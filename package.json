@@ -1,5 +1,5 @@
 {
-  "name": "studio-admin",
+  "name": "referee_assignments",
   "version": "2.0.0",
   "private": true,
   "scripts": {
@@ -32,6 +32,7 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "eslint-plugin-unicorn": "^56.0.1",
+    "firebase": "^12.4.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.453.0",
     "next": "^16.0.1",
