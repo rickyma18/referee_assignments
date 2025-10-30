@@ -1,8 +1,8 @@
-import Image from "next/image"; // 👈 importa Image
+import Image from "next/image";
 import Link from "next/link";
 
-import { RegisterForm } from "../../_components/register-form";
-import { GoogleButton } from "../../_components/social-auth/google-button";
+import { RegisterForm } from "../_components/register-form";
+import { GoogleButton } from "../_components/social-auth/google-button";
 
 export default function RegisterV1() {
   return (
@@ -30,7 +30,7 @@ export default function RegisterV1() {
       <div className="bg-primary hidden lg:block lg:w-1/3">
         <div className="flex h-full flex-col items-center justify-center p-12 text-center">
           <div className="space-y-6">
-            {/* 👇 Logo centrado */}
+            {/* Logo centrado */}
             <Image src="/media/FMF_Logo.png" alt="Logo" width={100} height={100} className="mx-auto" />
             <div className="space-y-2">
               <h1 className="text-primary-foreground text-5xl font-light">¡Bienvenido!</h1>

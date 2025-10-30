@@ -15,7 +15,6 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: APP_CONFIG.meta.title,
-  description: APP_CONFIG.meta.description,
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

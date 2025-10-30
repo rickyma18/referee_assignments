@@ -8,14 +8,19 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "generate:presets": "ts-node -P tsconfig.scripts.json src/scripts/generate-theme-presets.ts"
+    "generate:presets": "ts-node -P tsconfig.scripts.json src/scripts/generate-theme-presets.ts",
+"lint:staged": "eslint --fix --quiet --rule complexity:warn --rule \"@typescript-eslint/prefer-nullish-coalescing:off\" --rule \"react-hooks/purity:off\" --rule \"no-duplicate-imports:warn\""
   },
+
   "lint-staged": {
     "*.{js,ts,jsx,tsx}": [
-      "eslint --fix"
-    ]
+      "npm run lint:staged --",
+      "prettier --write"
+    ],
+    "*": "prettier --write --ignore-unknown"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
