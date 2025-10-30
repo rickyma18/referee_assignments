@@ -1,0 +1,45 @@
+[
+  {
+    "id": "MX-TDP-001",
+    "date": "2025-11-02T12:00:00-06:00",
+    "league": "TDP Jalisco",
+    "matchday": 10,
+    "homeTeam": "Atlético Zapopan",
+    "awayTeam": "Club Tonalá",
+    "venue": "Unidad Deportiva Zapopan",
+    "center": "Juan Pérez",
+    "aa1": "Carlos López",
+    "aa2": "Miguel Torres",
+    "fourth": "Luis Hernández",
+    "difficulty": "Media",
+    "status": "Programado"
+  },
+  {
+    "id": "MX-TDP-002",
+    "date": "2025-11-02T15:30:00-06:00",
+    "league": "TDP Jalisco",
+    "matchday": 10,
+    "homeTeam": "CEFAR FC",
+    "awayTeam": "Guadalajara B",
+    "venue": "Campo 2 Verde Valle",
+    "center": "Ricardo Gómez",
+    "aa1": "Arturo Díaz",
+    "aa2": "Pablo Jiménez",
+    "difficulty": "Alta",
+    "status": "Confirmado"
+  },
+  {
+    "id": "MX-TDP-003",
+    "date": "2025-11-03T09:00:00-06:00",
+    "league": "TDP Jalisco",
+    "matchday": 11,
+    "homeTeam": "Atlas Premier",
+    "awayTeam": "Leones Negros",
+    "venue": "CECAF",
+    "center": "Daniel Flores",
+    "aa1": "Ernesto Cruz",
+    "aa2": "Julián Vázquez",
+    "difficulty": "Baja",
+    "status": "Reasignar"
+  }
+]

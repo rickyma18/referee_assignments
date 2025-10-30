@@ -1,20 +1,12 @@
+// src/navigation/sidebar/sidebar-items.ts
 import {
-  ShoppingBag,
-  Forklift,
-  Mail,
-  MessageSquare,
-  Calendar,
-  Kanban,
-  ReceiptText,
-  Users,
-  Lock,
-  Fingerprint,
-  SquareArrowUpRight,
   LayoutDashboard,
+  PersonStanding,
+  Shield,
+  Star,
+  Circle,
   ChartBar,
-  Banknote,
-  Gauge,
-  GraduationCap,
+  Fingerprint,
   type LucideIcon,
 } from "lucide-react";
 
@@ -43,98 +35,26 @@ export interface NavGroup {
   items: NavMainItem[];
 }
 
-export const sidebarItems: NavGroup[] = [
+// Opcional: centraliza el prefijo para no repetir strings
+const DASH = "/dashboard" as const;
+
+export const sidebarItems = [
   {
     id: 1,
     label: "Dashboards",
     items: [
-      {
-        title: "Default",
-        url: "/dashboard/default",
-        icon: LayoutDashboard,
-      },
-      {
-        title: "CRM",
-        url: "/dashboard/crm",
-        icon: ChartBar,
-      },
-      {
-        title: "Finance",
-        url: "/dashboard/finance",
-        icon: Banknote,
-      },
-      {
-        title: "Analytics",
-        url: "/dashboard/coming-soon",
-        icon: Gauge,
-        comingSoon: true,
-      },
-      {
-        title: "E-commerce",
-        url: "/dashboard/coming-soon",
-        icon: ShoppingBag,
-        comingSoon: true,
-      },
-      {
-        title: "Academy",
-        url: "/dashboard/coming-soon",
-        icon: GraduationCap,
-        comingSoon: true,
-      },
-      {
-        title: "Logistics",
-        url: "/dashboard/coming-soon",
-        icon: Forklift,
-        comingSoon: true,
-      },
+      { title: "Designaciones", url: `${DASH}/default`, icon: LayoutDashboard },
+      { title: "Árbitros", url: `${DASH}/referees`, icon: PersonStanding },
+      { title: "Equipos", url: `${DASH}/teams`, icon: Shield },
+      { title: "Partidos", url: `${DASH}/matches`, icon: Circle },
+      { title: "Evaluaciones", url: `${DASH}/evaluations`, icon: Star },
+      { title: "Configuración", url: `${DASH}/config`, icon: ChartBar },
     ],
   },
   {
     id: 2,
     label: "Pages",
     items: [
-      {
-        title: "Email",
-        url: "/dashboard/coming-soon",
-        icon: Mail,
-        comingSoon: true,
-      },
-      {
-        title: "Chat",
-        url: "/dashboard/coming-soon",
-        icon: MessageSquare,
-        comingSoon: true,
-      },
-      {
-        title: "Calendar",
-        url: "/dashboard/coming-soon",
-        icon: Calendar,
-        comingSoon: true,
-      },
-      {
-        title: "Kanban",
-        url: "/dashboard/coming-soon",
-        icon: Kanban,
-        comingSoon: true,
-      },
-      {
-        title: "Invoice",
-        url: "/dashboard/coming-soon",
-        icon: ReceiptText,
-        comingSoon: true,
-      },
-      {
-        title: "Users",
-        url: "/dashboard/coming-soon",
-        icon: Users,
-        comingSoon: true,
-      },
-      {
-        title: "Roles",
-        url: "/dashboard/coming-soon",
-        icon: Lock,
-        comingSoon: true,
-      },
       {
         title: "Authentication",
         url: "/auth",
@@ -148,16 +68,4 @@ export const sidebarItems: NavGroup[] = [
       },
     ],
   },
-  {
-    id: 3,
-    label: "Misc",
-    items: [
-      {
-        title: "Others",
-        url: "/dashboard/coming-soon",
-        icon: SquareArrowUpRight,
-        comingSoon: true,
-      },
-    ],
-  },
-];
+] as const satisfies ReadonlyArray<NavGroup>;

@@ -1,190 +1,120 @@
+"use client";
+
 import { ColumnDef } from "@tanstack/react-table";
-import { CircleCheck, Loader, EllipsisVertical } from "lucide-react";
-import { toast } from "sonner";
-import { z } from "zod";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { ArrowUpDown } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { DataTableColumnHeader } from "../../../../../components/data-table/data-table-column-header";
+import { Designation } from "./types";
 
-import { sectionSchema } from "./schema";
-import { TableCellViewer } from "./table-cell-viewer";
-
-export const dashboardColumns: ColumnDef<z.infer<typeof sectionSchema>>[] = [
+export const columns: ColumnDef<Designation>[] = [
   {
-    id: "select",
-    header: ({ table }) => (
-      <div className="flex items-center justify-center">
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
-        />
-      </div>
+    accessorKey: "date",
+    header: ({ column }) => (
+      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="px-0">
+        Fecha/Hora
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
     ),
-    cell: ({ row }) => (
-      <div className="flex items-center justify-center">
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-        />
-      </div>
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    accessorKey: "header",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Header" />,
-    cell: ({ row }) => {
-      return <TableCellViewer item={row.original} />;
+    cell: ({ getValue }) => {
+      const v = getValue<string>();
+      return (
+        <div className="min-w-[160px]">
+          <div className="font-medium">{format(new Date(v), "EEE d MMM yyyy", { locale: es })}</div>
+          <div className="text-muted-foreground text-xs">{format(new Date(v), "HH:mm", { locale: es })} hrs</div>
+        </div>
+      );
     },
-    enableSorting: false,
+    enableSorting: true,
   },
   {
-    accessorKey: "type",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Section Type" />,
-    cell: ({ row }) => (
-      <div className="w-32">
-        <Badge variant="outline" className="text-muted-foreground px-1.5">
-          {row.original.type}
-        </Badge>
-      </div>
-    ),
-    enableSorting: false,
+    accessorKey: "league",
+    header: "Liga",
+    cell: ({ getValue }) => <span className="text-sm">{getValue<string>()}</span>,
+  },
+  {
+    accessorKey: "matchday",
+    header: "Jornada",
+    cell: ({ getValue }) => <span>J{getValue<number>()}</span>,
+  },
+  {
+    id: "match",
+    header: "Partido",
+    cell: ({ row }) => {
+      const h = row.original.homeTeam;
+      const a = row.original.awayTeam;
+      return (
+        <div className="min-w-[220px]">
+          <div className="font-medium">
+            {h} vs {a}
+          </div>
+          <div className="text-muted-foreground text-xs">{row.original.venue}</div>
+        </div>
+      );
+    },
+  },
+  {
+    id: "crew",
+    header: "Terna",
+    cell: ({ row }) => {
+      const { center, aa1, aa2, fourth } = row.original;
+      return (
+        <div className="flex flex-col gap-1">
+          <div>
+            <span className="text-muted-foreground text-xs">Central:</span> {center}
+          </div>
+          <div className="text-sm">
+            <span className="text-muted-foreground text-xs">AA1:</span> {aa1}{" "}
+            <span className="text-muted-foreground ml-2 text-xs">AA2:</span> {aa2}
+          </div>
+          {fourth ? (
+            <div className="text-sm">
+              <span className="text-muted-foreground text-xs">4º:</span> {fourth}
+            </div>
+          ) : null}
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "difficulty",
+    header: "Dificultad",
+    cell: ({ getValue }) => {
+      const v = getValue<Designation["difficulty"]>();
+      const variant = v === "Alta" ? "destructive" : v === "Media" ? "default" : "secondary";
+      return <Badge variant={variant as any}>{v ?? "—"}</Badge>;
+    },
   },
   {
     accessorKey: "status",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-    cell: ({ row }) => (
-      <Badge variant="outline" className="text-muted-foreground px-1.5">
-        {row.original.status === "Done" ? (
-          <CircleCheck className="stroke-border fill-green-500 dark:fill-green-400" />
-        ) : (
-          <Loader />
-        )}
-        {row.original.status}
-      </Badge>
-    ),
-    enableSorting: false,
-  },
-  {
-    accessorKey: "target",
-    header: ({ column }) => <DataTableColumnHeader className="w-full text-right" column={column} title="Target" />,
-    cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Done",
-            error: "Error",
-          });
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-target`} className="sr-only">
-          Target
-        </Label>
-        <Input
-          className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-16 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
-          defaultValue={row.original.target}
-          id={`${row.original.id}-target`}
-        />
-      </form>
-    ),
-    enableSorting: false,
-  },
-  {
-    accessorKey: "limit",
-    header: ({ column }) => <DataTableColumnHeader className="w-full text-right" column={column} title="Limit" />,
-    cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Done",
-            error: "Error",
-          });
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
-          Limit
-        </Label>
-        <Input
-          className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-16 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
-          defaultValue={row.original.limit}
-          id={`${row.original.id}-limit`}
-        />
-      </form>
-    ),
-    enableSorting: false,
-  },
-  {
-    accessorKey: "reviewer",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Reviewer" />,
-    cell: ({ row }) => {
-      const isAssigned = row.original.reviewer !== "Assign reviewer";
-
-      if (isAssigned) {
-        return row.original.reviewer;
-      }
-
-      return (
-        <>
-          <Label htmlFor={`${row.original.id}-reviewer`} className="sr-only">
-            Reviewer
-          </Label>
-          <Select>
-            <SelectTrigger
-              className="w-38 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
-              size="sm"
-              id={`${row.original.id}-reviewer`}
-            >
-              <SelectValue placeholder="Assign reviewer" />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
-              <SelectItem value="Jamik Tashpulatov">Jamik Tashpulatov</SelectItem>
-            </SelectContent>
-          </Select>
-        </>
-      );
+    header: "Estado",
+    cell: ({ getValue }) => {
+      const v = getValue<Designation["status"]>();
+      const map: Record<Designation["status"], string> = {
+        Programado: "secondary",
+        Confirmado: "default",
+        Reasignar: "outline",
+      };
+      return <Badge variant={map[v] as any}>{v}</Badge>;
     },
-    enableSorting: false,
   },
   {
     id: "actions",
-    cell: () => (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="data-[state=open]:bg-muted text-muted-foreground flex size-8" size="icon">
-            <EllipsisVertical />
-            <span className="sr-only">Open menu</span>
+    header: "",
+    cell: ({ row }) => {
+      // Aquí podrías abrir un drawer/modal para reasignar o confirmar
+      return (
+        <div className="flex justify-end">
+          <Button size="sm" variant="outline" className="mr-2">
+            Sugerir
           </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-32">
-          <DropdownMenuItem>Edit</DropdownMenuItem>
-          <DropdownMenuItem>Make a copy</DropdownMenuItem>
-          <DropdownMenuItem>Favorite</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ),
+          <Button size="sm">Confirmar</Button>
+        </div>
+      );
+    },
     enableSorting: false,
   },
 ];
