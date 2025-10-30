@@ -1,8 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { LoginForm } from "../../_components/login-form";
-import { GoogleButton } from "../../_components/social-auth/google-button";
+import { LoginForm } from "../_components/login-form";
+import { GoogleButton } from "../_components/social-auth/google-button";
 
 export default function LoginV1() {
   return (
