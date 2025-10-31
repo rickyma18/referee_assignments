@@ -43,19 +43,8 @@ export const sidebarItems: SidebarItem[] = [
   },
   {
     title: "Designaciones",
+    href: "/dashboard/assignments",
     icon: CalendarCheck,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
-    children: [
-      {
-        title: "Nueva",
-        href: "/delegado/designaciones/nueva",
-        requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
-      },
-      {
-        title: "Listado",
-        href: "/designaciones",
-        requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
-      },
-    ],
   },
 ];
