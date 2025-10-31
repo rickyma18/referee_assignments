@@ -1,54 +1,61 @@
 // src/navigation/sidebar/sidebar-items.ts
-import {
-  LayoutDashboard,
-  PersonStanding,
-  Shield,
-  Star,
-  Circle,
-  ChartBar,
-  Fingerprint,
-  type LucideIcon,
-} from "lucide-react";
+import { Users, CalendarCheck } from "lucide-react";
+import type { UserRole } from "@/types/roles";
 
-export interface NavSubItem {
+/**
+ * Árbol base editable por roles (tu definición original + opcionales usados por UI)
+ */
+export type SidebarItem = {
+  title: string;
+  href?: string;
+  icon?: any;
+  children?: SidebarItem[];
+  requiredRoles?: UserRole[];
+  // opcionales que algunos componentes soportan:
+  newTab?: boolean;
+  comingSoon?: boolean;
+};
+
+/**
+ * Estructura que espera NavMain (normalmente agrupado)
+ */
+export type NavMainItem = {
   title: string;
   url: string;
-  icon?: LucideIcon;
-  comingSoon?: boolean;
+  icon?: any;
   newTab?: boolean;
-  isNew?: boolean;
-}
-
-export interface NavMainItem {
-  title: string;
-  url: string;
-  icon?: LucideIcon;
-  subItems?: NavSubItem[];
   comingSoon?: boolean;
-  newTab?: boolean;
-  isNew?: boolean;
-}
+  subItems?: NavMainItem[];
+};
 
-export interface NavGroup {
-  id: number;
+export type NavGroup = {
+  id: string;
   label?: string;
   items: NavMainItem[];
-}
+};
 
-// Opcional: centraliza el prefijo para no repetir strings
-const DASH = "/dashboard" as const;
-
-export const sidebarItems = [
+export const sidebarItems: SidebarItem[] = [
   {
-    id: 1,
-    label: "Dashboards",
-    items: [
-      { title: "Designaciones", url: `${DASH}/default`, icon: LayoutDashboard },
-      { title: "Árbitros", url: `${DASH}/referees`, icon: PersonStanding },
-      { title: "Equipos", url: `${DASH}/teams`, icon: Shield },
-      { title: "Partidos", url: `${DASH}/matches`, icon: Circle },
-      { title: "Evaluaciones", url: `${DASH}/evaluations`, icon: Star },
-      { title: "Configuración", url: `${DASH}/config`, icon: ChartBar },
+    title: "Usuarios",
+    href: "/admin/usuarios",
+    icon: Users,
+    requiredRoles: ["SUPERUSUARIO"],
+  },
+  {
+    title: "Designaciones",
+    icon: CalendarCheck,
+    requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
+    children: [
+      {
+        title: "Nueva",
+        href: "/delegado/designaciones/nueva",
+        requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
+      },
+      {
+        title: "Listado",
+        href: "/designaciones",
+        requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
+      },
     ],
   },
-] as const satisfies ReadonlyArray<NavGroup>;
+];

@@ -1,31 +1,45 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-import { useRouter } from "next/navigation";
-
+import { useRouter, usePathname } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
 
-import { auth, db } from "@/lib/firebase";
-import type { UserDoc, AppRole } from "@/types/user";
+import { auth } from "@/lib/firebase";
+import type { UserDoc } from "@/types/user";
+import type { UserRole } from "@/types/roles";
+import { getUserDoc } from "@/data/users";
 
-export function AuthGuard({ allowedRoles, children }: { allowedRoles: AppRole[]; children: React.ReactNode }) {
+export function AuthGuard({ allowedRoles, children }: { allowedRoles: UserRole[]; children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
+      // 1) no sesión -> a login (si no estamos ya ahí)
+      const isAuthRoute = pathname.startsWith("/auth");
       if (!user) {
-        router.replace("/auth/login");
+        if (!isAuthRoute) router.replace("/auth/login");
+        setAuthorized(false);
         return;
       }
 
-      const snap = await getDoc(doc(db, "users", user.uid));
-      const data = snap.data() as UserDoc | undefined;
-
-      if (!data || !data.active || !allowedRoles.includes(data.role)) {
+      // 2) cargar doc
+      const u = await getUserDoc(user.uid);
+      if (!u) {
         router.replace("/auth/login");
+        setAuthorized(false);
+        return;
+      }
+
+      // 3) activo (opcional): si no existe, asumimos true
+      const isActive = (u as any).active ?? true;
+
+      // 4) rol permitido
+      const ok = isActive && allowedRoles.includes(u.role);
+      if (!ok) {
+        router.replace("/unauthorized");
+        setAuthorized(false);
         return;
       }
 
@@ -33,7 +47,7 @@ export function AuthGuard({ allowedRoles, children }: { allowedRoles: AppRole[];
     });
 
     return () => unsub();
-  }, [router, allowedRoles]);
+  }, [router, pathname, allowedRoles]);
 
   if (authorized === null) {
     return (
@@ -42,6 +56,8 @@ export function AuthGuard({ allowedRoles, children }: { allowedRoles: AppRole[];
       </div>
     );
   }
+
+  if (!authorized) return null;
 
   return <>{children}</>;
 }

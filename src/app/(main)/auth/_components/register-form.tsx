@@ -1,10 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -12,15 +10,18 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
+
+// 🔽 usa nuestro tipo y utilidades
 import type { UserDoc } from "@/types/user";
+import { upsertUserDoc } from "@/data/users";
 
 const FormSchema = z
   .object({
     email: z.string().email({ message: "Por favor, introduce un correo electrónico válido." }),
     password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }),
     confirmPassword: z.string().min(6, { message: "La confirmación de contraseña debe tener al menos 6 caracteres." }),
-    fullName: z.string().min(2, { message: "Ingresa tu nombre." }).optional(), // opcional
+    fullName: z.string().min(2, { message: "Ingresa tu nombre." }).optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Las contraseñas no coinciden.",
@@ -40,57 +41,43 @@ export function RegisterForm() {
     },
   });
 
-  // en onSubmit del RegisterForm
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
     const { email, password, fullName } = data;
 
     try {
       console.time("register-flow");
 
-      // 1) Auth
+      // 1) Crear usuario Auth
       console.time("auth:createUser");
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
       console.timeEnd("auth:createUser");
 
-      const uid = cred.user.uid;
-
-      // 2) Perfil (opcional)
+      // 2) Perfil opcional
       if (fullName && fullName.trim().length >= 2) {
         console.time("auth:updateProfile");
         await updateProfile(cred.user, { displayName: fullName.trim() });
         console.timeEnd("auth:updateProfile");
       }
 
-      // 3) Firestore
-      console.time("firestore:setDoc");
-      const now = Date.now();
-      const userDoc: UserDoc = {
-        email: email.trim(),
-        displayName: fullName?.trim() || undefined,
-        role: "arbitro",
-        active: true,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      await setDoc(doc(db, "users", uid), userDoc);
-      console.timeEnd("firestore:setDoc");
+      // 3) Firestore (⚠️ sin role explícito -> DEFAULT_ROLE = 'ARBITRO')
+      console.time("firestore:upsertUserDoc");
+      await upsertUserDoc({
+        uid: cred.user.uid,
+        email: cred.user.email!, // requerido por nuestro upsert
+        displayName: cred.user.displayName ?? null,
+        photoURL: cred.user.photoURL ?? null,
+        // role: no lo mandes — cae en DEFAULT_ROLE
+      });
+      console.timeEnd("firestore:upsertUserDoc");
 
       toast.success("Cuenta creada con éxito.");
       console.timeEnd("register-flow");
 
-      // 4) Redirect
-      if (userDoc.role === "delegado" || userDoc.role === "admin") {
-        router.replace("/dashboard/default");
-      } else {
-        router.replace("/dashboard/default");
-      }
+      // 4) Redirect básico (afinaremos por rol cuando tengamos guards de rutas)
+      router.replace("/dashboard/assignments");
     } catch (err: any) {
       console.error("Register error:", err);
       const code = err?.code ?? "unknown";
-      const message = err?.message ?? "unknown";
-
-      // Mensajes claros por code
       switch (code) {
         case "auth/email-already-in-use":
           toast.error("Este correo ya está registrado.");
@@ -100,9 +87,6 @@ export function RegisterForm() {
           break;
         case "auth/weak-password":
           toast.error("La contraseña es demasiado débil.");
-          break;
-        case "permission-denied":
-          toast.error("No tienes permisos para crear el documento de usuario.");
           break;
         default:
           toast.error(`No se pudo crear la cuenta. (${code})`);

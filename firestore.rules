@@ -1,7 +1,57 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ===== Helpers =====
+    function uid() {
+      return request.auth != null ? request.auth.uid : null;
+    }
+
+    // Prioridad: custom claims -> (transición) rol desde users/{uid}
+    function hasRole(role) {
+      return (request.auth.token.role == role) ||
+             (roleFromUsersDoc() == role);
+    }
+
+    function hasAnyRole(roles) {
+      return roles.hasAny(request.auth.token.role) ||
+             roles.hasAny(roleFromUsersDoc());
+    }
+
+    // ⚠️ Transitorio: permite leer tu propio users/{uid} para extraer role si aún no seteas claims.
+    // Cuando implementemos Tarea 4 (setUserRole + customClaims), podemos borrar esta función y
+    // las referencias a roleFromUsersDoc() para depender 100% de claims.
+    function roleFromUsersDoc() {
+      return uid() == null
+        ? null
+        : get(/databases/$(database)/documents/users/$(uid())).data.role;
+    }
+
+    // ===== Colección: users =====
+    match /users/{userId} {
+      // Todos los autenticados pueden leer (para mostrar nombre/foto/rol en UI)
+      allow read: if request.auth != null;
+
+      // Solo SUPERUSUARIO puede crear/actualizar/eliminar usuarios (p. ej. cambiar roles)
+      allow create, update, delete: if hasRole("SUPERUSUARIO")
+        && (!('role' in request.resource.data) || hasRole("SUPERUSUARIO")); // redundante pero explícito
+
+      // Protección adicional: si un no-super intenta cambiar 'role', rechaza
+      allow update: if false; // fallback; arriba ya cubrimos el caso permitido
+    }
+
+    // ===== Colección: designaciones =====
+    match /designaciones/{docId} {
+      // Lectura para cualquier rol válido
+      allow read: if request.auth != null && hasAnyRole(["SUPERUSUARIO","DELEGADO","ASISTENTE","ARBITRO"]);
+
+      // Crear/editar/borrar solo SUPERUSUARIO o DELEGADO
+      allow create, update, delete: if hasAnyRole(["SUPERUSUARIO","DELEGADO"]);
+    }
+
+    // (Si manejas subcolecciones específicas, puedes anotar reglas adicionales aquí)
+
+    // ===== Deny por defecto =====
     match /{document=**} {
       allow read, write: if false;
     }

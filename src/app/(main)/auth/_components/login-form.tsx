@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   signInWithEmailAndPassword,
@@ -9,7 +8,6 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -18,8 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
+
 import type { UserDoc } from "@/types/user";
+import { getUserDoc } from "@/data/users";
 
 const FormSchema = z.object({
   email: z.string().email({ message: "Por favor ingrese un correo electrónico válido." }),
@@ -32,44 +32,43 @@ export function LoginForm() {
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      remember: false,
-    },
+    defaultValues: { email: "", password: "", remember: false },
   });
 
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
     const { email, password, remember } = data;
     try {
-      // Persistencia según "Recordar dispositivo"
       await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
 
-      // 1) Login Auth
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const uid = cred.user.uid;
 
-      // 2) Cargar doc de usuario
-      const snap = await getDoc(doc(db, "users", uid));
-      if (!snap.exists()) {
+      const u = await getUserDoc(uid);
+      if (!u) {
         toast.error("Tu cuenta no está configurada. Contacta al administrador.");
         return;
       }
 
-      const u = snap.data() as UserDoc;
-
-      if (!u.active) {
+      const isActive = (u as any).active ?? true;
+      if (!isActive) {
         toast.error("Usuario inactivo. Contacta al administrador.");
         return;
       }
 
-      // 3) Routing por rol
-      if (u.role === "delegado" || u.role === "admin") {
-        router.replace("/dashboard/default");
-      } else if (u.role === "arbitro") {
-        router.replace("/dashboard/default");
-      } else {
-        toast.error("No tienes permisos para acceder.");
+      // ✅ Routing por rol (MAYÚSCULAS)
+      switch (u.role) {
+        case "SUPERUSUARIO":
+          router.replace("/dashboard/default"); // admin area
+          break;
+        case "DELEGADO":
+          router.replace("/dashboard/assignments"); // CRUD designaciones
+          break;
+        case "ASISTENTE":
+        case "ARBITRO":
+          router.replace("/dashboard/assignments"); // solo lectura
+          break;
+        default:
+          toast.error("No tienes permisos para acceder.");
       }
     } catch (err: any) {
       const code = err?.code || "";
@@ -78,7 +77,7 @@ export function LoginForm() {
       } else if (code === "auth/too-many-requests") {
         toast.error("Demasiados intentos. Inténtalo más tarde.");
       } else {
-        toast.error("No se encontró un registro asociado a ese correo.");
+        toast.error("No se pudo iniciar sesión.");
       }
     }
   };
