@@ -1,12 +1,10 @@
 import { ReactNode } from "react";
-
 import { cookies } from "next/headers";
 
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
-import { AuthGuard } from "@/components/auth-guard"; // 👈 importa tu guard
+import { AuthGuard } from "@/components/auth-guard";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { users } from "@/data/users";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
 import {
@@ -19,13 +17,13 @@ import {
   type ContentLayout,
   type NavbarStyle,
 } from "@/types/preferences/layout";
-
 import { AccountSwitcher } from "./_components/sidebar/account-switcher";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
 import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
+  // 👇 AQUI el await
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";
 
@@ -44,7 +42,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   };
 
   return (
-    <AuthGuard allowedRoles={["delegado", "admin", "arbitro"]}>
+    <AuthGuard allowedRoles={["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"]}>
       <SidebarProvider defaultOpen={defaultOpen}>
         <AppSidebar variant={sidebarVariant} collapsible={sidebarCollapsible} />
         <SidebarInset
