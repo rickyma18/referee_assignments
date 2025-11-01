@@ -13,7 +13,7 @@
     "prepare": "husky",
     "generate:presets": "ts-node -P tsconfig.scripts.json src/scripts/generate-theme-presets.ts",
     "backfill:users": "node scripts/backfill-users.mjs",
-"lint:staged": "eslint --fix --quiet --rule complexity:warn --rule \"@typescript-eslint/prefer-nullish-coalescing:off\" --rule \"react-hooks/purity:off\" --rule \"no-duplicate-imports:warn\" --rule \"import/order:off\" --rule \"max-depth:warn\""
+    "lint:staged": "eslint --fix --quiet --rule complexity:warn --rule \"@typescript-eslint/prefer-nullish-coalescing:off\" --rule \"react-hooks/purity:off\" --rule \"no-duplicate-imports:warn\" --rule \"import/order:off\" --rule \"max-depth:warn\""
   },
   "lint-staged": {
     "*.{js,ts,jsx,tsx}": [
@@ -53,6 +53,7 @@
     "recharts": "^2.15.4",
     "simple-icons": "^15.18.0",
     "sonner": "^2.0.7",
+    "swr": "^2.3.6",
     "tailwind-merge": "^3.3.1",
     "vaul": "^1.1.2",
     "zod": "^3.25.76",

@@ -1,24 +1,17 @@
 // src/navigation/sidebar/sidebar-items.ts
-import { Users, CalendarCheck } from "lucide-react";
+import { Users, CalendarCheck, Layers } from "lucide-react";
 import type { UserRole } from "@/types/roles";
 
-/**
- * Árbol base editable por roles (tu definición original + opcionales usados por UI)
- */
 export type SidebarItem = {
   title: string;
   href?: string;
   icon?: any;
   children?: SidebarItem[];
   requiredRoles?: UserRole[];
-  // opcionales que algunos componentes soportan:
   newTab?: boolean;
   comingSoon?: boolean;
 };
 
-/**
- * Estructura que espera NavMain (normalmente agrupado)
- */
 export type NavMainItem = {
   title: string;
   url: string;
@@ -35,16 +28,23 @@ export type NavGroup = {
 };
 
 export const sidebarItems: SidebarItem[] = [
-  {
-    title: "Usuarios",
-    href: "/admin/usuarios",
-    icon: Users,
-    requiredRoles: ["SUPERUSUARIO"],
-  },
+  // {
+  //   title: "Usuarios",
+  //   href: "/admin/usuarios",
+  //   icon: Users,
+  //   requiredRoles: ["SUPERUSUARIO"],
+  // },
+
   {
     title: "Designaciones",
     href: "/dashboard/assignments",
     icon: CalendarCheck,
+    requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
+  },
+  {
+    title: "Grupos",
+    href: "/dashboard/groups",
+    icon: Layers,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
   },
 ];
