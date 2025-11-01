@@ -1,17 +1,18 @@
 "use client";
 
-import Link from "next/link";
-
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 export default function NotFound() {
+  const router = useRouter();
+
   return (
     <div className="flex h-dvh flex-col items-center justify-center space-y-2 text-center">
-      <h1 className="text-2xl font-semibold">Page not found.</h1>
-      <p className="text-muted-foreground">The page you are looking for could not be found.</p>
-      <Link replace href="/auth/login">
-        <Button variant="outline">Go back</Button>
-      </Link>
+      <h1 className="text-2xl font-semibold">Página no encontrada</h1>
+      <p className="text-muted-foreground">La página que buscas no existe o fue movida.</p>
+      <Button variant="outline" onClick={() => router.back()}>
+        Volver
+      </Button>
     </div>
   );
 }

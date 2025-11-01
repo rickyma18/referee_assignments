@@ -1,59 +1,66 @@
 "use client";
 
+import Link from "next/link";
+import { PlusCircle } from "lucide-react";
+
 import RoleGate from "@/components/auth/role-gate";
 import { useCurrentUser } from "@/hooks/use-current-user";
 
+import { Button } from "@/components/ui/button";
+import { DataTable } from "./_components/data-table";
+import { makeColumns } from "./_components/columns";
+import type { Designation } from "./_components/types";
+import data from "./_components/designations.json";
+
 export default function AssignmentsPage() {
-  const { userDoc } = useCurrentUser();
+  const { userDoc, firebaseUser } = useCurrentUser();
   const role = userDoc?.role ?? "DESCONOCIDO";
+
+  // 🔹 Nombre con prioridad: Firestore → Firebase → correo
+  const displayName =
+    userDoc?.displayName || firebaseUser?.displayName || firebaseUser?.email?.split("@")[0] || "Usuario";
+
+  const canEdit = ["SUPERUSUARIO", "DELEGADO"].includes(role as string);
+  const designations = data as Designation[];
 
   return (
     <RoleGate require="VIEW_DESIGNS">
-      <div className="space-y-4 p-6">
-        <h1 className="text-2xl font-bold">Designaciones</h1>
-        <p className="text-muted-foreground text-sm">
-          Bienvenido, <span className="font-medium">{role}</span>.
-        </p>
+      <div className="@container/main flex flex-col gap-4 p-6 md:gap-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Designaciones</h1>
+            <p className="text-muted-foreground text-sm">
+              Bienvenido(a),{" "}
+              <span className="font-medium">
+                {displayName} ({role})
+              </span>
+              .
+            </p>
+          </div>
 
-        {/* 🔹 Aquí pondremos la tabla real (ahora un mock simple) */}
-        <div className="bg-background rounded-lg border p-4">
-          <h2 className="mb-2 font-semibold">Partidos asignados</h2>
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="p-2">Fecha</th>
-                <th className="p-2">Equipo Local</th>
-                <th className="p-2">Equipo Visitante</th>
-                <th className="p-2">Rol</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="hover:bg-muted/30 border-b">
-                <td className="p-2">10/11/2025</td>
-                <td className="p-2">Pumas TDP</td>
-                <td className="p-2">Atlas TDP</td>
-                <td className="p-2">Árbitro central</td>
-              </tr>
-              <tr className="hover:bg-muted/30">
-                <td className="p-2">17/11/2025</td>
-                <td className="p-2">Tecos</td>
-                <td className="p-2">Leones Negros</td>
-                <td className="p-2">Asistente 1</td>
-              </tr>
-            </tbody>
-          </table>
+          {canEdit && (
+            <Button asChild>
+              <Link href="/assignments/new">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Nueva designación
+              </Link>
+            </Button>
+          )}
         </div>
 
-        {/* Mensaje o botones condicionales */}
-        {["SUPERUSUARIO", "DELEGADO"].includes(role) ? (
-          <div className="pt-4">
+        <DataTable
+          data={designations}
+          columns={makeColumns(canEdit)}
+          searchableKeys={["homeTeam", "awayTeam", "center", "aa1", "aa2", "venue", "league"]}
+        />
+
+        <div className="pt-2">
+          {canEdit ? (
             <p className="text-muted-foreground text-sm">Puedes crear o editar designaciones.</p>
-          </div>
-        ) : (
-          <div className="pt-4">
+          ) : (
             <p className="text-muted-foreground text-sm">Solo puedes visualizar tus designaciones.</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </RoleGate>
   );

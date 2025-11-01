@@ -1,0 +1,26 @@
+[
+  {
+    "id": "mx-001",
+    "date": "2025-11-10",
+    "time": "12:00",
+    "league": "Liga TDP",
+    "venue": "CEGUD",
+    "homeTeam": "Pumas TDP",
+    "awayTeam": "Atlas TDP",
+    "center": "Árbitro central",
+    "aa1": "",
+    "aa2": ""
+  },
+  {
+    "id": "mx-002",
+    "date": "2025-11-17",
+    "time": "16:00",
+    "league": "Liga TDP",
+    "venue": "CEU",
+    "homeTeam": "Tecos",
+    "awayTeam": "Leones Negros",
+    "center": "",
+    "aa1": "Asistente 1",
+    "aa2": ""
+  }
+]
