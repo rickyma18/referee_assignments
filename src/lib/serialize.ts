@@ -1,43 +1,54 @@
-// Convierte cualquier Timestamp (admin/web/emulador) a number (ms)
-// y vuelve todo objeto "plain" (sin prototipos raros).
-type AnyObj = Record<string, any>;
+// src/lib/serialize.ts
 
-const isTimestampLike = (v: any) =>
-  v &&
-  typeof v === "object" &&
-  (typeof v.toMillis === "function" || // Admin/Web Timestamp
-    (("seconds" in v || "_seconds" in v) && // Web v9
-      ("nanoseconds" in v || "_nanoseconds" in v)) ||
-    ("_seconds" in v && "_nanoseconds" in v)); // Emulador (debug)
+/**
+ * Convierte valores Timestamp-like (Firestore client/admin) y Date a ISO string.
+ * Cumple ESLint:
+ *  - Evita no-underscore-dangle con bracket notation
+ */
 
-const toMillis = (v: any): number => {
-  if (typeof v?.toMillis === "function") return v.toMillis();
+type AnyRecord = Record<string, unknown>;
 
-  // usa bracket notation para no disparar no-underscore-dangle
-  // eslint-disable-next-line no-underscore-dangle
-  const sec = v.seconds ?? v["_seconds"] ?? 0;
-  // eslint-disable-next-line no-underscore-dangle
-  const ns = v.nanoseconds ?? v["_nanoseconds"] ?? 0;
+function toDateSafe(input: unknown): Date | null {
+  if (input instanceof Date) return input;
 
-  return Math.round(sec * 1000 + ns / 1e6);
-};
-
-export function toPlain<T = AnyObj>(input: any): T {
-  if (input == null) return input;
-
-  if (Array.isArray(input)) {
-    return input.map((i) => toPlain(i)) as unknown as T;
+  // Timestamps reales suelen exponer .toDate()
+  if (input && typeof (input as any).toDate === "function") {
+    return (input as any).toDate();
   }
 
-  if (typeof input === "object") {
-    if (isTimestampLike(input)) return toMillis(input) as unknown as T;
+  if (typeof input === "object" && input !== null) {
+    const obj = input as AnyRecord;
 
-    const out: AnyObj = {};
-    for (const [k, v] of Object.entries(input)) {
-      out[k] = toPlain(v);
+    // Firestore export/raw: { _seconds, _nanoseconds } o { seconds, nanoseconds }
+    const seconds = (obj["seconds"] as number | undefined) ?? (obj["_seconds"] as number | undefined);
+    const nanos = (obj["nanoseconds"] as number | undefined) ?? (obj["_nanoseconds"] as number | undefined) ?? 0;
+
+    if (typeof seconds === "number") {
+      const n = typeof nanos === "number" ? nanos : 0;
+      const ms = seconds * 1000 + Math.floor(n / 1e6);
+      return new Date(ms);
+    }
+  }
+
+  return null;
+}
+
+export function serialize<T = unknown>(value: T): T {
+  const maybeDate = toDateSafe(value);
+  if (maybeDate) return maybeDate.toISOString() as unknown as T;
+
+  if (Array.isArray(value)) {
+    return value.map(serialize) as unknown as T;
+  }
+
+  if (value && typeof value === "object") {
+    const obj = value as AnyRecord;
+    const out: AnyRecord = {};
+    for (const [k, v] of Object.entries(obj)) {
+      out[k] = serialize(v);
     }
     return out as T;
   }
 
-  return input;
+  return value;
 }
