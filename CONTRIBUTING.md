@@ -43,20 +43,21 @@ If you’d like a more detailed example of this setup, check out the [Next Coloc
 ### Fork and Clone the Repository
 
 1. Fork the Repository
-   
+
    Click [here](https://github.com/arhamkhnz/next-shadcn-admin-dashboard/fork) to fork the repository.
 
-2. Clone the Repository  
+2. Clone the Repository
    ```bash
    git clone https://github.com/YOUR_USERNAME/next-shadcn-admin-dashboard.git
    ```
-   
-3. Navigate into the Project  
+3. Navigate into the Project
+
    ```bash
    cd next-shadcn-admin-dashboard
    ```
 
 4. **Install dependencies**
+
    ```bash
    npm install
    ```
@@ -72,11 +73,13 @@ If you’d like a more detailed example of this setup, check out the [Next Coloc
 ## Contribution Flow
 
 - Always create a new branch before working on changes:
+
   ```bash
   git checkout -b feature/my-update
   ```
 
 - Use clear commit messages:
+
   ```bash
   git commit -m "feat: add finance dashboard screen"
   ```
@@ -88,19 +91,19 @@ If you’d like a more detailed example of this setup, check out the [Next Coloc
 
 ## Where to Contribute
 
-- **External Pages**: Landing pages or other non-dashboard routes → `src/app/(external)/`  
-- **Auth Screens**: Login, register, and authentication layouts → `src/app/(main)/auth/`  
+- **External Pages**: Landing pages or other non-dashboard routes → `src/app/(external)/`
+- **Auth Screens**: Login, register, and authentication layouts → `src/app/(main)/auth/`
 - **Dashboard Screens**: Feature dashboards like CRM, Finance, Analytics → `src/app/(main)/dashboard/`
-- **Components**: Reusable UI goes in `src/components/`  
-- **Hooks**: Custom logic goes in `src/hooks/`  
-- **Themes**: New presets under `src/styles/presets/`  
+- **Components**: Reusable UI goes in `src/components/`
+- **Hooks**: Custom logic goes in `src/hooks/`
+- **Themes**: New presets under `src/styles/presets/`
 
 ---
 
 ## Guidelines
 
 - Prefer **TypeScript types** over `any`
-- Husky pre-commit hooks are enabled - linting and formatting run automatically when you commit, and if there are errors the commit will be blocked until they are fixed. 
+- Husky pre-commit hooks are enabled - linting and formatting run automatically when you commit, and if there are errors the commit will be blocked until they are fixed.
 - Follow **Shadcn UI** style & Tailwind v4 conventions
 - Keep accessibility in mind (ARIA, keyboard nav)
 - Use clear commit messages with conventional prefixes (`feat:`, `fix:`, `chore:`, etc.)
@@ -110,8 +113,8 @@ If you’d like a more detailed example of this setup, check out the [Next Coloc
 
 ## Submitting PRs
 
-- Open a Pull Request once your changes are ready.  
-- Ensure your branch is up to date with `main` before submitting.  
+- Open a Pull Request once your changes are ready.
+- Ensure your branch is up to date with `main` before submitting.
 - Reference any related issue in your PR for context.
 
 ---

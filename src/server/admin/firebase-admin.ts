@@ -1,6 +1,6 @@
 // src/server/admin/firebase-admin.ts
 import { getApps, initializeApp, applicationDefault, cert, type AppOptions } from "firebase-admin/app";
-import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getFirestore, type Firestore, FieldValue } from "firebase-admin/firestore";
 import fs from "node:fs";
 
 declare global {
@@ -41,3 +41,6 @@ if (!globalThis.ADMIN_DB) {
   adminDb.settings({ ignoreUndefinedProperties: true });
   globalThis.ADMIN_DB = adminDb;
 }
+
+// 👇 ahora sí, exporta el FieldValue (ya importado arriba)
+export const AdminFieldValue = FieldValue;

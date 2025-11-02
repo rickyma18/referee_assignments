@@ -28,6 +28,7 @@ export type NavGroup = {
 };
 
 export const sidebarItems: SidebarItem[] = [
+  // === Ejemplo de usuarios (solo superusuario) ===
   // {
   //   title: "Usuarios",
   //   href: "/admin/usuarios",
@@ -41,10 +42,28 @@ export const sidebarItems: SidebarItem[] = [
     icon: CalendarCheck,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
   },
+
   {
-    title: "Grupos",
-    href: "/dashboard/groups",
+    title: "Ligas",
+    href: "/dashboard/leagues",
     icon: Layers,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
+    children: [
+      {
+        title: "Todas las Ligas",
+        href: "/dashboard/leagues",
+      },
+      {
+        title: "Nueva Liga",
+        href: "/dashboard/leagues/new",
+        requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
+      },
+      {
+        title: "Grupos (por liga)",
+        href: "/dashboard/leagues", // la vista raíz desde donde seleccionas una liga
+        // luego navegarás a /dashboard/leagues/[leagueId]/groups
+        requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
+      },
+    ],
   },
 ];
