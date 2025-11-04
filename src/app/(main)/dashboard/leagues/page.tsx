@@ -89,18 +89,31 @@ export default function LeaguesPage() {
             {items.map((l) => (
               <tr key={l.id} className="border-t">
                 <td className="p-2">
-                  <div className="flex items-center gap-2">
+                  <Link
+                    href={`/dashboard/leagues/${l.id}`}
+                    className="group focus-visible:ring-ring inline-flex items-center gap-2 rounded-sm outline-none focus-visible:ring-2"
+                    aria-label={`Abrir liga ${l.name}`}
+                    title={`Abrir liga ${l.name}`}
+                  >
                     {l.color ? (
-                      <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: l.color }} />
+                      <span
+                        className="inline-block h-3 w-3 rounded-full ring-1 ring-black/10 dark:ring-white/10"
+                        style={{ backgroundColor: l.color }}
+                      />
                     ) : null}
-                    {l.name}
-                  </div>
+                    <span className="font-medium underline-offset-4 group-hover:underline">{l.name}</span>
+                  </Link>
                 </td>
                 <td className="p-2">{l.season}</td>
                 <td className="p-2">{l.status ?? "ACTIVE"}</td>
                 <td className="space-x-2 p-2 text-right">
                   <Button asChild size="sm" variant="secondary">
                     <Link href={`/dashboard/leagues/${l.id}`}>Abrir</Link>
+                  </Button>
+
+                  {/* 👉 Ir a grupos de esta liga */}
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/dashboard/leagues/${l.id}/`}>Grupos</Link>
                   </Button>
 
                   {canEdit && (
@@ -110,7 +123,6 @@ export default function LeaguesPage() {
                           Eliminar
                         </Button>
                       </AlertDialogTrigger>
-
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>¿Eliminar liga &quot;{l.name}&quot;?</AlertDialogTitle>

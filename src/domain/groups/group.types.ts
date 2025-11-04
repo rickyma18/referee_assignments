@@ -1,11 +1,14 @@
-export type GroupId = string;
-
-export interface Group {
-  id: GroupId;
+// =============================
+// src/domain/groups/group.types.ts
+// =============================
+export type Group = {
+  id: string;
+  leagueId: string; // referencia padre
   name: string;
-  season: string;
+  season: string; // redundante pero útil para UI/filtros
   name_lc: string;
   season_lc: string;
-  createdAt: number; // Date.now()
-  updatedAt: number; // Date.now()
-}
+  order: number; // 👈 clave para el error que te salía
+  createdAt?: string; // ISO (por serialize)
+  updatedAt?: string; // ISO (por serialize)
+};

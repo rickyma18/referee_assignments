@@ -58,12 +58,6 @@ export const sidebarItems: SidebarItem[] = [
         href: "/dashboard/leagues/new",
         requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
       },
-      {
-        title: "Grupos (por liga)",
-        href: "/dashboard/leagues", // la vista raíz desde donde seleccionas una liga
-        // luego navegarás a /dashboard/leagues/[leagueId]/groups
-        requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
-      },
     ],
   },
 ];

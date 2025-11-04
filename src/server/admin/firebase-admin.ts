@@ -1,4 +1,6 @@
+// =============================
 // src/server/admin/firebase-admin.ts
+// =============================
 import { getApps, initializeApp, applicationDefault, cert, type AppOptions } from "firebase-admin/app";
 import { getFirestore, type Firestore, FieldValue } from "firebase-admin/firestore";
 import fs from "node:fs";
@@ -28,19 +30,16 @@ function getCredential() {
 }
 
 const projectId = process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || "referee-assignments";
-
 const appOptions: AppOptions = { credential: getCredential(), projectId };
 
 const adminApp = globalThis.ADMIN_APP || (getApps().length ? getApps()[0] : initializeApp(appOptions));
-
 if (!globalThis.ADMIN_APP) globalThis.ADMIN_APP = adminApp;
 
 export const adminDb: Firestore = globalThis.ADMIN_DB || getFirestore(adminApp);
-
 if (!globalThis.ADMIN_DB) {
   adminDb.settings({ ignoreUndefinedProperties: true });
   globalThis.ADMIN_DB = adminDb;
 }
 
-// 👇 ahora sí, exporta el FieldValue (ya importado arriba)
+// 👇 re-export de FieldValue para serverTimestamp, increment, etc.
 export const AdminFieldValue = FieldValue;

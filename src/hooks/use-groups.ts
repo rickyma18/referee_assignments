@@ -1,26 +1,21 @@
+// =============================
+// src/hooks/use-groups.ts (SWR para combos y listas)
+// =============================
 "use client";
-
 import useSWR from "swr";
+import { listGroupsAction } from "@/server/actions/groups.actions";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-export type GroupOption = { id: string; name: string; season: string };
-
-export function useGroupsCombo(params?: { search?: string; season?: string }) {
-  const qs = new URLSearchParams();
-  if (params?.search) qs.set("search", params.search);
-  if (params?.season) qs.set("season", params.season);
-
-  const { data, isLoading, error, mutate } = useSWR<GroupOption[]>(
-    `/api/groups${qs.toString() ? "?" + qs.toString() : ""}`,
-    fetcher,
-    { revalidateOnFocus: false },
-  );
-
+export function useGroups(leagueId: string, season?: string) {
+  const key = leagueId ? ["groups", leagueId, season ?? "all"] : null;
+  const { data, error, isValidating, mutate } = useSWR(key, async () => {
+    if (!leagueId) return [] as any[];
+    return listGroupsAction({ leagueId, season });
+  });
   return {
     groups: data ?? [],
-    loading: isLoading,
+    loading: !error && !data,
     error,
-    refresh: mutate,
+    isValidating,
+    reload: () => mutate(),
   };
 }

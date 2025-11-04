@@ -1,41 +1,59 @@
+// =============================
+// src/components/inputs/group-combobox.tsx
+// =============================
 "use client";
-
 import * as React from "react";
-import { useGroupsCombo } from "@/hooks/use-groups";
-import { Input } from "@/components/ui/input";
+import { useGroups } from "@/hooks/use-groups";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-type Props = {
-  value?: string; // groupId
+export function GroupCombobox({
+  leagueId,
+  value,
+  onChange,
+  placeholder = "Seleccionar grupo",
+}: {
+  leagueId: string;
+  value?: string;
   onChange?: (id: string | undefined) => void;
-  seasonFilter?: string;
-};
-
-export function GroupCombobox({ value, onChange, seasonFilter }: Props) {
-  const [search, setSearch] = React.useState("");
-  const { groups, loading } = useGroupsCombo({ search, season: seasonFilter });
+  placeholder?: string;
+}) {
+  const { groups, loading } = useGroups(leagueId);
+  const [open, setOpen] = React.useState(false);
+  const selected = groups.find((g) => g.id === value);
 
   return (
-    <div className="space-y-2">
-      <Input placeholder="Buscar grupo..." value={search} onChange={(e) => setSearch(e.target.value)} />
-      <div className="flex flex-wrap gap-2">
-        {loading ? (
-          <span className="text-sm opacity-70">Cargando…</span>
-        ) : groups.length ? (
-          groups.map((g) => (
-            <Button
-              key={g.id}
-              variant={g.id === value ? "default" : "secondary"}
-              onClick={() => onChange?.(g.id)}
-              className="text-sm"
-            >
-              {g.name} · {g.season}
-            </Button>
-          ))
-        ) : (
-          <span className="text-sm opacity-70">Sin resultados</span>
-        )}
-      </div>
-    </div>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" className="w-full justify-between">
+          {selected ? selected.name : placeholder}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0">
+        <Command>
+          <CommandInput placeholder="Buscar grupo" />
+          <CommandEmpty>{loading ? "Cargando..." : "Sin resultados"}</CommandEmpty>
+          <CommandGroup>
+            {groups.map((g) => (
+              <CommandItem
+                key={g.id}
+                value={g.name}
+                onSelect={() => {
+                  onChange?.(g.id);
+                  setOpen(false);
+                }}
+              >
+                <Check className={cn("mr-2 h-4 w-4", value === g.id ? "opacity-100" : "opacity-0")} />
+                {g.name} ({g.season})
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
