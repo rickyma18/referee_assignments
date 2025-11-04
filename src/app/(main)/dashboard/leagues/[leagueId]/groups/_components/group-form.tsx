@@ -1,102 +1,66 @@
+// =============================
+// src/app/(main)/dashboard/leagues/[leagueId]/groups/_components/group-form.tsx
+// =============================
 "use client";
-
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { z } from "zod";
-
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { useCurrentUser } from "@/hooks/use-current-user";
-
 import { GroupCreateSchema, GroupUpdateSchema } from "@/domain/groups/group.zod";
-import { createLeagueGroupAction, updateLeagueGroupAction } from "@/server/actions/league-groups.actions";
+import { createGroupAction, updateGroupAction } from "@/server/actions/groups.actions";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-type Props = {
-  leagueId: string; // 👈 obligatorio ahora
-  initial?: { id: string; name: string; season: string; order?: number } | null;
-};
+const CreateSchema = GroupCreateSchema;
+const UpdateSchema = GroupUpdateSchema;
 
-export function GroupForm({ leagueId, initial }: Props) {
+type Initial = { id?: string; name?: string; season?: string };
+
+export function GroupForm({ leagueId, initial }: { leagueId: string; initial?: Initial | null }) {
   const router = useRouter();
-  const { userDoc } = useCurrentUser();
-  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
-  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
+  const [loading, setLoading] = React.useState(false);
 
   const [name, setName] = React.useState(initial?.name ?? "");
   const [season, setSeason] = React.useState(initial?.season ?? "");
-  const [order, setOrder] = React.useState<number>(initial?.order ?? 0);
-  const [saving, setSaving] = React.useState(false);
 
-  const onSubmit = async () => {
-    if (!canEdit) {
-      toast.error("No tienes permisos para guardar.");
-      return;
-    }
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
     try {
-      setSaving(true);
-
-      if (initial?.id) {
-        // Update
-        const payload = GroupUpdateSchema.parse({
-          id: initial.id,
-          leagueId,
-          name,
-          season,
-          order,
-        });
-        await updateLeagueGroupAction(payload);
-        toast.success("Grupo actualizado");
-      } else {
-        // Create
-        const payload = GroupCreateSchema.parse({
-          leagueId,
-          name,
-          season,
-          order,
-        });
-        await createLeagueGroupAction(payload);
+      setLoading(true);
+      if (!initial?.id) {
+        const parsed = CreateSchema.parse({ leagueId, name, season });
+        await createGroupAction(parsed);
         toast.success("Grupo creado");
+      } else {
+        const parsed = UpdateSchema.parse({ leagueId, id: initial.id, name, season });
+        await updateGroupAction(parsed);
+        toast.success("Grupo actualizado");
       }
-
       router.push(`/dashboard/leagues/${leagueId}/groups`);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Error al guardar");
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err?.message ?? "Error al guardar");
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="max-w-xl space-y-4 p-6">
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Nombre</label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Grupo 13" />
+    <form onSubmit={onSubmit} className="flex max-w-lg flex-col gap-4">
+      <div className="grid gap-2">
+        <Label htmlFor="name">Nombre</Label>
+        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Grupo 13" />
       </div>
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Temporada</label>
-        <Input value={season} onChange={(e) => setSeason(e.target.value)} placeholder="2025-26" />
+      <div className="grid gap-2">
+        <Label htmlFor="season">Temporada</Label>
+        <Input id="season" value={season} onChange={(e) => setSeason(e.target.value)} placeholder="2025-26" />
       </div>
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Orden (opcional)</label>
-        <Input
-          type="number"
-          value={Number.isFinite(order) ? String(order) : ""}
-          onChange={(e) => setOrder(Number(e.target.value) || 0)}
-          placeholder="0"
-        />
-      </div>
-
       <div className="flex gap-2">
-        <Button disabled={saving || !canEdit} onClick={onSubmit}>
-          {saving ? "Guardando…" : "Guardar"}
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => history.back()}>
-          Cancelar
+        <Button type="submit" disabled={loading}>
+          {initial?.id ? "Guardar" : "Crear"}
         </Button>
       </div>
-    </div>
+    </form>
   );
 }

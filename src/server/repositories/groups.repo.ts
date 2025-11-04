@@ -1,125 +1,118 @@
+// =============================
+// src/server/repositories/groups.repo.ts
+// =============================
 "use server";
 
-import { db } from "@/lib/firebase";
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-} from "firebase/firestore";
+import { adminDb } from "@/server/admin/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import type { Group } from "@/domain/groups/group.types";
-import { norm } from "@/domain/groups/group.normalizers";
+import { toLc } from "@/domain/groups/group.normalizers";
+import { serialize } from "@/lib/serialize";
 
-const COL = "groups";
+const leaguesCol = () => adminDb.collection("leagues");
+const groupsCol = (leagueId: string) => leaguesCol().doc(leagueId).collection("groups");
 
 export type GetAllParams = {
+  leagueId: string;
   search?: string;
   season?: string;
-  pageSize?: number;
-  cursorId?: string;
+  limit?: number;
+  cursor?: string; // doc id para paginación simple
 };
 
-export async function getById(id: string) {
-  const snap = await getDoc(doc(db, COL, id));
-  return snap.exists() ? ({ id: snap.id, ...(snap.data() as any) } as Group) : null;
-}
+export async function getAll(params: GetAllParams) {
+  const { leagueId, search, season, limit = 25, cursor } = params;
 
-export async function existsByNameAndSeason(name: string, season: string): Promise<boolean> {
-  const name_lc = norm(name);
-  const season_lc = norm(season);
-  const q = query(collection(db, COL), where("name_lc", "==", name_lc), where("season_lc", "==", season_lc), limit(1));
-  const snap = await getDocs(q);
-  return !snap.empty;
-}
+  let q: FirebaseFirestore.Query = groupsCol(leagueId).orderBy("season_lc").orderBy("name_lc").limit(limit);
 
-export async function getAll(params: GetAllParams = {}) {
-  const { search, season, pageSize = 20, cursorId } = params;
-  const qRef: any = collection(db, COL);
-
-  const filters: any[] = [];
-  if (season) filters.push(where("season_lc", "==", norm(season)));
-
-  let qBase = query(qRef, orderBy("season_lc", "asc"), orderBy("name_lc", "asc"), limit(pageSize));
-
-  if (cursorId) {
-    const last = await getDoc(doc(db, COL, cursorId));
-    if (last.exists()) {
-      qBase = query(qRef, orderBy("season_lc", "asc"), orderBy("name_lc", "asc"), startAfter(last), limit(pageSize));
-    }
+  if (season) q = q.where("season_lc", "==", toLc(season));
+  if (cursor) {
+    const snap = await groupsCol(leagueId).doc(cursor).get();
+    if (snap.exists) q = q.startAfter(snap.get("season_lc"), snap.get("name_lc"));
   }
 
-  if (filters.length) qBase = query(qBase, ...filters);
+  const snaps = await q.get();
 
-  const snap = await getDocs(qBase);
-  let items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as Group[];
+  let items = snaps.docs.map((d) => serialize<Group>({ id: d.id, ...(d.data() as any) }));
 
-  if (search?.trim()) {
-    const s = norm(search);
-    items = items.filter((g) => g.name_lc.includes(s));
+  if (search && search.trim()) {
+    const s = toLc(search);
+    items = items.filter((g) => (g.name_lc ?? "").includes(s) || (g.season_lc ?? "").includes(s));
   }
 
-  const nextCursorId = snap.docs.length ? snap.docs[snap.docs.length - 1].id : undefined;
-
-  return { items, nextCursorId };
+  return items;
 }
 
-export async function create(data: { name: string; season: string }) {
-  const name_lc = norm(data.name);
-  const season_lc = norm(data.season);
+export async function getById(leagueId: string, id: string) {
+  const snap = await groupsCol(leagueId).doc(id).get();
+  if (!snap.exists) return null;
+  return serialize<Group>({ id: snap.id, ...(snap.data() as any) });
+}
 
-  if (await existsByNameAndSeason(data.name, data.season)) {
-    throw new Error("Ya existe un grupo con ese nombre en esa temporada.");
+export async function existsByNameAndSeason(leagueId: string, name: string, season: string, excludeId?: string) {
+  const name_lc = toLc(name);
+  const season_lc = toLc(season);
+  const q = await groupsCol(leagueId)
+    .where("name_lc", "==", name_lc)
+    .where("season_lc", "==", season_lc)
+    .limit(1)
+    .get();
+  const doc = q.docs[0];
+  if (!doc) return false;
+  if (excludeId && doc.id === excludeId) return false;
+  return true;
+}
+
+export async function create(input: { leagueId: string; name: string; season: string; order?: number }) {
+  const { leagueId, name, season } = input;
+  const order = typeof input.order === "number" ? input.order : 0;
+
+  if (await existsByNameAndSeason(leagueId, name, season)) {
+    throw new Error("Ya existe un grupo con ese nombre en esa temporada en la liga");
   }
 
-  const docRef = await addDoc(collection(db, COL), {
-    name: data.name,
-    season: data.season,
+  const name_lc = toLc(name);
+  const season_lc = toLc(season);
+  const now = FieldValue.serverTimestamp();
+
+  const docRef = await groupsCol(leagueId).add({
+    leagueId,
+    name,
+    season,
     name_lc,
     season_lc,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    order, // 👈 persistimos order
+    createdAt: now,
+    updatedAt: now,
   });
 
-  return { id: docRef.id };
+  const snap = await docRef.get();
+  return serialize<Group>({ id: snap.id, ...(snap.data() as any) });
 }
 
-export async function update(id: string, data: { name: string; season: string }) {
-  const name_lc = norm(data.name);
-  const season_lc = norm(data.season);
+export async function update(id: string, input: { leagueId: string; name: string; season: string; order?: number }) {
+  const { leagueId, name, season } = input;
+  const order = typeof input.order === "number" ? input.order : 0;
 
-  if (await existsByNameAndSeason(data.name, data.season)) {
-    const q = query(
-      collection(db, COL),
-      where("name_lc", "==", name_lc),
-      where("season_lc", "==", season_lc),
-      limit(1),
-    );
-    const snap = await getDocs(q);
-    if (!snap.empty && snap.docs[0].id !== id) {
-      throw new Error("Ya existe un grupo con ese nombre en esa temporada.");
-    }
+  if (await existsByNameAndSeason(leagueId, name, season, id)) {
+    throw new Error("Ya existe un grupo con ese nombre en esa temporada en la liga");
   }
 
-  await updateDoc(doc(db, COL, id), {
-    name: data.name,
-    season: data.season,
-    name_lc,
-    season_lc,
-    updatedAt: Date.now(),
+  const ref = groupsCol(leagueId).doc(id);
+  await ref.update({
+    name,
+    season,
+    name_lc: toLc(name),
+    season_lc: toLc(season),
+    order, // 👈 update order
+    updatedAt: FieldValue.serverTimestamp(),
   });
 
-  return { id };
+  const snap = await ref.get();
+  return serialize<Group>({ id: snap.id, ...(snap.data() as any) });
 }
 
-export async function remove(id: string) {
-  await deleteDoc(doc(db, COL, id));
-  return { id };
+export async function remove(leagueId: string, id: string) {
+  await groupsCol(leagueId).doc(id).delete();
+  return { ok: true } as const;
 }

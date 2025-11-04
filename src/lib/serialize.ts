@@ -1,17 +1,12 @@
+// =============================
 // src/lib/serialize.ts
-
-/**
- * Convierte valores Timestamp-like (Firestore client/admin) y Date a ISO string.
- * Cumple ESLint:
- *  - Evita no-underscore-dangle con bracket notation
- */
-
+// =============================
 type AnyRecord = Record<string, unknown>;
 
-function toDateSafe(input: unknown): Date | null {
+export function toDateSafe(input: unknown): Date | null {
   if (input instanceof Date) return input;
 
-  // Timestamps reales suelen exponer .toDate()
+  // Firestore Timestamp
   if (input && typeof (input as any).toDate === "function") {
     return (input as any).toDate();
   }
@@ -19,7 +14,7 @@ function toDateSafe(input: unknown): Date | null {
   if (typeof input === "object" && input !== null) {
     const obj = input as AnyRecord;
 
-    // Firestore export/raw: { _seconds, _nanoseconds } o { seconds, nanoseconds }
+    // Soporta {seconds,nanoseconds} y {_seconds,_nanoseconds}
     const seconds = (obj["seconds"] as number | undefined) ?? (obj["_seconds"] as number | undefined);
     const nanos = (obj["nanoseconds"] as number | undefined) ?? (obj["_nanoseconds"] as number | undefined) ?? 0;
 
@@ -33,8 +28,11 @@ function toDateSafe(input: unknown): Date | null {
   return null;
 }
 
+/**
+ * Convierte Timestamps/Date a ISO string y limpia prototipos (POJO).
+ */
 export function serialize<T = unknown>(value: T): T {
-  const maybeDate = toDateSafe(value);
+  const maybeDate = toDateSafe(value as any);
   if (maybeDate) return maybeDate.toISOString() as unknown as T;
 
   if (Array.isArray(value)) {
@@ -51,4 +49,17 @@ export function serialize<T = unknown>(value: T): T {
   }
 
   return value;
+}
+
+/**
+ * Alias semántico: asegura objeto plano con fechas como ISO.
+ */
+export function toPlain<T = unknown>(value: T): T {
+  return serialize<T>(value);
+}
+
+// Útil para UI
+export function formatDate(d?: Date | null, opts: Intl.DateTimeFormatOptions = {}): string {
+  if (!d) return "";
+  return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short", ...opts }).format(d);
 }

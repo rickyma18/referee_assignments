@@ -1,3 +1,4 @@
+// src/app/(main)/dashboard/leagues/_components/league-form.tsx
 "use client";
 
 import * as React from "react";
@@ -14,7 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
 
-type Props = { initial?: any };
+type Props = {
+  initial?: any;
+  /** Deshabilita inputs y submit si el usuario no puede editar */
+  canEdit?: boolean;
+  /** Redirección tras guardar. Default: "/dashboard/leagues" */
+  afterSaveHref?: string;
+};
 
 function slugify(name: string, season: string) {
   return `${name}-${season}`
@@ -25,7 +32,7 @@ function slugify(name: string, season: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-export function LeagueForm({ initial }: Props) {
+export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
   const router = useRouter();
   const isEdit = !!initial?.id;
 
@@ -62,17 +69,13 @@ export function LeagueForm({ initial }: Props) {
       const autoSlug = initial?.slug && isEdit ? (initial.slug as string) : slugify(values.name, values.season);
 
       const payload = isEdit ? { ...values, id: initial.id, slug: autoSlug } : { ...values, slug: autoSlug };
-
       const action = isEdit ? updateLeagueAction : createLeagueAction;
 
-      // Importante: maneja errores del server devolviendo un objeto,
-      // o lanza Error con message legible en tu action.
       const res = await action(payload);
 
       // Si tus actions devuelven {ok:false, fieldErrors, message}
       if (res?.ok === false) {
         if (res.fieldErrors) {
-          // Pinta errores por campo
           Object.entries(res.fieldErrors).forEach(([field, msg]) => {
             form.setError(field as any, { message: String(msg) });
           });
@@ -81,14 +84,17 @@ export function LeagueForm({ initial }: Props) {
         return;
       }
 
-      router.push("/dashboard/leagues");
+      // Redirige al detalle si te lo pasaron; si no, a la lista
+      router.push(afterSaveHref ?? "/dashboard/leagues");
     } catch (err: any) {
-      // Errores inesperados del servidor
       setServerError(err?.message ?? "Ocurrió un error al guardar.");
     } finally {
       setLoading(false);
     }
   };
+
+  // Deshabilitar por permisos o mientras guarda
+  const disabled = !canEdit || loading;
 
   return (
     <div className="space-y-6 p-6">
@@ -109,9 +115,9 @@ export function LeagueForm({ initial }: Props) {
                 <FormItem>
                   <FormLabel>Nombre</FormLabel>
                   <FormControl>
-                    <Input placeholder="Nombre" {...field} />
+                    <Input placeholder="Nombre" {...field} disabled={disabled} />
                   </FormControl>
-                  <FormMessage /> {/* ← error por campo */}
+                  <FormMessage />
                 </FormItem>
               )}
             />
@@ -123,7 +129,7 @@ export function LeagueForm({ initial }: Props) {
                 <FormItem>
                   <FormLabel>Temporada</FormLabel>
                   <FormControl>
-                    <Input placeholder="2025-26" {...field} />
+                    <Input placeholder="2025-26" {...field} disabled={disabled} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -144,6 +150,7 @@ export function LeagueForm({ initial }: Props) {
                         className="h-10 w-16 cursor-pointer p-1"
                         value={field.value ?? "#0057FF"}
                         onChange={(e) => field.onChange(e.target.value)}
+                        disabled={disabled}
                       />
                     </FormControl>
                     <span className="text-sm tabular-nums">{field.value}</span>
@@ -160,7 +167,7 @@ export function LeagueForm({ initial }: Props) {
                 <FormItem>
                   <FormLabel>Región (opcional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Región" {...field} />
+                    <Input placeholder="Región" {...field} disabled={disabled} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -174,7 +181,7 @@ export function LeagueForm({ initial }: Props) {
                 <FormItem>
                   <FormLabel>Logo URL (opcional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://…" {...field} />
+                    <Input placeholder="https://…" {...field} disabled={disabled} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -182,7 +189,7 @@ export function LeagueForm({ initial }: Props) {
             />
           </div>
 
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={disabled}>
             {loading ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear liga"}
           </Button>
         </form>

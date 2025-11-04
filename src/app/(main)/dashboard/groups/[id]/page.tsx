@@ -10,7 +10,10 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { getGroupAction } from "@/server/actions/groups.actions";
 
 export default function EditGroupPage() {
-  const { id } = useParams<{ id: string }>();
+  // Toma ambos por si tu carpeta es [groupId] o [id]
+  const params = useParams<Record<string, string>>();
+  const leagueId = String(params.leagueId);
+  const groupId = String(params.groupId ?? params.id); // fallback
 
   const { userDoc } = useCurrentUser();
   const role = (userDoc?.role ?? "DESCONOCIDO") as string;
@@ -25,7 +28,10 @@ export default function EditGroupPage() {
       try {
         setLoading(true);
         setError(null);
-        const data = await getGroupAction(id); // devuelve plain object
+
+        // ✅ ahora pasamos leagueId y groupId como requiere la action
+        const data = await getGroupAction(leagueId, groupId);
+
         setInitial(data ? { id: data.id, name: data.name, season: data.season } : null);
       } catch (e: any) {
         setError(e?.message ?? "Error al cargar el grupo");
@@ -33,7 +39,7 @@ export default function EditGroupPage() {
         setLoading(false);
       }
     })();
-  }, [id]);
+  }, [leagueId, groupId]);
 
   return (
     <RoleGate require="VIEW_DESIGNS">
@@ -42,14 +48,14 @@ export default function EditGroupPage() {
       ) : error ? (
         <div className="space-y-2 p-6">
           <p className="text-sm">Error: {error}</p>
-          <Link className="text-sm underline" href="/dashboard/groups">
+          <Link className="text-sm underline" href={`/dashboard/leagues/${leagueId}/groups`}>
             Volver
           </Link>
         </div>
       ) : !initial ? (
         <div className="space-y-2 p-6">
           <p className="text-sm">Grupo no encontrado.</p>
-          <Link className="text-sm underline" href="/dashboard/groups">
+          <Link className="text-sm underline" href={`/dashboard/leagues/${leagueId}/groups`}>
             Volver
           </Link>
         </div>
@@ -58,7 +64,7 @@ export default function EditGroupPage() {
       ) : (
         <div className="space-y-2 p-6">
           <p className="text-sm">No tienes permisos para editar grupos.</p>
-          <Link className="text-sm underline" href="/dashboard/groups">
+          <Link className="text-sm underline" href={`/dashboard/leagues/${leagueId}/groups`}>
             Volver
           </Link>
         </div>
