@@ -1,46 +1,103 @@
-// src/server/actions/league-teams.actions.ts
-"use server";
-import { revalidatePath } from "next/cache";
-import * as repo from "@/server/repositories/league-teams.repo";
-import { ZodError } from "zod";
+import { adminDb } from "@/server/admin/firebase-admin";
 
-type ActionResult<T = any> =
-  | { ok: true; data?: T }
-  | { ok: false; message?: string; fieldErrors?: Record<string, string | string[]> };
+const teamsCol = (leagueId: string, groupId: string) =>
+  adminDb.collection(`leagues/${leagueId}/groups/${groupId}/teams`);
 
-const zodFields = (e: unknown) => (e instanceof ZodError ? e.flatten().fieldErrors : undefined);
-const msg = (e: unknown) => (e instanceof Error ? e.message : "Error inesperado");
+const norm = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
 
-export async function listLeagueTeamsAction(leagueId: string, groupId: string) {
-  return repo.list(leagueId, groupId);
+type TeamBase = {
+  name: string;
+  municipality: string;
+  stadium: string;
+  venue: string;
+  logoUrl?: string | null;
+};
+
+export type TeamCreateInput = TeamBase & {
+  leagueId: string;
+  groupId: string;
+};
+
+export type TeamUpdateInput = Partial<TeamBase> & {
+  id: string;
+  leagueId: string;
+  groupId: string;
+};
+
+export type TeamRow = {
+  id: string;
+  name: string;
+  municipality: string;
+  stadium: string;
+  venue: string;
+  logoUrl?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  name_lc: string;
+};
+
+// ========== API esperada por las actions ==========
+
+// LIST
+export async function list(leagueId: string, groupId: string): Promise<TeamRow[]> {
+  const snap = await teamsCol(leagueId, groupId).orderBy("name_lc").get();
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as TeamRow[];
 }
 
-export async function createLeagueTeamAction(input: unknown): Promise<ActionResult> {
-  try {
-    const created = await repo.create(input); // valida en repo o usa tu zod aquí si lo tienes
-    revalidatePath(`/dashboard/leagues`);
-    return { ok: true, data: created };
-  } catch (e) {
-    return { ok: false, message: msg(e), fieldErrors: zodFields(e) as any };
-  }
+// CREATE
+export async function create(data: TeamCreateInput) {
+  const name_lc = norm(data.name);
+
+  const dup = await teamsCol(data.leagueId, data.groupId).where("name_lc", "==", name_lc).limit(1).get();
+  if (!dup.empty) throw new Error("Ya existe un equipo con ese nombre en este grupo.");
+
+  const ref = teamsCol(data.leagueId, data.groupId).doc();
+  const now = new Date();
+
+  const payload = {
+    name: data.name,
+    name_lc,
+    municipality: data.municipality,
+    stadium: data.stadium,
+    venue: data.venue,
+    logoUrl: data.logoUrl ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await ref.set(payload);
+  return { id: ref.id, ...payload };
 }
 
-export async function updateLeagueTeamAction(input: unknown): Promise<ActionResult> {
-  try {
-    const updated = await repo.update(input);
-    revalidatePath(`/dashboard/leagues`);
-    return { ok: true, data: updated };
-  } catch (e) {
-    return { ok: false, message: msg(e), fieldErrors: zodFields(e) as any };
+// UPDATE
+export async function update(data: TeamUpdateInput) {
+  const ref = teamsCol(data.leagueId, data.groupId).doc(data.id);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error("Equipo no encontrado.");
+
+  const updates: Record<string, any> = { updatedAt: new Date() };
+
+  if (typeof data.name === "string") {
+    updates.name = data.name;
+    updates.name_lc = norm(data.name);
   }
+  if (typeof data.municipality === "string") updates.municipality = data.municipality;
+  if (typeof data.stadium === "string") updates.stadium = data.stadium;
+  if (typeof data.venue === "string") updates.venue = data.venue;
+  if (data.logoUrl !== undefined) updates.logoUrl = data.logoUrl ?? null;
+
+  await ref.update(updates);
+  const after = await ref.get();
+  return { id: data.id, ...(after.data() as any) };
 }
 
-export async function deleteLeagueTeamAction(leagueId: string, groupId: string, id: string): Promise<ActionResult> {
-  try {
-    const res = await repo.remove(leagueId, groupId, id);
-    revalidatePath(`/dashboard/leagues`);
-    return { ok: true, data: res };
-  } catch (e) {
-    return { ok: false, message: msg(e) };
-  }
+// REMOVE
+export async function remove(leagueId: string, groupId: string, id: string) {
+  await teamsCol(leagueId, groupId).doc(id).delete();
+  return { id };
 }

@@ -1,42 +1,58 @@
+// src/app/(main)/dashboard/groups/_components/group-form.tsx
 "use client";
 
 import * as React from "react";
-import { z } from "zod";
+
 import { useRouter } from "next/navigation";
+
 import { toast } from "sonner";
 
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-
-import { GroupCreateSchema } from "@/domain/groups/group.zod";
+import { Input } from "@/components/ui/input";
+import { GroupCreateSchema, GroupUpdateSchema } from "@/domain/groups/group.zod";
 import { createGroupAction, updateGroupAction } from "@/server/actions/groups.actions";
-import { useCurrentUser } from "@/hooks/use-current-user";
 
-type Props = { initial?: { id?: string; name?: string; season?: string } };
+type Props = {
+  leagueId: string; // ⬅️ requerido por los esquemas
+  initial?: { id?: string; name?: string; season?: string } | null;
+};
 
-export function GroupForm({ initial }: Props) {
+export function GroupForm({ leagueId, initial }: Props) {
   const [name, setName] = React.useState(initial?.name ?? "");
   const [season, setSeason] = React.useState(initial?.season ?? "");
   const [saving, setSaving] = React.useState(false);
   const router = useRouter();
 
-  const { userDoc } = useCurrentUser();
-  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
+  const isEdit = Boolean(initial?.id);
 
   const onSubmit = async () => {
     try {
       setSaving(true);
-      const data = GroupCreateSchema.parse({ name, season });
 
-      if (initial?.id) {
-        await updateGroupAction({ id: initial.id, ...data }, role); // 🔑 pasa role
+      if (isEdit) {
+        const parsed = GroupUpdateSchema.parse({
+          id: initial!.id, // existe porque isEdit === true
+          leagueId,
+          name,
+          season,
+        });
+        await updateGroupAction(parsed); // ✅ un solo argumento
         toast.success("Grupo actualizado");
       } else {
-        await createGroupAction(data, role); // 🔑 pasa role
+        const parsed = GroupCreateSchema.parse({
+          leagueId,
+          name,
+          season,
+        });
+        await createGroupAction(parsed); // ✅ un solo argumento
         toast.success("Grupo creado");
+        setName("");
+        setSeason("");
       }
 
+      // Navegación: deja tu ruta preferida
       router.push("/dashboard/groups");
+      router.refresh();
     } catch (e: any) {
       toast.error(e?.message ?? "Error al guardar");
     } finally {

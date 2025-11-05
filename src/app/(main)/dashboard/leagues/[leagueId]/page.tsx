@@ -2,11 +2,14 @@
 "use client";
 
 import * as React from "react";
+
 import Link from "next/link";
 import { useParams } from "next/navigation";
+
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { listGroupsAction } from "@/server/actions/groups.actions";
@@ -211,7 +214,14 @@ export default function LeagueDetailPage() {
           <tbody>
             {groups.map((g) => (
               <tr key={g.id} className="border-t">
-                <td className="p-3">{g.name}</td>
+                <td className="p-3">
+                  <Link
+                    href={`/dashboard/leagues/${leagueId}/groups/${g.id}/teams`}
+                    className="text-blue-200 hover:underline"
+                  >
+                    {g.name}
+                  </Link>
+                </td>
                 <td className="p-3">{g.season}</td>
                 {canEdit && (
                   <td className="p-3 text-right">
@@ -220,7 +230,7 @@ export default function LeagueDetailPage() {
                         <Link href={`/dashboard/leagues/${league.id}/groups/${g.id}`}>Editar</Link>
                       </Button>
                       <Button asChild size="sm" variant="outline">
-                        <Link href={`/dashboard/leagues/${league.id}/groups`}>Ver todos</Link>
+                        <Link href={`/dashboard/leagues/${leagueId}/groups/${g.id}/teams`}>Ver equipos</Link>
                       </Button>
                     </div>
                   </td>

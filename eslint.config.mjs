@@ -145,6 +145,12 @@ export default defineConfig([
       "sonarjs/no-commented-code": "warn",
     },
   },
+  {
+    files: ["src/app/**/teams/page.tsx"], // evita literales con []
+    rules: {
+      "max-lines": ["warn", { max: 400, skipBlankLines: true, skipComments: true }],
+    },
+  },
   globalIgnores([
     ".github/",
     ".husky/",

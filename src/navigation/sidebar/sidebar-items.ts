@@ -1,5 +1,9 @@
+// =====================================
 // src/navigation/sidebar/sidebar-items.ts
-import { Users, CalendarCheck, Layers } from "lucide-react";
+// =====================================
+import { CalendarCheck, Layers } from "lucide-react";
+import { FaFutbol } from "react-icons/fa";
+
 import type { UserRole } from "@/types/roles";
 
 export type SidebarItem = {
@@ -28,7 +32,6 @@ export type NavGroup = {
 };
 
 export const sidebarItems: SidebarItem[] = [
-  // === Ejemplo de usuarios (solo superusuario) ===
   // {
   //   title: "Usuarios",
   //   href: "/admin/usuarios",
@@ -49,15 +52,18 @@ export const sidebarItems: SidebarItem[] = [
     icon: Layers,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
     children: [
-      {
-        title: "Todas las Ligas",
-        href: "/dashboard/leagues",
-      },
+      { title: "Todas las Ligas", href: "/dashboard/leagues" },
       {
         title: "Nueva Liga",
         href: "/dashboard/leagues/new",
         requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
       },
     ],
+  },
+  {
+    title: "Equipos",
+    href: "/dashboard/teams",
+    icon: FaFutbol,
+    requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
   },
 ];
