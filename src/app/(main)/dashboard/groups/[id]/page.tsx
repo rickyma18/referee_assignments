@@ -1,18 +1,20 @@
 "use client";
 
 import * as React from "react";
+
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import RoleGate from "@/components/auth/role-gate";
-import { GroupForm } from "../_components/group-form";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { getGroupAction } from "@/server/actions/groups.actions";
 
+import { GroupForm } from "../_components/group-form";
+
 export default function EditGroupPage() {
-  // Toma ambos por si tu carpeta es [groupId] o [id]
+  // Soporta rutas con leagueId/groupId o solo id
   const params = useParams<Record<string, string>>();
-  const leagueId = String(params.leagueId);
+  const leagueId = String(params.leagueId ?? ""); // ⬅️ necesario para el form
   const groupId = String(params.groupId ?? params.id); // fallback
 
   const { userDoc } = useCurrentUser();
@@ -29,9 +31,11 @@ export default function EditGroupPage() {
         setLoading(true);
         setError(null);
 
-        // ✅ ahora pasamos leagueId y groupId como requiere la action
-        const data = await getGroupAction(leagueId, groupId);
+        if (!leagueId) {
+          throw new Error("leagueId no disponible en la ruta.");
+        }
 
+        const data = await getGroupAction(leagueId, groupId);
         setInitial(data ? { id: data.id, name: data.name, season: data.season } : null);
       } catch (e: any) {
         setError(e?.message ?? "Error al cargar el grupo");
@@ -48,23 +52,33 @@ export default function EditGroupPage() {
       ) : error ? (
         <div className="space-y-2 p-6">
           <p className="text-sm">Error: {error}</p>
-          <Link className="text-sm underline" href={`/dashboard/leagues/${leagueId}/groups`}>
+          <Link
+            className="text-sm underline"
+            href={leagueId ? `/dashboard/leagues/${leagueId}/groups` : `/dashboard/groups`}
+          >
             Volver
           </Link>
         </div>
       ) : !initial ? (
         <div className="space-y-2 p-6">
           <p className="text-sm">Grupo no encontrado.</p>
-          <Link className="text-sm underline" href={`/dashboard/leagues/${leagueId}/groups`}>
+          <Link
+            className="text-sm underline"
+            href={leagueId ? `/dashboard/leagues/${leagueId}/groups` : `/dashboard/groups`}
+          >
             Volver
           </Link>
         </div>
       ) : canEdit ? (
-        <GroupForm initial={initial} />
+        // ⬇️ PASA leagueId
+        <GroupForm leagueId={leagueId} initial={initial} />
       ) : (
         <div className="space-y-2 p-6">
           <p className="text-sm">No tienes permisos para editar grupos.</p>
-          <Link className="text-sm underline" href={`/dashboard/leagues/${leagueId}/groups`}>
+          <Link
+            className="text-sm underline"
+            href={leagueId ? `/dashboard/leagues/${leagueId}/groups` : `/dashboard/groups`}
+          >
             Volver
           </Link>
         </div>

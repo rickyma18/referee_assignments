@@ -2,10 +2,14 @@
 // src/app/(main)/dashboard/leagues/[leagueId]/groups/page.tsx
 // =============================
 "use client";
+
 import * as React from "react";
+
 import Link from "next/link";
 import { useParams } from "next/navigation";
+
 import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -37,6 +41,7 @@ export default function GroupsPage() {
     if (leagueId) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leagueId, search]);
+
   const onDelete = async (id: string) => {
     if (!confirm("¿Eliminar grupo?")) return;
     try {
@@ -72,7 +77,7 @@ export default function GroupsPage() {
             <tr className="bg-muted/40 text-left">
               <th className="p-3">Nombre</th>
               <th className="p-3">Temporada</th>
-              <th className="w-40 p-3">Acciones</th>
+              {canEdit && <th className="w-40 p-3">Acciones</th>}
             </tr>
           </thead>
           <tbody>
@@ -80,21 +85,21 @@ export default function GroupsPage() {
               <tr key={g.id} className="border-t">
                 <td className="p-3">{g.name}</td>
                 <td className="p-3">{g.season}</td>
-                <td className="flex gap-2 p-3">
-                  <Link href={`/dashboard/leagues/${leagueId}/groups/${g.id}`}>
-                    <Button variant="secondary">Editar</Button>
-                  </Link>
-                  {canEdit && (
+                {canEdit && (
+                  <td className="flex gap-2 p-3">
+                    <Link href={`/dashboard/leagues/${leagueId}/groups/${g.id}`}>
+                      <Button variant="secondary">Editar</Button>
+                    </Link>
                     <Button variant="destructive" onClick={() => onDelete(g.id)}>
                       Eliminar
                     </Button>
-                  )}
-                </td>
+                  </td>
+                )}
               </tr>
             ))}
             {items.length === 0 && !loading && (
               <tr>
-                <td className="p-4" colSpan={3}>
+                <td className="p-4 text-center" colSpan={canEdit ? 3 : 2}>
                   Sin resultados
                 </td>
               </tr>
