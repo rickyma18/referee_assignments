@@ -16,17 +16,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { auth } from "@/lib/firebase";
-import { getInitials } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils"; // ✅ una sola import
 
 export function AccountSwitcher() {
   const router = useRouter();
   const { firebaseUser, userDoc, loading } = useCurrentUser();
 
-  const name = userDoc?.displayName || firebaseUser?.displayName || userDoc?.email || "Usuario";
-  const email = firebaseUser?.email || userDoc?.email || "";
-  const avatar = firebaseUser?.photoURL || "";
-  const role = userDoc?.role || "—";
+  // ✅ Usa ?? para null/undefined (no para falsy)
+  const name = userDoc?.displayName ?? firebaseUser?.displayName ?? userDoc?.email ?? "Usuario";
+
+  const email = firebaseUser?.email ?? userDoc?.email ?? "";
+  const avatar: string | undefined = firebaseUser?.photoURL ?? undefined;
+  const role = userDoc?.role ?? "—";
 
   const handleLogout = async () => {
     try {
@@ -37,7 +38,6 @@ export function AccountSwitcher() {
     }
   };
 
-  // Mientras carga, muestra un esqueleto simple
   if (loading) {
     return <div className="bg-muted h-9 w-9 animate-pulse rounded-lg" aria-label="Cargando usuario…" />;
   }
@@ -46,7 +46,7 @@ export function AccountSwitcher() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Avatar className="size-9 cursor-pointer rounded-lg">
-          <AvatarImage src={avatar || undefined} alt={name} />
+          <AvatarImage src={avatar} alt={name} />
           <AvatarFallback className="rounded-lg">{getInitials(name)}</AvatarFallback>
         </Avatar>
       </DropdownMenuTrigger>
@@ -54,7 +54,7 @@ export function AccountSwitcher() {
       <DropdownMenuContent className="min-w-56 space-y-1 rounded-lg" side="bottom" align="end" sideOffset={4}>
         <div className="flex items-center gap-3 px-2 py-2">
           <Avatar className="size-9 rounded-lg">
-            <AvatarImage src={avatar || undefined} alt={name} />
+            <AvatarImage src={avatar} alt={name} />
             <AvatarFallback className="rounded-lg">{getInitials(name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
@@ -79,7 +79,7 @@ export function AccountSwitcher() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 focus:text-red-700">
+        <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
           <LogOut className="mr-2 size-4" />
           Cerrar sesión
         </DropdownMenuItem>
