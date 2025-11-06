@@ -60,15 +60,17 @@ export function LayoutControls(props: LayoutControlsProps) {
       <PopoverContent align="end">
         <div className="flex flex-col gap-5">
           <div className="space-y-1.5">
-            <h4 className="text-sm leading-none font-medium">Layout Settings</h4>
-            <p className="text-muted-foreground text-xs">Customize your dashboard layout preferences.</p>
+            <h4 className="text-sm leading-none font-medium">Configuración del diseño</h4>
+            <p className="text-muted-foreground text-xs">Personaliza las preferencias del diseño de tu panel.</p>
           </div>
+
           <div className="space-y-3">
+            {/* === TEMA === */}
             <div className="space-y-1">
-              <Label className="text-xs font-medium">Preset</Label>
+              <Label className="text-xs font-medium">Tema</Label>
               <Select value={themePreset} onValueChange={(value) => handleValueChange("theme_preset", value)}>
                 <SelectTrigger size="sm" className="w-full text-xs">
-                  <SelectValue placeholder="Preset" />
+                  <SelectValue placeholder="Seleccionar tema" />
                 </SelectTrigger>
                 <SelectContent>
                   {THEME_PRESET_OPTIONS.map((preset) => (
@@ -86,8 +88,9 @@ export function LayoutControls(props: LayoutControlsProps) {
               </Select>
             </div>
 
+            {/* === MODO === */}
             <div className="space-y-1">
-              <Label className="text-xs font-medium">Mode</Label>
+              <Label className="text-xs font-medium">Modo</Label>
               <ToggleGroup
                 className="w-full"
                 size="sm"
@@ -96,17 +99,18 @@ export function LayoutControls(props: LayoutControlsProps) {
                 value={themeMode}
                 onValueChange={(value) => handleValueChange("theme_mode", value)}
               >
-                <ToggleGroupItem className="text-xs" value="light" aria-label="Toggle inset">
-                  Light
+                <ToggleGroupItem className="text-xs" value="light" aria-label="Modo claro">
+                  Claro
                 </ToggleGroupItem>
-                <ToggleGroupItem className="text-xs" value="dark" aria-label="Toggle sidebar">
-                  Dark
+                <ToggleGroupItem className="text-xs" value="dark" aria-label="Modo oscuro">
+                  Oscuro
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>
 
+            {/* === VARIANTE SIDEBAR === */}
             <div className="space-y-1">
-              <Label className="text-xs font-medium">Sidebar Variant</Label>
+              <Label className="text-xs font-medium">Variante de barra lateral</Label>
               <ToggleGroup
                 className="w-full"
                 size="sm"
@@ -115,20 +119,21 @@ export function LayoutControls(props: LayoutControlsProps) {
                 value={variant}
                 onValueChange={(value) => handleValueChange("sidebar_variant", value)}
               >
-                <ToggleGroupItem className="text-xs" value="inset" aria-label="Toggle inset">
-                  Inset
+                <ToggleGroupItem className="text-xs" value="inset" aria-label="Incrustado">
+                  Incrustado
                 </ToggleGroupItem>
-                <ToggleGroupItem className="text-xs" value="sidebar" aria-label="Toggle sidebar">
-                  Sidebar
+                <ToggleGroupItem className="text-xs" value="sidebar" aria-label="Lateral">
+                  Lateral
                 </ToggleGroupItem>
-                <ToggleGroupItem className="text-xs" value="floating" aria-label="Toggle floating">
-                  Floating
+                <ToggleGroupItem className="text-xs" value="floating" aria-label="Flotante">
+                  Flotante
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>
 
+            {/* === ESTILO NAVBAR === */}
             <div className="space-y-1">
-              <Label className="text-xs font-medium">Navbar Style</Label>
+              <Label className="text-xs font-medium">Estilo de la barra superior</Label>
               <ToggleGroup
                 className="w-full"
                 size="sm"
@@ -137,17 +142,18 @@ export function LayoutControls(props: LayoutControlsProps) {
                 value={navbarStyle}
                 onValueChange={(value) => handleValueChange("navbar_style", value)}
               >
-                <ToggleGroupItem className="text-xs" value="sticky" aria-label="Toggle sticky">
-                  Sticky
+                <ToggleGroupItem className="text-xs" value="sticky" aria-label="Fija">
+                  Fija
                 </ToggleGroupItem>
-                <ToggleGroupItem className="text-xs" value="scroll" aria-label="Toggle scroll">
-                  Scroll
+                <ToggleGroupItem className="text-xs" value="scroll" aria-label="Desplazable">
+                  Desplazable
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>
 
+            {/* === COLAPSABLE === */}
             <div className="space-y-1">
-              <Label className="text-xs font-medium">Sidebar Collapsible</Label>
+              <Label className="text-xs font-medium">Barra lateral colapsable</Label>
               <ToggleGroup
                 className="w-full"
                 size="sm"
@@ -156,17 +162,18 @@ export function LayoutControls(props: LayoutControlsProps) {
                 value={collapsible}
                 onValueChange={(value) => handleValueChange("sidebar_collapsible", value)}
               >
-                <ToggleGroupItem className="text-xs" value="icon" aria-label="Toggle icon">
-                  Icon
+                <ToggleGroupItem className="text-xs" value="icon" aria-label="Ícono">
+                  Ícono
                 </ToggleGroupItem>
-                <ToggleGroupItem className="text-xs" value="offcanvas" aria-label="Toggle offcanvas">
-                  OffCanvas
+                <ToggleGroupItem className="text-xs" value="offcanvas" aria-label="Fuera del lienzo">
+                  Fuera del lienzo
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>
 
+            {/* === DISEÑO DEL CONTENIDO === */}
             <div className="space-y-1">
-              <Label className="text-xs font-medium">Content Layout</Label>
+              <Label className="text-xs font-medium">Diseño del contenido</Label>
               <ToggleGroup
                 className="w-full"
                 size="sm"
@@ -175,11 +182,11 @@ export function LayoutControls(props: LayoutControlsProps) {
                 value={contentLayout}
                 onValueChange={(value) => handleValueChange("content_layout", value)}
               >
-                <ToggleGroupItem className="text-xs" value="centered" aria-label="Toggle centered">
-                  Centered
+                <ToggleGroupItem className="text-xs" value="centered" aria-label="Centrado">
+                  Centrado
                 </ToggleGroupItem>
-                <ToggleGroupItem className="text-xs" value="full-width" aria-label="Toggle full-width">
-                  Full Width
+                <ToggleGroupItem className="text-xs" value="full-width" aria-label="Ancho completo">
+                  Ancho completo
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>

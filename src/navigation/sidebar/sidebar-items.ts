@@ -45,9 +45,14 @@ export const sidebarItems: SidebarItem[] = [
     icon: CalendarCheck,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
   },
-
   {
-    title: "Ligas",
+    title: "Ligas - Grupos - Equipos",
+    href: "/dashboard/teams-explorer",
+    icon: FaFutbol,
+    requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
+  },
+  {
+    title: "Administrar ligas",
     href: "/dashboard/leagues",
     icon: Layers,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
@@ -59,11 +64,5 @@ export const sidebarItems: SidebarItem[] = [
         requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
       },
     ],
-  },
-  {
-    title: "Equipos",
-    href: "/dashboard/teams",
-    icon: FaFutbol,
-    requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
   },
 ];

@@ -1,6 +1,9 @@
 "use client";
 
-import { EllipsisVertical, CircleUser, CreditCard, MessageSquareDot, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
+
+import { signOut } from "firebase/auth";
+import { EllipsisVertical, CircleUser, LogOut } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -13,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
+import { auth } from "@/lib/firebase"; // 👈 tu instancia del SDK cliente de Firebase
 import { getInitials } from "@/lib/utils";
 
 export function NavUser({
@@ -24,7 +28,21 @@ export function NavUser({
     readonly avatar: string;
   };
 }) {
+  const router = useRouter();
   const { isMobile } = useSidebar();
+
+  const handleAccount = () => {
+    router.push("/account"); // 👈 ajusta la ruta si tu vista de cuenta está en otra parte
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.replace("/auth/login"); // 👈 o la ruta que uses para login
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+    }
+  };
 
   return (
     <SidebarMenu>
@@ -46,6 +64,7 @@ export function NavUser({
               <EllipsisVertical className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
+
           <DropdownMenuContent
             className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
             side={isMobile ? "bottom" : "right"}
@@ -64,17 +83,21 @@ export function NavUser({
                 </div>
               </div>
             </DropdownMenuLabel>
+
             <DropdownMenuSeparator />
+
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <CircleUser />
-                Account
+              <DropdownMenuItem onClick={handleAccount} className="cursor-pointer">
+                <CircleUser className="mr-2 h-4 w-4" />
+                Cuenta
               </DropdownMenuItem>
             </DropdownMenuGroup>
+
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <LogOut />
-              Log out
+
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
+              <LogOut className="mr-2 h-4 w-4" />
+              Cerrar sesión
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

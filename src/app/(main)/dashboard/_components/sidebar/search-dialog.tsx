@@ -64,19 +64,20 @@ export function SearchDialog() {
 
   const searchItems = React.useMemo<SearchEntry[]>(() => {
     const base: SearchEntry[] = [
-      { group: "General", icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
+      { group: "General", icon: LayoutDashboard, label: "Designaciones", href: "/dashboard/assignments" },
       { group: "General", icon: UserCircle2, label: "Mi perfil", href: "/profile" },
       { group: "General", icon: HelpCircle, label: "Ayuda", href: "/help" },
     ];
 
     const admin: SearchEntry[] = [
       { group: "Catálogos", icon: Flag, label: "Ligas", href: "/dashboard/leagues" },
-      { group: "Catálogos", icon: FolderTree, label: "Grupos", href: "/dashboard/groups" },
-      { group: "Catálogos", icon: Shirt, label: "Equipos", href: "/dashboard/teams" },
-      { group: "Operación", icon: ClipboardList, label: "Designaciones", href: "/dashboard/assignments" },
-      { group: "Administración", icon: Users, label: "Usuarios", href: "/dashboard/users" },
-      { group: "Administración", icon: Shield, label: "Roles y permisos", href: "/dashboard/roles" },
-      { group: "Calendario", icon: CalendarDays, label: "Calendario de jornadas", href: "/dashboard/calendar" },
+      { group: "Catálogos", icon: FolderTree, label: "Nueva liga", href: "/dashboard/leagues/new" },
+      {
+        group: "Catálogos",
+        icon: Shirt,
+        label: "Explorador",
+        href: "/dashboard/teams-explorer",
+      },
     ];
 
     const referee: SearchEntry[] = [

@@ -215,10 +215,7 @@ export default function LeagueDetailPage() {
             {groups.map((g) => (
               <tr key={g.id} className="border-t">
                 <td className="p-3">
-                  <Link
-                    href={`/dashboard/leagues/${leagueId}/groups/${g.id}/teams`}
-                    className="text-blue-200 hover:underline"
-                  >
+                  <Link href={`/dashboard/leagues/${leagueId}/groups/${g.id}/teams`} className="white">
                     {g.name}
                   </Link>
                 </td>
