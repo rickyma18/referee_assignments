@@ -278,7 +278,7 @@ export default function TeamsExplorerPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Explorador de Ligas, Grupos y Equipos</h1>
-        <p className="text-muted-foreground text-sm">Navega todo en una sola vista, con carga perezosa y logos.</p>
+        <p className="text-muted-foreground text-sm">Navega todo en una sola vista.</p>
       </div>
 
       <Separator />
@@ -455,7 +455,7 @@ export default function TeamsExplorerPage() {
                                             disabled={teamsByGroup[group.id]?.loading}
                                             onClick={() => loadMoreTeams(group.id)}
                                           >
-                                            {teamsByGroup[group.id]?.loading ? "Cargando…" : "Cargar más"}
+                                            {teamsByGroup[group.id]?.loading ? "Cargando…" : "Refrescar"}
                                           </Button>
                                         ) : null}
                                       </div>

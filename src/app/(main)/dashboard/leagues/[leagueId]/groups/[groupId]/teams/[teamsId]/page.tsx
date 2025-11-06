@@ -1,3 +1,4 @@
+// src/app/(main)/dashboard/leagues/[leagueId]/groups/[groupId]/teams/[teamId]/page.tsx
 "use client";
 
 import * as React from "react";
@@ -40,7 +41,6 @@ export default function EditTeamPage() {
   const params = useParams();
   const pathname = usePathname();
 
-  // ---- Params robustos (como en tu versión previa)
   const fromParams = useMemo(() => {
     const p = params as any;
     return (p?.teamId ?? p?.id ?? p?.TeamId ?? p?.teamid ?? p?.Id) as string | undefined;
@@ -56,18 +56,13 @@ export default function EditTeamPage() {
   }, [pathname]);
 
   const teamId = fromParams ?? fromPath;
-
   const leagueId = (params as any)?.leagueId ?? pathname?.split("/leagues/")[1]?.split("/")[0];
-
   const groupId = (params as any)?.groupId ?? pathname?.split("/groups/")[1]?.split("/")[0];
 
-  // ---- Estados UI (igual que en crear)
   const [league, setLeague] = useState<LeagueUI | null>(null);
   const [loadingLeague, setLoadingLeague] = useState(true);
-
   const [group, setGroup] = useState<GroupUI | null>(null);
   const [loadingGroup, setLoadingGroup] = useState(true);
-
   const [initial, setInitial] = useState<{
     id?: string;
     name?: string;
@@ -77,29 +72,25 @@ export default function EditTeamPage() {
     venue?: string;
     logoUrl?: string | null;
   } | null>(null);
-
   const [loadingTeam, setLoadingTeam] = useState(true);
 
-  // ---- Carga liga (mismo patrón que en “Nuevo equipo”)
+  // ---- Carga liga
   useEffect(() => {
     (async () => {
       if (!leagueId) return;
       try {
         setLoadingLeague(true);
         const lg = await getLeagueAction(String(leagueId));
-        if (!lg) {
-          setLeague(null);
-        } else {
-          setLeague({
-            id: String(lg.id),
-            name: String(lg.name ?? ""),
-            season: String(lg.season ?? ""),
-            status: (lg.status ?? "ACTIVE") as any,
-            color: lg.color ?? null,
-            slug: lg.slug ?? null,
-            logoUrl: lg.logoUrl ?? null,
-          });
-        }
+        if (!lg) return setLeague(null);
+        setLeague({
+          id: String(lg.id),
+          name: String(lg.name ?? ""),
+          season: String(lg.season ?? ""),
+          status: (lg.status ?? "ACTIVE") as any,
+          color: lg.color ?? null,
+          slug: lg.slug ?? null,
+          logoUrl: lg.logoUrl ?? null,
+        });
       } catch (e: any) {
         toast.error(e?.message ?? "Error al cargar la liga");
         setLeague(null);
@@ -109,22 +100,19 @@ export default function EditTeamPage() {
     })();
   }, [leagueId]);
 
-  // ---- Carga grupo (leagueId + groupId)
+  // ---- Carga grupo
   useEffect(() => {
     (async () => {
       if (!leagueId || !groupId) return;
       try {
         setLoadingGroup(true);
         const g = await getGroupAction(String(leagueId), String(groupId));
-        if (!g) {
-          setGroup(null);
-        } else {
-          setGroup({
-            id: String(g.id),
-            name: String(g.name ?? ""),
-            season: (g.season ?? null) as string | null,
-          });
-        }
+        if (!g) return setGroup(null);
+        setGroup({
+          id: String(g.id),
+          name: String(g.name ?? ""),
+          season: (g.season ?? null) as string | null,
+        });
       } catch (e: any) {
         toast.error(e?.message ?? "Error al cargar el grupo");
         setGroup(null);
@@ -134,25 +122,20 @@ export default function EditTeamPage() {
     })();
   }, [leagueId, groupId]);
 
-  // ---- Carga equipo (initial para el form)
+  // ---- Carga equipo
   useEffect(() => {
     (async () => {
       try {
         setLoadingTeam(true);
-
         if (!teamId || typeof teamId !== "string" || !teamId.trim()) {
           toast.error("Identificador de equipo inválido.");
-          setInitial(null);
-          return;
+          return setInitial(null);
         }
-
         const data = await getTeamAction(teamId);
         if (!data) {
           toast.error("Equipo no encontrado");
-          setInitial(null);
-          return;
+          return setInitial(null);
         }
-
         setInitial({
           id: data.id,
           name: data.name,
@@ -180,24 +163,23 @@ export default function EditTeamPage() {
     );
   }
 
-  // Header con mismo diseño que “Nuevo equipo”
   return (
     <div className="space-y-6 p-6">
-      {/* Header compacto con logo de liga */}
+      {/* Header con logo del EQUIPO (antes era el de la liga) */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <div className="bg-muted size-16 shrink-0 overflow-hidden rounded-md border">
-            {league?.logoUrl ? (
+            {initial?.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={league.logoUrl}
-                alt={`${league.name} logo`}
+                src={initial.logoUrl}
+                alt={`${initial.name} logo`}
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-xs opacity-50">
-                {loadingLeague ? "Cargando…" : "Sin logo"}
+                {loadingTeam ? "Cargando…" : "Sin logo"}
               </div>
             )}
           </div>
@@ -224,7 +206,7 @@ export default function EditTeamPage() {
         </div>
       </div>
 
-      {/* Color de la liga (si existe) */}
+      {/* Color de la liga */}
       {league?.color ? (
         <div className="flex items-center gap-3 text-sm">
           <span
@@ -239,7 +221,7 @@ export default function EditTeamPage() {
 
       <Separator />
 
-      {/* Formulario (igual que en crear, pero con initial) */}
+      {/* Formulario */}
       {loadingTeam ? (
         <p className="text-muted-foreground text-sm">Cargando…</p>
       ) : initial ? (
