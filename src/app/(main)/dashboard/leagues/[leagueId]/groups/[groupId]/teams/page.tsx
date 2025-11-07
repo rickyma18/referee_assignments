@@ -1,3 +1,4 @@
+// src/app/(main)/dashboard/leagues/[leagueId]/groups/[groupId]/teams/page.tsx
 "use client";
 
 import * as React from "react";
@@ -8,6 +9,17 @@ import { useParams } from "next/navigation";
 
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -45,7 +57,6 @@ type GroupUI = {
 };
 
 export default function TeamsPage() {
-  // ⚠️ Next 16: params desde useParams
   const { leagueId, groupId } = useParams<{ leagueId: string; groupId: string }>();
 
   const { userDoc } = useCurrentUser();
@@ -64,6 +75,9 @@ export default function TeamsPage() {
   const [search, setSearch] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [page, setPage] = React.useState<Paged<TeamRow>>({ items: [], nextCursorId: null });
+
+  // Estado de eliminación
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
   // Guard para evitar doble fetch
   const fetchingRef = React.useRef(false);
@@ -171,23 +185,24 @@ export default function TeamsPage() {
     load({ append: false });
   }, [groupId, search, load]);
 
-  const onDelete = async (teamId: string) => {
+  // ---------- Eliminar equipo (con AlertDialog) ----------
+  async function handleDelete(team: TeamRow) {
     if (!canEdit) return;
-    const ok = window.confirm("¿Eliminar este equipo? Esta acción no se puede deshacer.");
-    if (!ok) return;
-
     try {
-      const res = await deleteTeamAction(String(leagueId), String(groupId), teamId);
-      if (!res.ok) {
-        toast.error(res.message ?? "No se pudo eliminar el equipo");
+      setDeletingId(team.id);
+      const res = await deleteTeamAction(String(leagueId), String(groupId), team.id);
+      if ((res as any)?.ok === false) {
+        toast.error((res as any)?.message ?? "No se pudo eliminar el equipo");
         return;
       }
-      setPage((prev) => ({ ...prev, items: prev.items.filter((i) => i.id !== teamId) }));
+      setPage((prev) => ({ ...prev, items: prev.items.filter((i) => i.id !== team.id) }));
       toast.success("Equipo eliminado");
     } catch (e: any) {
       toast.error(e?.message ?? "Error al eliminar");
+    } finally {
+      setDeletingId(null);
     }
-  };
+  }
 
   const onLoadMore = () => {
     if (!page.nextCursorId) return;
@@ -275,7 +290,7 @@ export default function TeamsPage() {
               <th>Municipio</th>
               <th>Estadio</th>
               <th>Sede (dirección)</th>
-              <th className="w-[140px] text-right">Acciones</th>
+              <th className="w-[220px] text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -298,22 +313,67 @@ export default function TeamsPage() {
                     <div className="bg-muted h-8 w-8 rounded" />
                   )}
                 </td>
-                <td className="font-medium">{t.name}</td>
+
+                {/* 🔗 Nombre enlazado al detalle */}
+                <td className="font-medium">
+                  <Link
+                    href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${t.id}`}
+                    className="hover:underline"
+                    title={`Ver información de ${t.name}`}
+                  >
+                    {t.name}
+                  </Link>
+                </td>
+
                 <td>{t.municipality ?? ""}</td>
                 <td>{t.stadium ?? ""}</td>
                 <td className="max-w-[420px] truncate">{t.venue ?? ""}</td>
                 <td className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Link
-                      href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${t.id}`}
-                      className="text-primary hover:underline"
-                    >
-                      Editar
-                    </Link>
-                    {canEdit && (
-                      <button className="text-destructive hover:underline" onClick={() => onDelete(t.id)}>
-                        Eliminar
-                      </button>
+                  <div className="flex justify-end gap-3">
+                    {/* Para roles sin permisos: solo "Ver" */}
+                    {!canEdit ? (
+                      <Link
+                        href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${t.id}`}
+                        className="text-muted-foreground hover:underline"
+                      >
+                        Ver
+                      </Link>
+                    ) : (
+                      <>
+                        <Link
+                          href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${t.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          Ver
+                        </Link>
+                        <Link
+                          href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${t.id}/edit`}
+                          className="text-primary hover:underline"
+                        >
+                          Editar
+                        </Link>
+
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button className="text-destructive hover:underline" disabled={deletingId === t.id}>
+                              {deletingId === t.id ? "Eliminando..." : "Eliminar"}
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Eliminar equipo</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Vas a eliminar el equipo <span className="font-semibold">{t.name}</span>. Esta acción no
+                                se puede deshacer y podría afectar registros relacionados. ¿Deseas continuar?
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(t)}>Confirmar</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </>
                     )}
                   </div>
                 </td>
@@ -327,7 +387,7 @@ export default function TeamsPage() {
           <span className="text-muted-foreground text-xs">{page.items.length} resultados</span>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={onLoadMore} disabled={!page.nextCursorId || loading}>
-              {loading ? "Cargando…" : page.nextCursorId ? "Cargar más" : "Sin más resultados"}
+              {loading ? "Cargando…" : page.nextCursorId ? "Refrescar" : "Sin más resultados"}
             </Button>
           </div>
         </div>

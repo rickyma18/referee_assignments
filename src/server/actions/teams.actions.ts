@@ -15,6 +15,9 @@ import {
 } from "@/domain/teams/team.zod";
 import * as repo from "@/server/repositories/teams.repo";
 
+import { ForbiddenError } from "../auth/errors";
+import { requireEditRole } from "../auth/require-role";
+
 type ActionResult<T = any> =
   | { ok: true; data?: T }
   | { ok: false; message?: string; fieldErrors?: Record<string, string | string[]> };
@@ -22,10 +25,7 @@ type ActionResult<T = any> =
 const zodFields = (e: unknown) => (e instanceof ZodError ? e.flatten().fieldErrors : undefined);
 const msg = (e: unknown) => (e instanceof Error ? e.message : "Error inesperado");
 
-// ------- Helpers -------
-
 function revalidateTeamsList(leagueId: string, groupId: string) {
-  // Ajusta esta ruta si tu UI usa otra URL
   revalidatePath(`/dashboard/leagues/${leagueId}/groups/${groupId}/teams`);
 }
 
@@ -54,7 +54,10 @@ export async function getTeamAction(teamId: string) {
  */
 export async function createTeamAction(input: TeamCreateInput & { leagueId?: string }): Promise<ActionResult> {
   const { leagueId, ...rest } = input;
+
   try {
+    await requireEditRole(); // 🔒 Guard de rol
+
     const data = TeamCreateSchema.parse(rest);
     const created = await repo.create(data);
 
@@ -65,6 +68,10 @@ export async function createTeamAction(input: TeamCreateInput & { leagueId?: str
   } catch (e: any) {
     const groupId = (rest as any)?.groupId ?? "";
     if (leagueId && groupId) revalidateTeamsList(leagueId, groupId);
+
+    if (e instanceof ForbiddenError) {
+      return { ok: false, message: e.message };
+    }
 
     const duplicateMsg =
       e?.code === "DUPLICATE_NAME_IN_GROUP"
@@ -77,13 +84,14 @@ export async function createTeamAction(input: TeamCreateInput & { leagueId?: str
 
 /**
  * Actualiza un equipo.
- * - 'input' debe incluir 'id' + campos editables.
- * - Recibe opcional 'leagueId' para revalidate.
+ * Solo SUPERUSUARIO o DELEGADO pueden ejecutar esta acción.
  */
 export async function updateTeamAction(input: TeamUpdateInput & { leagueId?: string }): Promise<ActionResult> {
   const { leagueId, id, ...patch } = input;
 
   try {
+    await requireEditRole(); // 🔒 Guard de rol
+
     const data = TeamUpdateSchema.parse({ id, ...patch });
     const { id: _id, ...rest } = data;
 
@@ -98,6 +106,10 @@ export async function updateTeamAction(input: TeamUpdateInput & { leagueId?: str
     const groupId = (patch as any)?.groupId ?? "";
     if (leagueId && groupId) revalidateTeamsList(leagueId, groupId);
 
+    if (e instanceof ForbiddenError) {
+      return { ok: false, message: e.message };
+    }
+
     const duplicateMsg =
       e?.code === "DUPLICATE_NAME_IN_GROUP"
         ? "Ya existe un equipo con ese nombre en el grupo seleccionado."
@@ -108,18 +120,23 @@ export async function updateTeamAction(input: TeamUpdateInput & { leagueId?: str
 }
 
 /**
- * Elimina un equipo por id.
- * - Pasar leagueId y groupId para revalidate preciso.
+ * Elimina un equipo.
+ * Solo SUPERUSUARIO o DELEGADO pueden ejecutar esta acción.
  */
 export async function deleteTeamAction(leagueId: string, groupId: string, teamId: string): Promise<ActionResult> {
   try {
+    await requireEditRole(); // 🔒 Guard de rol
+
     const res = await repo.remove(teamId);
 
     if (leagueId && groupId) revalidateTeamsList(leagueId, groupId);
     else revalidatePath("/dashboard");
 
     return { ok: true, data: res };
-  } catch (e) {
+  } catch (e: any) {
+    if (e instanceof ForbiddenError) {
+      return { ok: false, message: e.message };
+    }
     return { ok: false, message: msg(e) };
   }
 }
