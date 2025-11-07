@@ -1,8 +1,11 @@
+// src/app/(main)/dashboard/_components/sidebar/app-sidebar.tsx
 "use client";
 
 import * as React from "react";
+
 import Link from "next/link";
-import { Settings, CircleHelp, Search, Database, ClipboardList, File, Command } from "lucide-react";
+
+import { Command } from "lucide-react";
 
 import {
   Sidebar,
@@ -15,30 +18,16 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_CONFIG } from "@/config/app-config";
 import { useCurrentUser } from "@/hooks/use-current-user";
-
-// ⬇️ ahora este módulo SÍ exporta NavGroup/NavMainItem
 import { sidebarItems, type SidebarItem, type NavGroup, type NavMainItem } from "@/navigation/sidebar/sidebar-items";
 import type { UserRole } from "@/types/roles";
 
 import { NavMain } from "./nav-main";
 import { NavUser } from "./nav-user";
 
-const data = {
-  navSecondary: [
-    { title: "Settings", url: "#", icon: Settings },
-    { title: "Get Help", url: "#", icon: CircleHelp },
-    { title: "Search", url: "#", icon: Search },
-  ],
-  documents: [
-    { name: "Data Library", url: "#", icon: Database },
-    { name: "Reports", url: "#", icon: ClipboardList },
-    { name: "Word Assistant", url: "#", icon: File },
-  ],
-};
-
 // ---- helpers de rol y mapeo ----
 function filterByRole(items: SidebarItem[], role: UserRole | null): SidebarItem[] {
-  const allowed = (it: SidebarItem) => !it.requiredRoles || (role != null && it.requiredRoles.includes(role));
+  const allowed = (it: SidebarItem) =>
+    it.requiredRoles == null || it.requiredRoles.length === 0 || (role != null && it.requiredRoles.includes(role));
 
   const walk = (list: SidebarItem[]): SidebarItem[] =>
     list
@@ -47,7 +36,8 @@ function filterByRole(items: SidebarItem[], role: UserRole | null): SidebarItem[
         const kids = it.children ? walk(it.children) : undefined;
         return { ...it, children: kids && kids.length ? kids : undefined };
       })
-      .filter((it) => it.href || it.children);
+      // Evita usar `||` como coalescing; convierte explícitamente a boolean
+      .filter((it) => Boolean(it.href ?? it.children ?? (it as any).dynamic));
 
   return walk(items);
 }
@@ -81,10 +71,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // 1) filtra por rol
   const filtered: SidebarItem[] = React.useMemo(() => filterByRole(sidebarItems, effectiveRole), [effectiveRole]);
 
-  // 2) convierte a grupos que NavMain entiende
+  // 2) convierte TODOS (incluido el dinámico) para que NavMain los maneje
   const navGroups: NavGroup[] = React.useMemo(() => sidebarItemsToNavGroups(filtered), [filtered]);
 
-  // 3) datos para NavUser
+  // Datos para NavUser
   const userForNav = React.useMemo(
     () => ({
       name: userDoc?.displayName ?? firebaseUser?.displayName ?? userDoc?.email ?? "Usuario",
@@ -141,7 +131,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-        {/* NavMain ahora recibe NavGroup[] */}
+        {/* Menú principal normal: incluye el ítem dinámico para que NavMain lo renderice como colapsable */}
         <NavMain items={navGroups} />
       </SidebarContent>
 

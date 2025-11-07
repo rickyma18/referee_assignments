@@ -14,6 +14,8 @@ export type SidebarItem = {
   requiredRoles?: UserRole[];
   newTab?: boolean;
   comingSoon?: boolean;
+  /** <- NUEVO: pinta children dinámicos desde el cliente */
+  dynamic?: "groupsByLeague";
 };
 
 export type NavMainItem = {
@@ -32,13 +34,6 @@ export type NavGroup = {
 };
 
 export const sidebarItems: SidebarItem[] = [
-  // {
-  //   title: "Usuarios",
-  //   href: "/admin/usuarios",
-  //   icon: Users,
-  //   requiredRoles: ["SUPERUSUARIO"],
-  // },
-
   {
     title: "Designaciones",
     href: "/dashboard/assignments",
@@ -58,11 +53,15 @@ export const sidebarItems: SidebarItem[] = [
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
     children: [
       { title: "Todas las Ligas", href: "/dashboard/leagues" },
-      {
-        title: "Nueva Liga",
-        href: "/dashboard/leagues/new",
-        requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
-      },
+      { title: "Nueva Liga", href: "/dashboard/leagues/new", requiredRoles: ["SUPERUSUARIO", "DELEGADO"] },
     ],
+  },
+  {
+    title: "Administrar grupos",
+    href: "/dashboard/leagues", // fallback si no se despliega
+    icon: Layers,
+    requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
+    // El submenú se rellena dinámicamente con las ligas
+    dynamic: "groupsByLeague",
   },
 ];

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { listGroupsAction } from "@/server/actions/groups.actions";
 import { listLeaguesAction } from "@/server/actions/leagues.actions";
 import { listTeamsByGroupAction } from "@/server/actions/teams.actions";
@@ -64,6 +65,12 @@ const initialsOf = (name: string) =>
 export default function TeamsExplorerPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // === Roles / permisos ===
+  const { userDoc } = useCurrentUser();
+
+  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
+  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
 
   const [leagues, setLeagues] = React.useState<LeagueUI[]>([]);
   const [loadingLeagues, setLoadingLeagues] = React.useState(true);
@@ -221,9 +228,7 @@ export default function TeamsExplorerPage() {
     }
 
     // si se abrió/cambió de liga
-    if (prev !== next) {
-      void ensureGroupsLoaded(next);
-    }
+    if (prev !== next) void ensureGroupsLoaded(next);
 
     params.set("leagueId", next);
 
@@ -250,9 +255,7 @@ export default function TeamsExplorerPage() {
       params.set("groupId", openedNow[openedNow.length - 1]);
     } else {
       // si cerraste todos los grupos de esa liga y era la actual, limpia groupId
-      if (params.get("leagueId") === leagueId) {
-        params.delete("groupId");
-      }
+      if (params.get("leagueId") === leagueId) params.delete("groupId");
     }
     router.replace(`?${params.toString()}`);
   };
@@ -272,6 +275,14 @@ export default function TeamsExplorerPage() {
     if (tg.loading) return <Badge variant="secondary">Cargando…</Badge>;
     if (tg.error) return <Badge variant="destructive">Error</Badge>;
     return <Badge variant="outline">{tg.page.items.length} equipos</Badge>;
+  };
+
+  // util accesibilidad para clic con teclado
+  const keyActivate = (fn: () => void) => (e: React.KeyboardEvent<HTMLLIElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      fn();
+    }
   };
 
   return (
@@ -362,7 +373,7 @@ export default function TeamsExplorerPage() {
                                     router.push(`/dashboard/leagues/${league.id}/groups/${group.id}/teams`);
                                   }}
                                 >
-                                  Ver / administrar equipos
+                                  {canEdit ? "Ver / administrar equipos" : "Ver equipos"}
                                 </Button>
                               </div>
 
@@ -379,67 +390,85 @@ export default function TeamsExplorerPage() {
                                   ) : (teamsByGroup[group.id]?.page?.items?.length ?? 0) === 0 ? (
                                     <div className="flex items-center justify-between pr-2">
                                       <p className="text-muted-foreground py-2 text-sm">Sin equipos en este grupo.</p>
-                                      <Button
-                                        size="sm"
-                                        onClick={() =>
-                                          router.push(`/dashboard/leagues/${league.id}/groups/${group.id}/teams/new`)
-                                        }
-                                      >
-                                        Crear equipo
-                                      </Button>
+                                      {canEdit && (
+                                        <Button
+                                          size="sm"
+                                          onClick={() =>
+                                            router.push(`/dashboard/leagues/${league.id}/groups/${group.id}/teams/new`)
+                                          }
+                                        >
+                                          Crear equipo
+                                        </Button>
+                                      )}
                                     </div>
                                   ) : (
                                     <>
                                       <ScrollArea className="h-[260px] pr-2">
                                         <ul className="space-y-1 py-1">
-                                          {teamsByGroup[group.id].page.items.map((t) => (
-                                            <li
-                                              key={t.id}
-                                              className="flex items-center justify-between rounded-md border px-2 py-1.5"
-                                            >
-                                              <div className="flex items-center gap-3">
-                                                <CircleLogo
-                                                  src={t.logoUrl}
-                                                  alt={`${t.name} logo`}
-                                                  size={24}
-                                                  initials={initialsOf(t.name)}
-                                                />
-                                                <div className="text-sm">
-                                                  <div className="leading-none font-medium">{t.name}</div>
-                                                  {t.municipality ? (
-                                                    <div className="text-muted-foreground text-xs">
-                                                      {t.municipality}
-                                                    </div>
-                                                  ) : null}
+                                          {teamsByGroup[group.id].page.items.map((t) => {
+                                            const goToDetail = () =>
+                                              router.push(
+                                                `/dashboard/leagues/${league.id}/groups/${group.id}/teams/${t.id}`,
+                                              );
+                                            return (
+                                              <li
+                                                key={t.id}
+                                                className="hover:bg-muted/50 flex cursor-pointer items-center justify-between rounded-md border px-2 py-1.5"
+                                                onClick={goToDetail}
+                                                role="button"
+                                                tabIndex={0}
+                                                onKeyDown={keyActivate(goToDetail)}
+                                                aria-label={`Abrir ${t.name}`}
+                                                title={`Abrir ${t.name}`}
+                                              >
+                                                <div className="flex items-center gap-3">
+                                                  <CircleLogo
+                                                    src={t.logoUrl}
+                                                    alt={`${t.name} logo`}
+                                                    size={24}
+                                                    initials={initialsOf(t.name)}
+                                                  />
+                                                  <div className="text-sm">
+                                                    <div className="leading-none font-medium">{t.name}</div>
+                                                    {t.municipality ? (
+                                                      <div className="text-muted-foreground text-xs">
+                                                        {t.municipality}
+                                                      </div>
+                                                    ) : null}
+                                                  </div>
                                                 </div>
-                                              </div>
 
-                                              <div className="flex items-center gap-2">
-                                                <Button
-                                                  variant="outline"
-                                                  size="sm"
-                                                  onClick={() =>
-                                                    router.push(
-                                                      `/dashboard/leagues/${league.id}/groups/${group.id}/teams/${t.id}`,
-                                                    )
-                                                  }
-                                                >
-                                                  Abrir
-                                                </Button>
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  onClick={() =>
-                                                    router.push(
-                                                      `/dashboard/leagues/${league.id}/groups/${group.id}/teams/${t.id}/edit`,
-                                                    )
-                                                  }
-                                                >
-                                                  Editar
-                                                </Button>
-                                              </div>
-                                            </li>
-                                          ))}
+                                                <div className="flex items-center gap-2">
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      router.push(
+                                                        `/dashboard/leagues/${league.id}/groups/${group.id}/teams/${t.id}`,
+                                                      );
+                                                    }}
+                                                  >
+                                                    Abrir
+                                                  </Button>
+                                                  {canEdit && (
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        router.push(
+                                                          `/dashboard/leagues/${league.id}/groups/${group.id}/teams/${t.id}/edit`,
+                                                        );
+                                                      }}
+                                                    >
+                                                      Editar
+                                                    </Button>
+                                                  )}
+                                                </div>
+                                              </li>
+                                            );
+                                          })}
                                         </ul>
                                       </ScrollArea>
 

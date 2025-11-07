@@ -28,8 +28,6 @@ import { getGroupAction } from "@/server/actions/groups.actions";
 import { getLeagueAction } from "@/server/actions/leagues.actions";
 import { listTeamsByGroupAction, deleteTeamAction } from "@/server/actions/teams.actions";
 
-// shadcn/ui
-
 // ---- Tipos UI
 type TeamRow = {
   id: string;
@@ -59,7 +57,6 @@ type GroupUI = {
 };
 
 export default function TeamsPage() {
-  // ⚠️ Next 16: params desde useParams
   const { leagueId, groupId } = useParams<{ leagueId: string; groupId: string }>();
 
   const { userDoc } = useCurrentUser();
@@ -293,7 +290,7 @@ export default function TeamsPage() {
               <th>Municipio</th>
               <th>Estadio</th>
               <th>Sede (dirección)</th>
-              <th className="w-[180px] text-right">Acciones</th>
+              <th className="w-[220px] text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -316,40 +313,67 @@ export default function TeamsPage() {
                     <div className="bg-muted h-8 w-8 rounded" />
                   )}
                 </td>
-                <td className="font-medium">{t.name}</td>
+
+                {/* 🔗 Nombre enlazado al detalle */}
+                <td className="font-medium">
+                  <Link
+                    href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${t.id}`}
+                    className="hover:underline"
+                    title={`Ver información de ${t.name}`}
+                  >
+                    {t.name}
+                  </Link>
+                </td>
+
                 <td>{t.municipality ?? ""}</td>
                 <td>{t.stadium ?? ""}</td>
                 <td className="max-w-[420px] truncate">{t.venue ?? ""}</td>
                 <td className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Link
-                      href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${t.id}`}
-                      className="text-primary hover:underline"
-                    >
-                      Editar
-                    </Link>
+                  <div className="flex justify-end gap-3">
+                    {/* Para roles sin permisos: solo "Ver" */}
+                    {!canEdit ? (
+                      <Link
+                        href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${t.id}`}
+                        className="text-muted-foreground hover:underline"
+                      >
+                        Ver
+                      </Link>
+                    ) : (
+                      <>
+                        <Link
+                          href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${t.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          Ver
+                        </Link>
+                        <Link
+                          href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${t.id}/edit`}
+                          className="text-primary hover:underline"
+                        >
+                          Editar
+                        </Link>
 
-                    {canEdit && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <button className="text-destructive hover:underline" disabled={deletingId === t.id}>
-                            {deletingId === t.id ? "Eliminando..." : "Eliminar"}
-                          </button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Eliminar equipo</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Vas a eliminar el equipo <span className="font-semibold">{t.name}</span>. Esta acción no
-                              se puede deshacer y podría afectar registros relacionados. ¿Deseas continuar?
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(t)}>Confirmar</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button className="text-destructive hover:underline" disabled={deletingId === t.id}>
+                              {deletingId === t.id ? "Eliminando..." : "Eliminar"}
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Eliminar equipo</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Vas a eliminar el equipo <span className="font-semibold">{t.name}</span>. Esta acción no
+                                se puede deshacer y podría afectar registros relacionados. ¿Deseas continuar?
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(t)}>Confirmar</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </>
                     )}
                   </div>
                 </td>

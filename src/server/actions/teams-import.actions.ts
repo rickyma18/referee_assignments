@@ -3,10 +3,13 @@
 // =====================================
 "use server";
 
+import { revalidatePath } from "next/cache"; // ⬅️ para revalidar al final
+
 import { ZodError, z } from "zod";
 
 import { normTeamName } from "@/domain/teams/team.normalizers";
 import { adminDb, AdminFieldValue } from "@/server/admin/firebase-admin";
+import { secureWrite } from "@/server/auth/secure-action";
 import * as teamsRepo from "@/server/repositories/teams.repo";
 
 type ActionResult<T = any> =
@@ -32,11 +35,7 @@ export type ImportReport = {
   totals: { inserted: number; updated: number; rejected: number; received: number };
 };
 
-/**
- * Busca el groupId por nombre dentro de la liga.
- * - Coincidencia exacta usando name_lc normalizado.
- * - Colección: "groups" con campos: { leagueId, name, name_lc, ... }
- */
+/** Busca el groupId por nombre dentro de la liga. */
 async function resolveGroupIdByName(leagueId: string, groupName: string): Promise<string | null> {
   const name_lc = normTeamName(groupName);
   const q = await adminDb
@@ -62,15 +61,15 @@ export async function importTeamsAction(params: {
   fallbackGroupId?: string; // groupId de la URL actual, si las filas no traen "group"
   rows: ImportRow[];
 }): Promise<ActionResult<ImportReport>> {
-  const { leagueId, fallbackGroupId, rows } = params;
+  return secureWrite<ImportReport>(async () => {
+    const { leagueId, fallbackGroupId, rows } = params;
 
-  // Validación básica de entrada
-  if (!leagueId) return { ok: false, message: "leagueId requerido." };
-  if (!rows || !Array.isArray(rows) || rows.length === 0) {
-    return { ok: false, message: "No hay filas para importar." };
-  }
+    // Validación de entrada (lanza error para que secureWrite lo capture)
+    if (!leagueId) throw new Error("leagueId requerido.");
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      throw new Error("No hay filas para importar.");
+    }
 
-  try {
     const report: ImportReport = {
       inserted: [],
       updated: [],
@@ -78,7 +77,10 @@ export async function importTeamsAction(params: {
       totals: { inserted: 0, updated: 0, rejected: 0, received: rows.length },
     };
 
-    // Procesamiento secuencial para simplicidad y manejo de errores claro
+    // Para revalidar solo lo necesario
+    const touchedGroups = new Set<string>();
+
+    // Procesamiento secuencial (claro y suficiente para imports normales)
     for (const raw of rows) {
       // Limpia/valida la fila
       let row: ImportRow;
@@ -113,13 +115,14 @@ export async function importTeamsAction(params: {
         continue;
       }
 
+      touchedGroups.add(groupId);
+
       // ¿Existe equipo con ese nombre en el grupo?
       const exists = await teamsRepo.existsByNameInGroup(row.name, groupId);
       const name_lc = normTeamName(row.name);
 
       if (exists) {
         // Actualiza campos de texto libre (no logo en import)
-        // Busca el doc para saber su id y hacer update
         const q = await adminDb
           .collection("teams")
           .where("groupId", "==", groupId)
@@ -128,7 +131,6 @@ export async function importTeamsAction(params: {
           .get();
 
         if (q.empty) {
-          // Raro: existsByNameInGroup devolvió true pero el query no encontró… lo rechazamos para no duplicar
           report.rejected.push({
             name: row.name,
             group: row.group,
@@ -168,8 +170,11 @@ export async function importTeamsAction(params: {
     report.totals.updated = report.updated.length;
     report.totals.rejected = report.rejected.length;
 
-    return { ok: true, data: report };
-  } catch (e) {
-    return { ok: false, message: msg(e) };
-  }
+    // 🔄 Revalidate de cada grupo tocado
+    for (const gid of touchedGroups) {
+      revalidatePath(`/dashboard/leagues/${leagueId}/groups/${gid}/teams`);
+    }
+
+    return report; // ⬅️ dato plano (secureWrite lo envolverá en { ok: true, data })
+  });
 }
