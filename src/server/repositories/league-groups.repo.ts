@@ -1,8 +1,6 @@
-"use server";
-
-import { adminDb, AdminFieldValue } from "@/server/admin/firebase-admin";
 import { GroupCreateSchema, GroupUpdateSchema } from "@/domain/groups/group.zod";
 import { serialize } from "@/lib/serialize";
+import { adminDb, AdminFieldValue } from "@/server/admin/firebase-admin";
 
 const leaguesCol = () => adminDb.collection("leagues");
 const groupsCol = (leagueId: string) => leaguesCol().doc(leagueId).collection("groups");

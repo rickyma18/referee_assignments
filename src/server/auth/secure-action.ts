@@ -1,5 +1,4 @@
 // src/server/auth/secure-action.ts
-"use server";
 
 import { ForbiddenError } from "./errors"; // 👈 importa la clase desde el archivo sin "use server"
 import { requireEditRole } from "./require-role";

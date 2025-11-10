@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   signInWithEmailAndPassword,
@@ -16,10 +17,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { auth } from "@/lib/firebase";
-
-import type { UserDoc } from "@/types/user";
 import { getUserDoc } from "@/data/users";
+import { auth } from "@/lib/firebase";
+import { createSessionAction } from "@/server/auth/auth.actions"; // 👈 importante
 
 const FormSchema = z.object({
   email: z.string().email({ message: "Por favor ingrese un correo electrónico válido." }),
@@ -38,46 +38,50 @@ export function LoginForm() {
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
     const { email, password, remember } = data;
     try {
+      // Persistencia del SDK cliente
       await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
 
+      // Login en Firebase (cliente)
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const uid = cred.user.uid;
 
+      // 👇 crea cookie __session en el SERVER (httpOnly) usando el ID token del usuario
+      const idToken = await cred.user.getIdToken(true);
+      await createSessionAction(idToken);
+
+      // Carga del documento de usuario (para roles/estado)
       const u = await getUserDoc(uid);
       if (!u) {
         toast.error("Tu cuenta no está configurada. Contacta al administrador.");
         return;
       }
 
-      const isActive = (u as any).active ?? true;
-      if (!isActive) {
+      if ((u as any).active === false) {
         toast.error("Usuario inactivo. Contacta al administrador.");
         return;
       }
 
-      // ✅ Routing por rol (MAYÚSCULAS)
+      // Routing por rol
       switch (u.role) {
         case "SUPERUSUARIO":
-          router.replace("/dashboard/default"); // admin area
+          router.replace("/dashboard/default");
           break;
         case "DELEGADO":
-          router.replace("/dashboard/assignments"); // CRUD designaciones
-          break;
         case "ASISTENTE":
         case "ARBITRO":
-          router.replace("/dashboard/assignments"); // solo lectura
+          router.replace("/dashboard/assignments");
           break;
         default:
           toast.error("No tienes permisos para acceder.");
       }
     } catch (err: any) {
-      const code = err?.code || "";
+      const code = err?.code ?? "";
       if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
         toast.error("Correo o contraseña incorrectos.");
       } else if (code === "auth/too-many-requests") {
         toast.error("Demasiados intentos. Inténtalo más tarde.");
       } else {
-        toast.error("No se pudo iniciar sesión.");
+        toast.error(err?.message ?? "No se pudo iniciar sesión.");
       }
     }
   };

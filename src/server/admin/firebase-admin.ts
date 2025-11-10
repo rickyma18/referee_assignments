@@ -1,10 +1,12 @@
 // =============================
 // src/server/admin/firebase-admin.ts
 // =============================
+import "server-only";
+
 import fs from "node:fs";
 
 import { getApps, initializeApp, applicationDefault, cert, type AppOptions } from "firebase-admin/app";
-import { getAuth, type Auth } from "firebase-admin/auth"; // ⬅️ NUEVO
+import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore, FieldValue } from "firebase-admin/firestore";
 
 declare global {
@@ -13,7 +15,9 @@ declare global {
   // eslint-disable-next-line no-var
   var ADMIN_DB: Firestore | undefined;
   // eslint-disable-next-line no-var
-  var ADMIN_AUTH: Auth | undefined; // ⬅️ NUEVO
+  var ADMIN_AUTH: Auth | undefined;
+  // eslint-disable-next-line no-var
+  var firestoreSettingsApplied: boolean | undefined;
 }
 
 function getCredential() {
@@ -36,21 +40,25 @@ function getCredential() {
 const projectId = process.env.GCLOUD_PROJECT ?? process.env.FIREBASE_PROJECT_ID ?? "referee-assignments";
 const appOptions: AppOptions = { credential: getCredential(), projectId };
 
-// --- App (usa ?? y ??=) ---
+// --- App (singleton seguro) ---
 const adminApp = globalThis.ADMIN_APP ?? (getApps().length ? getApps()[0] : initializeApp(appOptions));
 globalThis.ADMIN_APP ??= adminApp;
 
-// --- Firestore (usa ?? y ??=) ---
+// --- Firestore (singleton + settings una sola vez) ---
 const dbInstance: Firestore = globalThis.ADMIN_DB ?? getFirestore(adminApp);
-// Aseguramos la configuración (repetirla no rompe nada)
-dbInstance.settings({ ignoreUndefinedProperties: true });
+
+if (!globalThis.firestoreSettingsApplied) {
+  dbInstance.settings({ ignoreUndefinedProperties: true });
+  globalThis.firestoreSettingsApplied = true;
+}
+
 globalThis.ADMIN_DB ??= dbInstance;
 export const adminDb: Firestore = dbInstance;
 
-// --- Auth (usa ?? y ??=) ---
+// --- Auth (singleton) ---
 const authInstance: Auth = globalThis.ADMIN_AUTH ?? getAuth(adminApp);
 globalThis.ADMIN_AUTH ??= authInstance;
 export const adminAuth: Auth = authInstance;
 
-// 👇 re-export de FieldValue para serverTimestamp, increment, etc.
+// Utils
 export const AdminFieldValue = FieldValue;

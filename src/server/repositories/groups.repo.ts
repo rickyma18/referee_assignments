@@ -1,13 +1,13 @@
 // =============================
 // src/server/repositories/groups.repo.ts
 // =============================
-"use server";
 
-import { adminDb } from "@/server/admin/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
-import type { Group } from "@/domain/groups/group.types";
+
 import { toLc } from "@/domain/groups/group.normalizers";
+import type { Group } from "@/domain/groups/group.types";
 import { serialize } from "@/lib/serialize";
+import { adminDb } from "@/server/admin/firebase-admin";
 
 const leaguesCol = () => adminDb.collection("leagues");
 const groupsCol = (leagueId: string) => leaguesCol().doc(leagueId).collection("groups");

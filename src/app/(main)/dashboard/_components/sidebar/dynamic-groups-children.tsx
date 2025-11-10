@@ -1,5 +1,5 @@
 // =====================================
-// src/navigation/sidebar/DynamicGroupsChildren.tsx
+// src/navigation/sidebar/dynamic-groups-children.tsx
 // =====================================
 "use client";
 

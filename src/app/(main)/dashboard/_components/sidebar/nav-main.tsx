@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 
 import { ChevronRight } from "lucide-react";
 
+// ⬇️ Ajusta estas rutas según donde hayas guardado los componentes dinámicos
 import { DynamicGroupsChildren } from "@/app/(main)/dashboard/_components/sidebar/dynamic-groups-children";
+import { DynamicMatchdaysChildren } from "@/app/(main)/dashboard/_components/sidebar/dynamic-matchday-children";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -28,14 +30,12 @@ import {
 } from "@/components/ui/sidebar";
 import { type NavGroup, type NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
-// 👇 importa tu renderer dinámico (el que ya creaste)
-
 interface NavMainProps {
   readonly items?: readonly NavGroup[];
 }
 
 const IsComingSoon = () => (
-  <span className="ml-auto rounded-md bg-gray-200 px-2 py-1 text-xs dark:text-gray-800">Soon</span>
+  <span className="bg-gray-2 00 ml-auto rounded-md px-2 py-1 text-xs dark:text-gray-800">Soon</span>
 );
 
 function SimpleLinkItem({
@@ -163,8 +163,6 @@ export function NavMain({ items = [] }: NavMainProps) {
   const { state, isMobile } = useSidebar();
 
   const isItemActive = (url: string, subItems?: NavMainItem["subItems"]) => {
-    // Activo SOLO si estás exactamente en el link del padre
-    // o exactamente en uno de sus subitems (no por prefijo).
     if (subItems?.length) {
       return path === url || subItems.some((sub) => path === sub.url);
     }
@@ -173,6 +171,7 @@ export function NavMain({ items = [] }: NavMainProps) {
 
   const isSubmenuOpen = (subItems?: NavMainItem["subItems"]) =>
     subItems?.some((sub) => path.startsWith(sub.url)) ?? false;
+
   return (
     <>
       {items.map((group) => (
@@ -182,17 +181,42 @@ export function NavMain({ items = [] }: NavMainProps) {
           <SidebarGroupContent className="flex flex-col gap-2">
             <SidebarMenu>
               {(group.items ?? []).map((item) => {
-                // 🔹 Caso especial: ítem dinámico "Administrar grupos"
-                //    Lo renderizamos como Collapsible con contenido dinámico,
-                //    cerrado por defecto y en la posición exacta del array.
+                // 🔹 Ítem dinámico: "Administrar grupos"
                 const isDynamicGroups =
                   (item as any)?.title === "Administrar grupos" && (item as any)?.url === "/dashboard/leagues";
 
                 if (isDynamicGroups) {
-                  // Expandido solo si la ruta actual empieza por /dashboard/leagues
                   const openByRoute = path.startsWith("/dashboard/leagues");
                   if (state === "collapsed" && !isMobile) {
-                    // En colapsado, usa dropdown; el contenido dinámico se abre como overlay.
+                    return <CollapsedDropdown key={item.title} item={item} isActive={isItemActive} />;
+                  }
+                  return (
+                    <CollapsibleItem
+                      key={item.title}
+                      item={item}
+                      isActive={isItemActive}
+                      isSubmenuOpen={isSubmenuOpen}
+                      defaultOpen={openByRoute ? false : false}
+                    >
+                      <SidebarMenuSub>
+                        <DynamicGroupsChildren />
+                      </SidebarMenuSub>
+                    </CollapsibleItem>
+                  );
+                }
+
+                // 🔹 Ítem dinámico: "Administrar jornadas"
+                const isDynamicMatchdays =
+                  (item as any)?.title === "Administrar jornadas" && (item as any)?.url === "/dashboard/leagues";
+
+                if (isDynamicMatchdays) {
+                  const openByRoute =
+                    path.startsWith("/dashboard/leagues/") && path.includes("/groups/") && path.endsWith("/matchdays")
+                      ? true
+                      : false;
+
+                  if (state === "collapsed" && !isMobile) {
+                    // mismo comportamiento que grupos en colapsado
                     return <CollapsedDropdown key={item.title} item={item} isActive={isItemActive} />;
                   }
 
@@ -202,11 +226,10 @@ export function NavMain({ items = [] }: NavMainProps) {
                       item={item}
                       isActive={isItemActive}
                       isSubmenuOpen={isSubmenuOpen}
-                      defaultOpen={openByRoute ? false : false} // fuerza cerrado
+                      defaultOpen={openByRoute ? true : false}
                     >
                       <SidebarMenuSub>
-                        {/* 👇 aquí pintas las ligas y cada liga con su submenú de grupos */}
-                        <DynamicGroupsChildren />
+                        <DynamicMatchdaysChildren />
                       </SidebarMenuSub>
                     </CollapsibleItem>
                   );

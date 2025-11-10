@@ -1,9 +1,7 @@
-"use server";
-
-import { adminDb, AdminFieldValue } from "@/server/admin/firebase-admin";
 import type { League } from "@/domain/leagues/league.types";
 import { LeagueCreateSchema, LeagueUpdateSchema } from "@/domain/leagues/league.zod";
 import { serialize } from "@/lib/serialize";
+import { adminDb, AdminFieldValue } from "@/server/admin/firebase-admin";
 
 const leaguesCol = () => adminDb.collection("leagues");
 

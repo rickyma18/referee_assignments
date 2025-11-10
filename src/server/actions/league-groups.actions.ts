@@ -2,6 +2,7 @@
 // src/server/actions/league-groups.actions.ts
 // =====================================
 "use server";
+import "server-only";
 
 import { revalidatePath } from "next/cache";
 

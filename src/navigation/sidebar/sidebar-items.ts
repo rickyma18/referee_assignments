@@ -1,7 +1,7 @@
 // =====================================
 // src/navigation/sidebar/sidebar-items.ts
 // =====================================
-import { CalendarCheck, Layers } from "lucide-react";
+import { CalendarCheck, Layers, CalendarDays } from "lucide-react";
 import { FaFutbol } from "react-icons/fa";
 
 import type { UserRole } from "@/types/roles";
@@ -15,7 +15,7 @@ export type SidebarItem = {
   newTab?: boolean;
   comingSoon?: boolean;
   /** <- NUEVO: pinta children dinámicos desde el cliente */
-  dynamic?: "groupsByLeague";
+  dynamic?: "groupsByLeague" | "matchdaysByGroup";
 };
 
 export type NavMainItem = {
@@ -63,5 +63,13 @@ export const sidebarItems: SidebarItem[] = [
     requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
     // El submenú se rellena dinámicamente con las ligas
     dynamic: "groupsByLeague",
+  },
+  {
+    title: "Administrar jornadas",
+    href: "/dashboard/leagues", // fallback
+    icon: CalendarDays,
+    requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
+    // Submenú dinámico: Liga → Grupos → Jornadas
+    dynamic: "matchdaysByGroup",
   },
 ];

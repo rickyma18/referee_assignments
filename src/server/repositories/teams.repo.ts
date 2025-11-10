@@ -1,7 +1,6 @@
 // =====================================
 // src/server/repositories/teams.repo.ts
 // =====================================
-"use server";
 
 import { normTeamName } from "@/domain/teams/team.normalizers";
 import type { Team } from "@/domain/teams/team.types";
