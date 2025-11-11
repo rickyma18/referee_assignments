@@ -88,7 +88,7 @@ export default function EditGroupPage() {
   if (!canEdit) {
     return (
       <div className="p-6">
-        <h1 className="mb-2 text-xl font-semibold">Editar grupo</h1>
+        <h1 className="mb-2 text-xl font-semibold">Jornadas</h1>
         <p className="text-muted-foreground text-sm">No tienes permisos para editar grupos.</p>
       </div>
     );
@@ -96,7 +96,7 @@ export default function EditGroupPage() {
 
   return (
     <div className="space-y-6 p-6">
-      {/* Header con logo de la LIGA + datos del grupo */}
+      {/* Header con logo de la LIGA + datos del grupo para JORNADAS */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <div className="bg-muted size-16 shrink-0 overflow-hidden rounded-md border">
@@ -109,18 +109,18 @@ export default function EditGroupPage() {
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-xs opacity-50">
+              <div className="text-muted-foreground flex h-full w-full items-center justify-center text-[10px]">
                 {loadingLeague ? "Cargando…" : "Sin logo"}
               </div>
             )}
           </div>
 
           <div>
-            <h1 className="text-xl leading-tight font-semibold">Editar grupo</h1>
+            <h1 className="text-xl leading-tight font-semibold">Jornadas</h1>
             <p className="text-muted-foreground text-sm">
-              Liga: <span className="font-medium">{league?.name ?? String(leagueId ?? "(?)")}</span>{" "}
+              <span className="font-medium">{league?.name ?? String(leagueId ?? "(?)")}</span>{" "}
               {league?.season ? <span>({league.season})</span> : null}
-              {" · Grupo: "}
+              {" · "}
               <span className="font-medium">{initial?.name ?? String(groupId ?? "(?)")}</span>
             </p>
           </div>
@@ -148,7 +148,7 @@ export default function EditGroupPage() {
 
       <Separator />
 
-      {/* Formulario */}
+      {/* Aquí ya va tu contenido de jornadas o tu formulario según tu flujo */}
       <GroupForm leagueId={String(leagueId)} initial={initial} />
     </div>
   );

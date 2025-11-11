@@ -94,7 +94,7 @@ export default function NewGroupPage() {
           <div>
             <h1 className="text-xl leading-tight font-semibold">Nuevo grupo</h1>
             <p className="text-muted-foreground text-sm">
-              Liga: <span className="font-medium">{league?.name ?? String(leagueId ?? "(?)")}</span>{" "}
+              <span className="font-medium">{league?.name ?? String(leagueId ?? "(?)")}</span>{" "}
               {league?.season ? <span>({league.season})</span> : null}
             </p>
           </div>

@@ -10,8 +10,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { getGroupAction } from "@/server/actions/groups.actions";
+import { getLeagueAction } from "@/server/actions/leagues.actions";
 import { createMatchdayAction, getNextMatchdayNumberAction } from "@/server/actions/matchdays.actions";
+
+type LeagueUI = {
+  id: string;
+  name: string;
+  season: string;
+  color?: string | null;
+  logoUrl?: string | null;
+};
 
 export default function NewMatchdayPage() {
   const { leagueId, groupId } = useParams<{ leagueId: string; groupId: string }>();
@@ -25,6 +36,45 @@ export default function NewMatchdayPage() {
   const [end, setEnd] = React.useState<string>("");
   const [submitting, setSubmitting] = React.useState(false);
 
+  // Header meta
+  const [league, setLeague] = React.useState<LeagueUI | null>(null);
+  const [groupName, setGroupName] = React.useState<string | null>(null);
+  const [metaLoading, setMetaLoading] = React.useState(true);
+
+  // Cargar liga y grupo
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setMetaLoading(true);
+        const [lg, grp] = await Promise.all([
+          getLeagueAction(String(leagueId)),
+          getGroupAction(String(leagueId), String(groupId)),
+        ]);
+        if (!alive) return;
+        setLeague(
+          lg
+            ? {
+                id: String(lg.id),
+                name: lg.name ?? "",
+                season: lg.season ?? "",
+                color: lg.color ?? null,
+                logoUrl: lg.logoUrl ?? null,
+              }
+            : null,
+        );
+        setGroupName(grp?.name ?? null);
+      } catch {
+        /* no-op */
+      } finally {
+        if (alive) setMetaLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [leagueId, groupId]);
+
   // Cargar el siguiente número de jornada
   React.useEffect(() => {
     (async () => {
@@ -37,7 +87,6 @@ export default function NewMatchdayPage() {
     })();
   }, [leagueId, groupId]);
 
-  // Si no tiene permisos
   if (!canEdit) {
     return <p className="text-muted-foreground text-sm">No tienes permisos para crear jornadas.</p>;
   }
@@ -83,9 +132,59 @@ export default function NewMatchdayPage() {
 
   return (
     <form onSubmit={onSubmit} className="max-w-xl space-y-4">
-      <h1 className="text-xl font-semibold">Crear jornada</h1>
+      {/* Header con logo + liga/grupo */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="bg-muted size-14 shrink-0 overflow-hidden rounded-md border">
+            {league?.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={league.logoUrl}
+                alt={`${league.name} logo`}
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="text-muted-foreground flex h-full w-full items-center justify-center text-[10px]">
+                {metaLoading ? "Cargando…" : "Sin logo"}
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <h1 className="truncate text-xl leading-tight font-semibold">Crear jornada</h1>
+            <p className="text-muted-foreground text-sm">
+              <span className="font-medium">{league?.name ?? "(?)"}</span>{" "}
+              {league?.season ? <span>({league.season})</span> : null}
+              {" · "}
+              <span className="font-medium">{groupName ?? "(?)"}</span>
+            </p>
+            {league?.color ? (
+              <div className="mt-1 flex items-center gap-2 text-xs">
+                <span
+                  className="inline-block size-4 rounded border"
+                  style={{ backgroundColor: league.color ?? undefined }}
+                  title={league.color ?? ""}
+                />
+                <span className="text-muted-foreground">Color liga:</span>
+                <span className="font-mono">{league.color}</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push(`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays`)}
+        >
+          Volver
+        </Button>
+      </div>
+
       <Separator />
 
+      {/* Formulario */}
       <div className="grid gap-4">
         <div className="grid gap-2">
           <Label>Número (autogenerado)</Label>

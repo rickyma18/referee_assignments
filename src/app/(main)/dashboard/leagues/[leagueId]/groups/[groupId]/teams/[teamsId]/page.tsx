@@ -200,7 +200,7 @@ export default function TeamDetailPage() {
           <div>
             <h1 className="text-xl font-semibold">{team.name}</h1>
             <p className="text-muted-foreground text-sm">
-              Liga: <span className="font-medium">{league?.name ?? leagueId}</span> ({league?.season ?? "—"}) · Grupo:{" "}
+              <span className="font-medium">{league?.name ?? leagueId}</span> ({league?.season ?? "—"}) ·{" "}
               <span className="font-medium">{group?.name ?? groupId}</span>
             </p>
           </div>

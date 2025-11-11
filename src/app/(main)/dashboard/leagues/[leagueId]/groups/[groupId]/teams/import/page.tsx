@@ -157,8 +157,7 @@ export default function ImportTeamsPage() {
       <div>
         <h1 className="text-xl font-semibold">Importar equipos (CSV/Excel)</h1>
         <p className="text-muted-foreground text-sm">
-          Liga: <span className="font-medium">{leagueId}</span> · Grupo actual:{" "}
-          <span className="font-medium">{groupId}</span>
+          <span className="font-medium">{leagueId}</span> · <span className="font-medium">{groupId}</span>
         </p>
       </div>
       <Separator />
