@@ -6,22 +6,11 @@ import { useParams, useRouter } from "next/navigation";
 
 import { toast } from "sonner";
 
-import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from "@/components/ui/alert-dialog";
+import { EntityHeader } from "@/components/entity-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { getGroupAction } from "@/server/actions/groups.actions";
@@ -190,23 +179,11 @@ export default function MatchdayDetailPage() {
     }
   };
 
+  // Loading
   if (loading) {
     return (
       <div className="flex flex-col gap-4">
-        {/* Header skeleton */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-14 w-14 rounded-md" />
-            <div className="space-y-2">
-              <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-4 w-64" />
-            </div>
-          </div>
-          <Skeleton className="h-10 w-28" />
-        </div>
-
-        <Separator />
-
+        <EntityHeader.Skeleton />
         <div className="grid gap-3">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
@@ -222,88 +199,26 @@ export default function MatchdayDetailPage() {
 
   return (
     <form onSubmit={onSave} className="max-w-xl space-y-4">
-      {/* Header con logo + liga/grupo */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-muted size-14 shrink-0 overflow-hidden rounded-md border">
-            {league?.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={league.logoUrl}
-                alt={`${league.name} logo`}
-                className="h-full w-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="text-muted-foreground flex h-full w-full items-center justify-center text-[10px]">
-                {metaLoading ? "Cargando…" : "Sin logo"}
-              </div>
-            )}
-          </div>
-
-          <div className="min-w-0">
-            <h1 className="truncate text-xl leading-tight font-semibold">Jornada {item.number}</h1>
-            <p className="text-muted-foreground text-sm">
-              Liga: <span className="font-medium">{league?.name ?? "(?)"}</span>{" "}
-              {league?.season ? <span>({league.season})</span> : null}
-              {" · Grupo: "}
-              <span className="font-medium">{groupName ?? "(?)"}</span>
-            </p>
-            {league?.color ? (
-              <div className="mt-1 flex items-center gap-2 text-xs">
-                <span
-                  className="inline-block size-4 rounded border"
-                  style={{ backgroundColor: league.color ?? undefined }}
-                  title={league.color ?? ""}
-                />
-                <span className="text-muted-foreground">Color liga:</span>
-                <span className="font-mono">{league.color}</span>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push(`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays`)}
-          >
-            Volver
-          </Button>
-
-          {canEdit && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button type="button" variant="destructive">
-                  Eliminar
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Eliminar jornada</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta acción no se puede deshacer. Se eliminará la jornada y su registro. (No borra partidos aún; eso
-                    lo definimos en 3.2+)
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={onDelete}
-                    disabled={deleting}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    {deleting ? "Eliminando..." : "Eliminar"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
-        </div>
-      </div>
-
-      <Separator />
+      <EntityHeader
+        logoUrl={league?.logoUrl ?? null}
+        title={`Jornada ${item.number}`}
+        subtitle={
+          <>
+            <span className="font-medium">{league?.name ?? "(?)"}</span>{" "}
+            {league?.season ? <span>({league.season})</span> : null}
+            {" · "}
+            <span className="font-medium">{groupName ?? "(?)"}</span>
+          </>
+        }
+        colorHex={league?.color ?? null}
+        backHref={`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays`}
+        backText="Volver"
+        canDelete={canEdit}
+        deleteLabel="Eliminar"
+        deleteConfirmTitle="Eliminar jornada"
+        deleteConfirmDescription="Esta acción no se puede deshacer. Se eliminará la jornada y su registro. (No borra partidos aún; eso lo definimos en 3.2+)"
+        onDelete={onDelete}
+      />
 
       <div className="grid gap-4">
         <div className="grid gap-2">

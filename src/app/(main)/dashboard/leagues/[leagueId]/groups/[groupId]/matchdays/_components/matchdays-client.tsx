@@ -3,13 +3,18 @@
 import * as React from "react";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { getGroupAction } from "@/server/actions/groups.actions";
 import { getLeagueAction } from "@/server/actions/leagues.actions";
+import { deleteMatchdayAction } from "@/server/actions/matchdays.actions";
 
 // --- Helper seguro ---
 function toDateClientSafe(input: unknown): Date | null {
@@ -25,7 +30,6 @@ function toDateClientSafe(input: unknown): Date | null {
         // ignore conversion error
       }
     }
-
     const seconds = obj.seconds ?? obj.seconds;
     const nanos = obj.nanoseconds ?? obj.nanoseconds ?? 0;
     if (typeof seconds === "number") {
@@ -45,7 +49,7 @@ function toDateClientSafe(input: unknown): Date | null {
 type Row = {
   id: string;
   number: number;
-  startDate: any; // Puede ser Timestamp, ISO o Date
+  startDate: any;
   endDate: any;
   status?: "ACTIVE" | "ARCHIVED";
 };
@@ -65,17 +69,23 @@ type Props = {
 };
 
 export function MatchdaysClient({ initialData, leagueId, groupId }: Props) {
+  const router = useRouter();
   const { userDoc } = useCurrentUser();
   const role = (userDoc?.role ?? "DESCONOCIDO") as string;
   const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
 
-  const [items] = React.useState<Row[]>(initialData);
+  const [items, setItems] = React.useState<Row[]>(initialData);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const loading = false;
 
   // ⬇️ meta: liga y grupo para el header
   const [league, setLeague] = React.useState<LeagueUI | null>(null);
   const [groupName, setGroupName] = React.useState<string | null>(null);
   const [metaLoading, setMetaLoading] = React.useState(true);
+
+  // ⬇️ estado del diálogo de eliminación
+  const [openDelete, setOpenDelete] = React.useState(false);
+  const [targetMd, setTargetMd] = React.useState<Row | null>(null);
 
   React.useEffect(() => {
     let alive = true;
@@ -116,6 +126,43 @@ export function MatchdaysClient({ initialData, leagueId, groupId }: Props) {
       timeZone: "America/Mexico_City",
       dateStyle: "medium",
     }).format(date);
+  };
+
+  // --- Actions por jornada ---
+  const askDelete = (md: Row) => {
+    if (!canEdit) return;
+    setTargetMd(md);
+    setOpenDelete(true);
+  };
+
+  const handleDeleteConfirmed = async () => {
+    if (!canEdit || !targetMd) return;
+    try {
+      setDeletingId(targetMd.id);
+      const res = await deleteMatchdayAction(leagueId, groupId, targetMd.id);
+      if (!res?.ok) {
+        throw new Error(res?.message ?? "No se pudo eliminar la jornada");
+      }
+      setItems((prev) => prev.filter((x) => x.id !== targetMd.id));
+      toast.success(`Jornada ${targetMd.number} eliminada`);
+      setOpenDelete(false);
+      setTargetMd(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Error eliminando la jornada");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const onEdit = (md: Row) => {
+    if (!canEdit) return;
+    router.push(`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays/${md.id}`);
+  };
+
+  const onAddMatches = (md: Row) => {
+    if (!canEdit) return;
+    // Puedes ajustar esta ruta a tu flujo (nuevo partido o importador por Excel)
+    router.push(`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays/${md.id}/matches/upload`);
   };
 
   return (
@@ -179,23 +226,62 @@ export function MatchdaysClient({ initialData, leagueId, groupId }: Props) {
       ) : items && items.length > 0 ? (
         <div className="grid gap-2">
           {items.map((md) => (
-            <Link
-              key={md.id}
-              href={`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays/${md.id}`}
-              className="hover:bg-muted rounded-lg border p-3 transition"
-            >
-              <div className="flex items-center justify-between">
-                <div className="font-medium">Jornada {md.number}</div>
-                <div className="text-muted-foreground text-sm">
-                  {fmt(md.startDate)} — {fmt(md.endDate)}
-                </div>
+            <div key={md.id} className="hover:bg-muted/50 rounded-lg border p-3 transition">
+              <div className="flex items-center justify-between gap-3">
+                {/* Info principal con link a la jornada */}
+                <Link
+                  href={`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays/${md.id}/matches`}
+                  className="min-w-0 grow"
+                >
+                  <div className="font-medium">Jornada {md.number}</div>
+                  <div className="text-muted-foreground text-sm">
+                    {fmt(md.startDate)} — {fmt(md.endDate)}
+                  </div>
+                </Link>
+
+                {/* Acciones */}
+                {canEdit && (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => onAddMatches(md)} title="Agregar partidos">
+                      Agregar partidos
+                    </Button>
+
+                    <Button variant="secondary" size="sm" onClick={() => onEdit(md)} title="Editar jornada">
+                      Editar
+                    </Button>
+
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => askDelete(md)}
+                      disabled={deletingId === md.id}
+                      title="Eliminar jornada"
+                    >
+                      {deletingId === md.id ? "Eliminando…" : "Eliminar"}
+                    </Button>
+                  </div>
+                )}
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       ) : (
         <p className="text-muted-foreground text-sm">No hay jornadas registradas.</p>
       )}
+
+      {/* Diálogo reutilizable de confirmación */}
+      <ConfirmDeleteDialog
+        open={openDelete}
+        onOpenChange={(open) => {
+          // si se cierra manualmente, soltamos el target
+          if (!open) setTargetMd(null);
+          setOpenDelete(open);
+        }}
+        onConfirm={handleDeleteConfirmed}
+        loading={Boolean(deletingId)}
+        title={targetMd ? `¿Eliminar Jornada ${targetMd.number}?` : "¿Eliminar jornada?"}
+        description="Esta acción eliminará la jornada y sus partidos. No se puede deshacer."
+      />
     </div>
   );
 }

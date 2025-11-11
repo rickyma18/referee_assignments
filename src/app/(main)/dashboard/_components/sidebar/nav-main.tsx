@@ -8,6 +8,7 @@ import { ChevronRight } from "lucide-react";
 // ⬇️ Ajusta estas rutas según donde hayas guardado los componentes dinámicos
 import { DynamicGroupsChildren } from "@/app/(main)/dashboard/_components/sidebar/dynamic-groups-children";
 import { DynamicMatchdaysChildren } from "@/app/(main)/dashboard/_components/sidebar/dynamic-matchday-children";
+import { DynamicTeamsChildren } from "@/app/(main)/dashboard/_components/sidebar/dynamic-teams-children";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -157,8 +158,7 @@ function CollapsedDropdown({
     </SidebarMenuItem>
   );
 }
-
-export function NavMain({ items = [] }: NavMainProps) {
+export function NavMain({ items = [] }: { readonly items?: readonly NavGroup[] }) {
   const path = usePathname();
   const { state, isMobile } = useSidebar();
 
@@ -177,14 +177,12 @@ export function NavMain({ items = [] }: NavMainProps) {
       {items.map((group) => (
         <SidebarGroup key={group.id}>
           {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
-
           <SidebarGroupContent className="flex flex-col gap-2">
             <SidebarMenu>
               {(group.items ?? []).map((item) => {
-                // 🔹 Ítem dinámico: "Administrar grupos"
+                // 🔹 Dinámico: Administrar grupos
                 const isDynamicGroups =
                   (item as any)?.title === "Administrar grupos" && (item as any)?.url === "/dashboard/leagues";
-
                 if (isDynamicGroups) {
                   const openByRoute = path.startsWith("/dashboard/leagues");
                   if (state === "collapsed" && !isMobile) {
@@ -205,21 +203,15 @@ export function NavMain({ items = [] }: NavMainProps) {
                   );
                 }
 
-                // 🔹 Ítem dinámico: "Administrar jornadas"
+                // 🔹 Dinámico: Administrar jornadas
                 const isDynamicMatchdays =
                   (item as any)?.title === "Administrar jornadas" && (item as any)?.url === "/dashboard/leagues";
-
                 if (isDynamicMatchdays) {
                   const openByRoute =
-                    path.startsWith("/dashboard/leagues/") && path.includes("/groups/") && path.endsWith("/matchdays")
-                      ? true
-                      : false;
-
+                    path.startsWith("/dashboard/leagues/") && path.includes("/groups/") && path.endsWith("/matchdays");
                   if (state === "collapsed" && !isMobile) {
-                    // mismo comportamiento que grupos en colapsado
                     return <CollapsedDropdown key={item.title} item={item} isActive={isItemActive} />;
                   }
-
                   return (
                     <CollapsibleItem
                       key={item.title}
@@ -235,12 +227,36 @@ export function NavMain({ items = [] }: NavMainProps) {
                   );
                 }
 
+                // 🔹 Dinámico: Administrar equipos (NUEVO)
+                const isDynamicTeams =
+                  (item as any)?.title === "Administrar equipos" && (item as any)?.url === "/dashboard/leagues";
+                if (isDynamicTeams) {
+                  const openByRoute =
+                    path.startsWith("/dashboard/leagues/") && path.includes("/groups/") && path.endsWith("/teams");
+                  if (state === "collapsed" && !isMobile) {
+                    return <CollapsedDropdown key={item.title} item={item} isActive={isItemActive} />;
+                  }
+                  return (
+                    <CollapsibleItem
+                      key={item.title}
+                      item={item}
+                      isActive={isItemActive}
+                      isSubmenuOpen={isSubmenuOpen}
+                      defaultOpen={openByRoute ? true : false}
+                    >
+                      <SidebarMenuSub>
+                        {/* Liga → Grupos; click en grupo te manda a /teams */}
+                        <DynamicTeamsChildren />
+                      </SidebarMenuSub>
+                    </CollapsibleItem>
+                  );
+                }
+
                 // 🔹 Ítems normales
                 if (state === "collapsed" && !isMobile) {
                   if (!item.subItems) return <SimpleLinkItem key={item.title} item={item} isActive={isItemActive} />;
                   return <CollapsedDropdown key={item.title} item={item} isActive={isItemActive} />;
                 }
-
                 if (!item.subItems) return <SimpleLinkItem key={item.title} item={item} isActive={isItemActive} />;
 
                 return (

@@ -4,17 +4,20 @@ import * as React from "react";
 
 import { useParams } from "next/navigation";
 
+import { Upload, FileSpreadsheet, Eraser, CheckCircle2, AlertTriangle, Download } from "lucide-react";
 import Papa from "papaparse";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
+import { EntityHeader } from "@/components/entity-header";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { getGroupAction } from "@/server/actions/groups.actions";
+import { getLeagueAction } from "@/server/actions/leagues.actions";
 import { importTeamsAction, type ImportRow, type ImportReport } from "@/server/actions/teams-import.actions";
 
 type PreviewRow = ImportRow & {
-  formErrors?: string[]; // validación de cliente (renombrado para evitar no-underscore-dangle)
+  formErrors?: string[];
 };
 
 function normalizeHeader(h: string): string {
@@ -52,6 +55,39 @@ export default function ImportTeamsPage() {
   const [rows, setRows] = React.useState<PreviewRow[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [report, setReport] = React.useState<ImportReport | null>(null);
+
+  // meta para EntityHeader
+  const [metaLoading, setMetaLoading] = React.useState(true);
+  const [league, setLeague] = React.useState<any | null>(null);
+  const [group, setGroup] = React.useState<any | null>(null);
+
+  const hiddenInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setMetaLoading(true);
+        const [lg, grp] = await Promise.all([
+          getLeagueAction(String(leagueId)),
+          getGroupAction(String(leagueId), String(groupId)),
+        ]);
+        if (!mounted) return;
+        setLeague(lg ?? null);
+        setGroup(grp ?? null);
+      } catch {
+        if (mounted) {
+          setLeague(null);
+          setGroup(null);
+        }
+      } finally {
+        if (mounted) setMetaLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [leagueId, groupId]);
 
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
@@ -104,7 +140,6 @@ export default function ImportTeamsPage() {
     return arr.map((r) => {
       const errors: string[] = [];
       if (!r.name || r.name.trim().length < 2) errors.push("Nombre requerido");
-      // group opcional; si no viene, usaremos el groupId de la URL
       return { ...r, formErrors: errors.length ? errors : undefined };
     });
   };
@@ -114,7 +149,6 @@ export default function ImportTeamsPage() {
       toast.error("No hay filas para importar.");
       return;
     }
-    // Si todas las filas tienen errores, ni lo intentes
     const allBad = rows.every((r) => r.formErrors && r.formErrors.length > 0);
     if (allBad) {
       toast.error("Todas las filas tienen errores. Corrige el archivo e inténtalo de nuevo.");
@@ -131,7 +165,7 @@ export default function ImportTeamsPage() {
 
       const res = await importTeamsAction({
         leagueId,
-        fallbackGroupId: groupId, // si una fila no trae 'group', usamos el grupo actual
+        fallbackGroupId: groupId,
         rows: cleanRows,
       });
 
@@ -152,32 +186,111 @@ export default function ImportTeamsPage() {
     }
   };
 
+  function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const f = e.dataTransfer.files?.[0];
+    if (f) {
+      const dt = new DataTransfer();
+      dt.items.add(f);
+      if (hiddenInputRef.current) hiddenInputRef.current.files = dt.files;
+      void onFileChange({ target: hiddenInputRef.current! } as any);
+    }
+  }
+
+  function onDragOver(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+  }
+
+  function clearAll() {
+    setFile(null);
+    setRows([]);
+    setReport(null);
+    if (hiddenInputRef.current) hiddenInputRef.current.value = "";
+  }
+
+  function downloadTemplate() {
+    const header = ["name", "group", "municipality", "stadium", "venue"];
+    const example = ["Tapatíos FC", "", "Guadalajara", "Campo Tapatío", "Av. Patria #1800, Guadalajara"];
+    const csv = [header.join(","), example.map((c) => `"${c}"`).join(",")].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "teams_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Importar equipos (CSV/Excel)</h1>
-        <p className="text-muted-foreground text-sm">
-          <span className="font-medium">{leagueId}</span> · <span className="font-medium">{groupId}</span>
-        </p>
-      </div>
-      <Separator />
-
-      {/* Subida de archivo */}
-      <div className="flex items-center gap-3">
-        <Input type="file" accept=".csv, .xlsx, .xls" onChange={onFileChange} />
-        <Button variant="outline" disabled={!file} onClick={() => setFile(null)}>
-          Limpiar
-        </Button>
-      </div>
+      {/* Header reutilizable con liga/grupo */}
+      {metaLoading ? (
+        <EntityHeader.Skeleton />
+      ) : (
+        <EntityHeader
+          loading={false}
+          logoUrl={league?.logoUrl ?? null}
+          title={league?.name ?? "—"}
+          subtitle={
+            <span className="block">
+              {league?.season ? <>Temporada {league.season} · </> : null}
+              <span className="font-medium">{group?.name ?? groupId}</span>
+            </span>
+          }
+          colorHex={league?.color ?? null}
+          backHref={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams`}
+          backText="Volver a equipos"
+          rightExtra={
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={downloadTemplate}>
+                <Download className="mr-2 h-4 w-4" />
+                Descargar plantilla
+              </Button>
+              <Button variant="ghost" onClick={clearAll} disabled={!file && rows.length === 0}>
+                <Eraser className="mr-2 h-4 w-4" />
+                Limpiar
+              </Button>
+            </div>
+          }
+        />
+      )}
 
       {/* Instrucciones */}
-      <div className="text-muted-foreground text-sm">
-        Columnas soportadas: <code>name</code>, <code>group</code>, <code>municipality</code>, <code>stadium</code>,{" "}
-        <code>venue</code>. Si <code>group</code> no viene, se usará el grupo actual (<code>{groupId}</code>).
+      <div className="rounded-lg border p-4 md:p-5">
+        <div className="text-sm">
+          Columnas soportadas: <code>name</code>, <code>group</code>, <code>municipality</code>, <code>stadium</code>,{" "}
+          <code>venue</code>. Si <code>group</code> no viene, se usará el grupo actual (<code>{groupId}</code>).
+        </div>
       </div>
 
+      {/* Dropzone */}
+      <div
+        className="group hover:bg-muted/40 cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition"
+        onClick={() => hiddenInputRef.current?.click()}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && hiddenInputRef.current?.click()}
+      >
+        <Upload className="mx-auto mb-2 h-6 w-6 opacity-70 group-hover:opacity-100" />
+        <p className="text-sm">
+          Arrastra tu archivo aquí o <span className="underline">haz clic para seleccionar</span>
+        </p>
+        <p className="text-muted-foreground mt-1 text-xs">Formatos: .csv, .xlsx, .xls</p>
+
+        {file ? (
+          <div className="bg-background mx-auto mt-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs">
+            <FileSpreadsheet className="h-4 w-4" />
+            <span className="font-medium">{file.name}</span>
+          </div>
+        ) : null}
+      </div>
+
+      <input ref={hiddenInputRef} type="file" accept=".csv, .xlsx, .xls" className="hidden" onChange={onFileChange} />
+
       {/* Preview */}
-      <div className="overflow-x-auto rounded-xl border">
+      <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr className="text-left [&>th]:px-4 [&>th]:py-3">
@@ -206,9 +319,15 @@ export default function ImportTeamsPage() {
                   <td className="max-w-[420px] truncate">{r.venue}</td>
                   <td>
                     {r.formErrors?.length ? (
-                      <span className="text-destructive text-xs">{r.formErrors.join(", ")}</span>
+                      <span className="text-destructive inline-flex items-center gap-1 text-xs">
+                        <AlertTriangle className="h-3 w-3" />
+                        {r.formErrors.join(", ")}
+                      </span>
                     ) : (
-                      <span className="text-muted-foreground text-xs">OK</span>
+                      <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
+                        <CheckCircle2 className="h-3 w-3" />
+                        OK
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -218,6 +337,7 @@ export default function ImportTeamsPage() {
         </table>
       </div>
 
+      {/* Acción final */}
       <div className="flex justify-end">
         <Button onClick={onImport} disabled={loading || rows.length === 0}>
           {loading ? "Importando…" : "Importar"}
@@ -235,7 +355,7 @@ export default function ImportTeamsPage() {
           </p>
 
           {report.rejected.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border">
+            <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr className="text-left [&>th]:px-4 [&>th]:py-3">

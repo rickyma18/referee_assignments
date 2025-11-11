@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { getGroupAction } from "@/server/actions/groups.actions";
 import { getLeagueAction } from "@/server/actions/leagues.actions";
@@ -32,6 +31,7 @@ export default function NewMatchdayPage() {
   const router = useRouter();
 
   const [nextNumber, setNextNumber] = React.useState<number | null>(null);
+  const [numberStr, setNumberStr] = React.useState<string>(""); // <- editable
   const [start, setStart] = React.useState<string>("");
   const [end, setEnd] = React.useState<string>("");
   const [submitting, setSubmitting] = React.useState(false);
@@ -75,12 +75,13 @@ export default function NewMatchdayPage() {
     };
   }, [leagueId, groupId]);
 
-  // Cargar el siguiente número de jornada
+  // Cargar el siguiente número (y precargar input editable)
   React.useEffect(() => {
     (async () => {
       try {
         const n = await getNextMatchdayNumberAction(String(leagueId), String(groupId));
         setNextNumber(n);
+        setNumberStr(n ? String(n) : ""); // precarga en el input
       } catch {
         toast.error("Error al obtener número de jornada");
       }
@@ -99,6 +100,14 @@ export default function NewMatchdayPage() {
       return;
     }
 
+    // validar número editable
+    const numOk = /^\d+$/.test(numberStr) && parseInt(numberStr, 10) >= 1;
+    if (!numOk) {
+      toast.error("El número de jornada debe ser un entero ≥ 1.");
+      return;
+    }
+    const chosenNumber = parseInt(numberStr, 10);
+
     const startDate = new Date(`${start}T00:00:00`);
     const endDate = new Date(`${end}T23:59:59`);
 
@@ -114,13 +123,14 @@ export default function NewMatchdayPage() {
         groupId: String(groupId),
         startDate,
         endDate,
-        _prefillNumber: nextNumber ?? undefined,
+        // Antes solo lo autogenerábamos; ahora permitimos override con el input:
+        _prefillNumber: chosenNumber,
       });
 
       if (!res.ok) {
         toast.error(res.message ?? "Error al crear jornada");
       } else {
-        toast.success(`Jornada ${res.data?.number} creada`);
+        toast.success(`Jornada ${res.data?.number ?? chosenNumber} creada`);
         router.push(`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays`);
       }
     } catch {
@@ -187,8 +197,21 @@ export default function NewMatchdayPage() {
       {/* Formulario */}
       <div className="grid gap-4">
         <div className="grid gap-2">
-          <Label>Número (autogenerado)</Label>
-          <Input value={nextNumber ?? ""} readOnly />
+          <Label>Número (autogenerado, editable)</Label>
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={numberStr}
+            onChange={(e) => {
+              // solo dígitos
+              const v = e.target.value.replace(/[^\d]/g, "");
+              setNumberStr(v);
+            }}
+            placeholder={nextNumber ? String(nextNumber) : "1"}
+            required
+          />
         </div>
 
         <div className="grid gap-2">

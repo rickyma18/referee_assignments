@@ -30,7 +30,7 @@ function rvdList(leagueId: string, groupId: string) {
   revalidatePath(`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays`);
 }
 
-// --- Actions ---
+// --- Actions de lectura ---
 export async function listMatchdaysAction(params: repo.GetAllParams) {
   // Asegura POJO + fechas en ISO ANTES de cruzar al cliente
   const rows = await repo.getAll(params);
@@ -42,11 +42,38 @@ export async function getMatchdayAction(leagueId: string, groupId: string, id: s
   return toPlain(row);
 }
 
+/**
+ * Compatible con la página de Upload: retorna { ok, matchday: { id, number } }
+ */
+export async function getMatchdayByIdAction({
+  leagueId,
+  groupId,
+  matchdayId,
+}: {
+  leagueId: string;
+  groupId: string;
+  matchdayId: string;
+}): Promise<
+  { ok: true; matchday: { id: string; number: number | null } } | { ok: false; error: "not_found" | "unexpected" }
+> {
+  try {
+    const row = await repo.getById(leagueId, groupId, matchdayId);
+    if (!row) return { ok: false, error: "not_found" };
+    // row puede venir con más campos; extraemos lo necesario
+    const plain = toPlain(row) as any;
+    const number: number | null = typeof plain?.number === "number" ? plain.number : null;
+    return { ok: true, matchday: { id: matchdayId, number } };
+  } catch {
+    return { ok: false, error: "unexpected" };
+  }
+}
+
 export async function getNextMatchdayNumberAction(leagueId: string, groupId: string) {
   // Devuelve un número plano (no requiere serialize)
   return repo.getNextNumber(leagueId, groupId);
 }
 
+// --- Actions de escritura ---
 export async function createMatchdayAction(input: unknown): Promise<ActionResult<{ id: string; number: number }>> {
   try {
     const data = MatchdayCreateSchema.parse(input);
@@ -58,7 +85,7 @@ export async function createMatchdayAction(input: unknown): Promise<ActionResult
     });
 
     rvdList(data.leagueId, data.groupId);
-    // res tipa { id, number } (ya plano). Si en tu repo incluyes fechas, envuélvelo con toPlain(res).
+    // res tipa { id, number }. Si tu repo regresa fechas u objetos complejos, envuelve con toPlain(res).
     return { ok: true, data: res };
   } catch (e) {
     return { ok: false, message: msg(e), fieldErrors: zodFields(e) };
