@@ -134,7 +134,7 @@ export default function NewTeamPage() {
           <div>
             <h1 className="text-xl leading-tight font-semibold">Nuevo equipo</h1>
             <p className="text-muted-foreground text-sm">
-              Liga: <span className="font-medium">{league.name}</span> ({league.season}) · Grupo:{" "}
+              <span className="font-medium">{league.name}</span> ({league.season}) · Grupo:{" "}
               <span className="font-medium">{loadingGroup ? "Cargando…" : (group?.name ?? String(groupId))}</span>
             </p>
           </div>

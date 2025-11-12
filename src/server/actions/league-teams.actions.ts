@@ -1,3 +1,7 @@
+"use server";
+import "server-only";
+import { use } from "react";
+
 import { adminDb } from "@/server/admin/firebase-admin";
 
 const teamsCol = (leagueId: string, groupId: string) =>

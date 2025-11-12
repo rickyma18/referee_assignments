@@ -1,9 +1,7 @@
-"use server";
-
-import { adminDb } from "@/server/admin/firebase-admin";
-import type { Group } from "@/domain/groups/group.types";
 import { norm } from "@/domain/groups/group.normalizers";
+import type { Group } from "@/domain/groups/group.types";
 import { toPlain } from "@/lib/serialize";
+import { adminDb } from "@/server/admin/firebase-admin";
 
 const COL = "groups";
 

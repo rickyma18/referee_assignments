@@ -2,6 +2,7 @@
 // src/server/actions/groups.actions.ts
 // =============================
 "use server";
+import "server-only";
 
 import { revalidatePath } from "next/cache";
 
@@ -12,6 +13,11 @@ import * as repo from "@/server/repositories/groups.repo";
 // -------- Lecturas (sin restricción de rol) --------
 export async function listGroupsAction(params: repo.GetAllParams) {
   return repo.getAll(params);
+}
+
+// ✅ NUEVA: listar grupos por liga (usada en DynamicTeamsChildren)
+export async function listGroupsByLeagueAction(leagueId: string) {
+  return repo.getAll({ leagueId }); // ya usas patrón limpio con repositorio
 }
 
 export async function getGroupAction(leagueId: string, id: string) {

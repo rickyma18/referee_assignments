@@ -2,6 +2,7 @@
 // src/server/actions/teams-import.actions.ts
 // =====================================
 "use server";
+import "server-only";
 
 import { revalidatePath } from "next/cache"; // ⬅️ para revalidar al final
 

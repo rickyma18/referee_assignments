@@ -234,11 +234,11 @@ export default function EditTeamPage() {
           <div>
             <h1 className="text-xl leading-tight font-semibold">Editar equipo</h1>
             <p className="text-muted-foreground text-sm">
-              Liga:{" "}
+              {" "}
               <span className="font-medium">
                 {league?.name ?? (loadingLeague ? "Cargando…" : String(leagueId ?? "(?)"))}
               </span>{" "}
-              ({league?.season ?? ""}) · Grupo:{" "}
+              ({league?.season ?? ""}) ·{" "}
               <span className="font-medium">
                 {loadingGroup ? "Cargando…" : (group?.name ?? String(groupId ?? "(?)"))}
               </span>
