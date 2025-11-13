@@ -182,7 +182,7 @@ export function NavMain({ items = [] }: { readonly items?: readonly NavGroup[] }
               {(group.items ?? []).map((item) => {
                 // 🔹 Dinámico: Administrar grupos
                 const isDynamicGroups =
-                  (item as any)?.title === "Administrar grupos" && (item as any)?.url === "/dashboard/leagues";
+                  (item as any)?.title === "Grupos" && (item as any)?.url === "/dashboard/leagues";
                 if (isDynamicGroups) {
                   const openByRoute = path.startsWith("/dashboard/leagues");
                   if (state === "collapsed" && !isMobile) {
@@ -203,9 +203,9 @@ export function NavMain({ items = [] }: { readonly items?: readonly NavGroup[] }
                   );
                 }
 
-                // 🔹 Dinámico: Administrar jornadas
+                // 🔹 Dinámico: jornadas
                 const isDynamicMatchdays =
-                  (item as any)?.title === "Administrar jornadas" && (item as any)?.url === "/dashboard/leagues";
+                  (item as any)?.title === "Jornadas" && (item as any)?.url === "/dashboard/leagues";
                 if (isDynamicMatchdays) {
                   const openByRoute =
                     path.startsWith("/dashboard/leagues/") && path.includes("/groups/") && path.endsWith("/matchdays");
@@ -227,9 +227,9 @@ export function NavMain({ items = [] }: { readonly items?: readonly NavGroup[] }
                   );
                 }
 
-                // 🔹 Dinámico: Administrar equipos (NUEVO)
+                // 🔹 Dinámico: Equipos (NUEVO)
                 const isDynamicTeams =
-                  (item as any)?.title === "Administrar equipos" && (item as any)?.url === "/dashboard/leagues";
+                  (item as any)?.title === "Equipos" && (item as any)?.url === "/dashboard/leagues";
                 if (isDynamicTeams) {
                   const openByRoute =
                     path.startsWith("/dashboard/leagues/") && path.includes("/groups/") && path.endsWith("/teams");

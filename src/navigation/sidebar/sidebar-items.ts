@@ -1,7 +1,7 @@
 // =====================================
 // src/navigation/sidebar/sidebar-items.ts
 // =====================================
-import { CalendarCheck, Layers, CalendarDays } from "lucide-react";
+import { CalendarCheck, Layers, CalendarDays, UserRound } from "lucide-react"; // 👈 añade UserRound
 import { FaFutbol } from "react-icons/fa";
 
 import type { UserRole } from "@/types/roles";
@@ -14,8 +14,7 @@ export type SidebarItem = {
   requiredRoles?: UserRole[];
   newTab?: boolean;
   comingSoon?: boolean;
-  /** <- NUEVO: pinta children dinámicos desde el cliente */
-  dynamic?: "groupsByLeague" | "matchdaysByGroup";
+  dynamic?: "groupsByLeague" | "matchdaysByGroup" | "teamsByGroup"; // ⬅️ añade esto
 };
 
 export type NavMainItem = {
@@ -32,6 +31,7 @@ export type NavGroup = {
   label?: string;
   items: NavMainItem[];
 };
+
 export const sidebarItems: SidebarItem[] = [
   {
     title: "Designaciones",
@@ -45,8 +45,25 @@ export const sidebarItems: SidebarItem[] = [
     icon: FaFutbol,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
   },
+
   {
-    title: "Administrar ligas",
+    title: "Árbitros y asesores",
+    href: "/dashboard/referees",
+    icon: UserRound,
+    requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
+    children: [
+      { title: "Todos los árbitros", href: "/dashboard/referees" },
+      { title: "Nuevo árbitro", href: "/dashboard/referees/new", requiredRoles: ["SUPERUSUARIO", "DELEGADO"] },
+      {
+        title: "Importar desde Excel",
+        href: "/dashboard/referees/import",
+        requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
+      },
+    ],
+  },
+
+  {
+    title: "Ligas",
     href: "/dashboard/leagues",
     icon: Layers,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
@@ -56,25 +73,24 @@ export const sidebarItems: SidebarItem[] = [
     ],
   },
   {
-    title: "Administrar grupos",
+    title: "Grupos",
     href: "/dashboard/leagues",
     icon: Layers,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
-    dynamic: "groupsByLeague",
+    dynamic: "groupsByLeague", // ⬅️ ya lo tienes
   },
   {
-    title: "Administrar equipos",
-    href: "/dashboard/leagues", // fallback
+    title: "Equipos",
+    href: "/dashboard/leagues", // ⬅️ mejor que apunte a leagues (como pivot)
     icon: FaFutbol,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE"],
-    // Solo liga → grupos; click en grupo navega a /teams
-    // (no lista equipos en el menú; te manda a la vista por grupo)
+    dynamic: "teamsByGroup", // ⬅️ marca como dinámico
   },
   {
-    title: "Administrar jornadas",
+    title: "Jornadas",
     href: "/dashboard/leagues",
     icon: CalendarDays,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
-    dynamic: "matchdaysByGroup",
+    dynamic: "matchdaysByGroup", // ⬅️ ya lo tienes
   },
 ];

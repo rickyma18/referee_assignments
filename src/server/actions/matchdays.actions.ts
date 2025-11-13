@@ -54,16 +54,41 @@ export async function getMatchdayByIdAction({
   groupId: string;
   matchdayId: string;
 }): Promise<
-  { ok: true; matchday: { id: string; number: number | null } } | { ok: false; error: "not_found" | "unexpected" }
+  | {
+      ok: true;
+      matchday: {
+        id: string;
+        number: number | null;
+        startDate: string | null;
+        endDate: string | null;
+      };
+    }
+  | { ok: false; error: "not_found" | "unexpected" }
 > {
   try {
     const row = await repo.getById(leagueId, groupId, matchdayId);
     if (!row) return { ok: false, error: "not_found" };
-    // row puede venir con más campos; extraemos lo necesario
+
+    // row ya viene con startDate/endDate serializables gracias al repo
     const plain = toPlain(row) as any;
+
     const number: number | null = typeof plain?.number === "number" ? plain.number : null;
-    return { ok: true, matchday: { id: matchdayId, number } };
-  } catch {
+
+    const startDate: string | null = typeof plain?.startDate === "string" ? plain.startDate : null;
+
+    const endDate: string | null = typeof plain?.endDate === "string" ? plain.endDate : null;
+
+    return {
+      ok: true,
+      matchday: {
+        id: matchdayId,
+        number,
+        startDate,
+        endDate,
+      },
+    };
+  } catch (e) {
+    console.error("[getMatchdayByIdAction] error:", e);
     return { ok: false, error: "unexpected" };
   }
 }

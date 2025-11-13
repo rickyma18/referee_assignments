@@ -80,7 +80,7 @@ export function TeamForm({ initial }: Props) {
 
         toast.success("Equipo actualizado");
         router.push(`/dashboard/leagues/${leagueId}/groups/${groupId}/teams`);
-        router.refresh();
+        // router.refresh();
       } else {
         const res = await createTeamAction({
           groupId,
@@ -100,7 +100,6 @@ export function TeamForm({ initial }: Props) {
 
         toast.success("Equipo creado");
         router.push(`/dashboard/leagues/${leagueId}/groups/${groupId}/teams`);
-        router.refresh();
       }
     } catch (err: any) {
       toast.error(err?.message ?? "Error inesperado");

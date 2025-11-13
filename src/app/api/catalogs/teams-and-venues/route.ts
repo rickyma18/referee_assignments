@@ -20,15 +20,17 @@ export async function GET(req: Request) {
 
     const [teamsSnap, venuesSnap] = await Promise.all([
       db.collection("teams").where("groupId", "==", groupId).get(),
-      db.collection("venues").where("groupId", "==", groupId).get(), // puede estar vacío
+      db.collection("venues").where("groupId", "==", groupId).get(),
     ]);
 
     const teams = teamsSnap.docs.map((d) => {
       const stadiumRaw = (d.get("stadium") ?? d.get("venue") ?? "").toString();
+      const logoUrl = (d.get("logoUrl") ?? d.get("logo") ?? "").toString();
       return {
         id: d.id,
         name: String(d.get("name") ?? ""),
-        stadium: stadiumRaw.trim(), // <- lo mandamos SIEMPRE
+        logoUrl: logoUrl.trim() ?? undefined, // <- para preview VS
+        stadium: stadiumRaw.trim(),
       };
     });
 
@@ -45,24 +47,20 @@ export async function GET(req: Request) {
       return v ? { ...t, defaultVenueId: v.id, defaultVenueName: v.name } : t;
     });
 
-    // ---- VENUES DERIVADOS desde teams.stadium/venue ----
-    // Si no existe en /venues, generamos uno "derivado" para que salga en el combo.
+    // Venues derivados desde teams.stadium
     const seen = new Set(venuesReal.map((v) => key(v.name)));
     const venuesDerived: { id: string; name: string }[] = [];
     for (const t of teams) {
-      if (!t.stadium) continue; // sin estadio, lo saltamos
+      if (!t.stadium) continue;
       const k = key(t.stadium);
       if (seen.has(k)) continue;
       seen.add(k);
-      venuesDerived.push({
-        id: `team-derived:${k}`, // ID sintético SOLO para UI
-        name: t.stadium,
-      });
+      venuesDerived.push({ id: `team-derived:${k}`, name: t.stadium });
     }
 
     const venuesMerged = [...venuesReal, ...venuesDerived];
 
-    // 🔤 Ordenar ambos catálogos alfabéticamente (respetando tildes y mayúsculas)
+    // Ordenar alfabéticamente (ES)
     const collator = new Intl.Collator("es", {
       sensitivity: "base",
       ignorePunctuation: true,

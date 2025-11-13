@@ -3,14 +3,17 @@
 // =============================
 "use client";
 import * as React from "react";
+
 import { useRouter } from "next/navigation";
-import { z } from "zod";
-import { GroupCreateSchema, GroupUpdateSchema } from "@/domain/groups/group.zod";
-import { createGroupAction, updateGroupAction } from "@/server/actions/groups.actions";
+
 import { toast } from "sonner";
+import { z } from "zod";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { GroupCreateSchema, GroupUpdateSchema } from "@/domain/groups/group.zod";
+import { createGroupAction, updateGroupAction } from "@/server/actions/groups.actions";
 
 const CreateSchema = GroupCreateSchema;
 const UpdateSchema = GroupUpdateSchema;
@@ -38,7 +41,6 @@ export function GroupForm({ leagueId, initial }: { leagueId: string; initial?: I
         toast.success("Grupo actualizado");
       }
       router.push(`/dashboard/leagues/${leagueId}/groups`);
-      router.refresh();
     } catch (err: any) {
       toast.error(err?.message ?? "Error al guardar");
     } finally {

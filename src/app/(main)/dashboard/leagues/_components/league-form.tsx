@@ -50,7 +50,7 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
     defaultValues: {
       name: initial?.name ?? "",
       season: initial?.season ?? "",
-      color: initial?.color ?? "#0057FF",
+      color: initial?.color ?? "#232730ff",
       status: initial?.status ?? "ACTIVE",
       region: initial?.region ?? "",
       startDate: initial?.startDate ? new Date(initial.startDate) : undefined,
@@ -238,7 +238,7 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
                       <Input
                         type="color"
                         className="h-10 w-16 cursor-pointer p-1"
-                        value={field.value ?? "#0057FF"}
+                        value={field.value ?? "#232730ff"}
                         onChange={(e) => field.onChange(e.target.value)}
                         disabled={disabled}
                         aria-label="Seleccionar color de la liga"

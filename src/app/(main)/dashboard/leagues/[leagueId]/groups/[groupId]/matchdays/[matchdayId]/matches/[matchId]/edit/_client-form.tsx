@@ -92,7 +92,6 @@ export default function EditMatchForm({ initial, header }: Props) {
       if (!res?.ok) throw new Error(res?.error ?? "No se pudo actualizar.");
       toast.success("Partido actualizado.");
       router.back();
-      router.refresh();
     } catch (err: any) {
       console.error(err);
       toast.error(err.message ?? "Error al actualizar.");

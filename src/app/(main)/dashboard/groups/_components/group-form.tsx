@@ -52,7 +52,6 @@ export function GroupForm({ leagueId, initial }: Props) {
 
       // Navegación: deja tu ruta preferida
       router.push("/dashboard/groups");
-      router.refresh();
     } catch (e: any) {
       toast.error(e?.message ?? "Error al guardar");
     } finally {
