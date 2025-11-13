@@ -70,18 +70,6 @@ export function RefereesClient({
     [router, params],
   );
 
-  // 👉 Botón "Cargar más": empuja un limit grande en la URL
-  const handleLoadAll = React.useCallback(() => {
-    const base = "/dashboard/referees";
-    const sp = new URLSearchParams(Array.from(params.entries()));
-
-    // Ajusta este número al límite real que uses
-    sp.set("limit", "500");
-
-    const qs = sp.toString();
-    router.push(qs ? `${base}?${qs}` : base);
-  }, [params, router]);
-
   // 🧠 Columnas (memo para rendimiento)
   const columns: ColumnDef<any>[] = React.useMemo(
     () => [
@@ -185,7 +173,7 @@ export function RefereesClient({
     <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Árbitros</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Árbitros y asesores</h1>
         <div className="flex gap-2">
           <Button asChild variant="outline" className="h-9">
             <Link href="/dashboard/referees/import">Importar Excel</Link>
@@ -223,12 +211,6 @@ export function RefereesClient({
       <SectionHeader title={`Árbitros (${refs.arbitros.length})`} subtitle="Plantilla operativa" />
       <div className="overflow-hidden rounded-md border">
         <DataTable table={tableArbitros} columns={columns} />
-      </div>
-
-      <div className="flex justify-center py-4">
-        <Button variant="outline" onClick={handleLoadAll}>
-          Cargar más
-        </Button>
       </div>
 
       <Separator />

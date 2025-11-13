@@ -26,7 +26,7 @@ export default async function RefereesPage({ searchParams }: { searchParams: Pro
 
   // 👇 parseamos el limit que viene de la URL
   const rawLimit = sp.limit;
-  let limit = 50; // default
+  let limit = 100; // default
 
   if (typeof rawLimit === "string") {
     const n = Number(rawLimit);
