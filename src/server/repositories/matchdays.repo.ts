@@ -27,10 +27,29 @@ export async function getAll(params: GetAllParams): Promise<Matchday[]> {
 }
 
 export async function getById(leagueId: string, groupId: string, id: string): Promise<Matchday | null> {
-  const ref = adminDb.doc(`${colPath(leagueId, groupId)}/${id}`);
+  const ref = adminDb.doc(`leagues/${leagueId}/groups/${groupId}/matchdays/${id}`);
   const doc = await ref.get();
   if (!doc.exists) return null;
-  return { id: doc.id, ...(doc.data() as Omit<Matchday, "id">) };
+
+  const data = doc.data() as Omit<Matchday, "id">;
+
+  // 🔹 Convierte los Firestore Timestamp a ISO (o a .getTime() si prefieres)
+  const start =
+    data.startDate && typeof (data.startDate as any).toDate === "function"
+      ? (data.startDate as any).toDate().toISOString()
+      : (data.startDate ?? null);
+
+  const end =
+    data.endDate && typeof (data.endDate as any).toDate === "function"
+      ? (data.endDate as any).toDate().toISOString()
+      : (data.endDate ?? null);
+
+  return {
+    id: doc.id,
+    ...data,
+    startDate: start,
+    endDate: end,
+  };
 }
 
 // Siguiente número autoincremental dentro del grupo

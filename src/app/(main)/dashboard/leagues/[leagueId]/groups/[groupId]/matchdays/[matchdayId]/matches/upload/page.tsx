@@ -5,6 +5,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
+import { CalendarDays } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -17,6 +19,83 @@ import { getMatchdayByIdAction } from "@/server/actions/matchdays.actions";
 
 import { ExcelUploader } from "./_components/excel-uploader";
 import { ManualMatchForm } from "./_components/manual-match-form";
+
+/** Helper seguro para convertir Firestore Timestamp/Date/string a Date */
+function toDateClientSafe(input: unknown): Date | null {
+  if (!input) return null;
+  if (input instanceof Date) return isNaN(input.getTime()) ? null : input;
+
+  if (typeof input === "number") {
+    const ms = input < 10_000_000_000 ? input * 1000 : input;
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof input === "string") {
+    const d = new Date(input);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof input === "object") {
+    const obj = input as any;
+
+    if (typeof obj?.toDate === "function") {
+      try {
+        const d = obj.toDate();
+        return d instanceof Date && !isNaN(d.getTime()) ? d : null;
+      } catch (err) {
+        // Intencionalmente vacío
+      }
+    }
+
+    const seconds =
+      typeof obj?.seconds === "number" ? obj.seconds : typeof obj?.seconds === "number" ? obj.seconds : undefined;
+
+    const nanos =
+      typeof obj?.nanoseconds === "number"
+        ? obj.nanoseconds
+        : typeof obj?.nanoseconds === "number"
+          ? obj.nanoseconds
+          : 0;
+
+    if (typeof seconds === "number") {
+      const d = new Date(seconds * 1000 + Math.floor(nanos / 1_000_000));
+      return isNaN(d.getTime()) ? null : d;
+    }
+  }
+
+  return null;
+}
+
+/** Formatea un rango: 12–18 oct 2025 | 12 oct 2025 – 03 nov 2025, etc. */
+function formatDateRange(start: Date | null, end: Date | null): string {
+  const fmtShort = new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  if (start && end) {
+    // si mismo mes y año, usa día–día mes año
+    if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
+      const dayStart = start.getDate().toString().padStart(2, "0");
+      const dayEnd = end.getDate().toString().padStart(2, "0");
+      const monthYear = new Intl.DateTimeFormat("es-MX", {
+        month: "short",
+        year: "numeric",
+      }).format(start);
+      return `${dayStart}–${dayEnd} ${monthYear}`;
+    }
+    return `${fmtShort.format(start)} – ${fmtShort.format(end)}`;
+  }
+  if (start && !end) {
+    return `Desde ${fmtShort.format(start)}`;
+  }
+  if (!start && end) {
+    return `Hasta ${fmtShort.format(end)}`;
+  }
+  return "Sin rango definido";
+}
 
 export default function UploadMatchesPage() {
   const { leagueId, groupId, matchdayId } = useParams<{
@@ -31,6 +110,9 @@ export default function UploadMatchesPage() {
   const userId = firebaseUser?.uid ?? "";
 
   const [matchdayNumber, setMatchdayNumber] = React.useState<number | null>(null);
+  const [mdStart, setMdStart] = React.useState<Date | null>(null);
+  const [mdEnd, setMdEnd] = React.useState<Date | null>(null);
+
   const [league, setLeague] = React.useState<any | null>(null);
   const [group, setGroup] = React.useState<any | null>(null);
   const [metaLoading, setMetaLoading] = React.useState(true);
@@ -38,9 +120,13 @@ export default function UploadMatchesPage() {
   // cargar metadata (liga, grupo, jornada)
   React.useEffect(() => {
     let mounted = true;
+    console.debug("[UploadMatchesPage] effect mounted"); // ← 1
+
     (async () => {
       try {
+        console.time("[UploadMatchesPage] load meta");
         setMetaLoading(true);
+
         const [lg, grp, md] = await Promise.all([
           getLeagueAction(String(leagueId)),
           getGroupAction(String(leagueId), String(groupId)),
@@ -50,20 +136,50 @@ export default function UploadMatchesPage() {
             matchdayId: String(matchdayId),
           }),
         ]);
+
+        console.timeEnd("[UploadMatchesPage] load meta");
         if (!mounted) return;
+
+        console.debug("[UploadMatchesPage] md raw:", md); // ← 2
+
         setLeague(lg ?? null);
         setGroup(grp ?? null);
-        setMatchdayNumber(md?.ok && typeof md.matchday?.number === "number" ? md.matchday.number : null);
-      } catch {
+
+        if (md && md.ok === true) {
+          const m = md.matchday as any;
+          setMatchdayNumber(typeof m?.number === "number" ? m.number : null);
+
+          const start = toDateClientSafe(m?.startDate);
+          const end = toDateClientSafe(m?.endDate);
+
+          console.debug("[UploadMatchesPage] parsed dates:", {
+            start,
+            end,
+            rawStart: m?.startDate,
+            rawEnd: m?.endDate,
+          });
+
+          setMdStart(start);
+          setMdEnd(end);
+        } else {
+          setMatchdayNumber(null);
+          setMdStart(null);
+          setMdEnd(null);
+        }
+      } catch (err) {
+        console.error("[UploadMatchesPage] meta load error:", err); // ← 3
         if (mounted) {
           setLeague(null);
           setGroup(null);
           setMatchdayNumber(null);
+          setMdStart(null);
+          setMdEnd(null);
         }
       } finally {
         if (mounted) setMetaLoading(false);
       }
     })();
+
     return () => {
       mounted = false;
     };
@@ -80,6 +196,17 @@ export default function UploadMatchesPage() {
       </div>
     );
   }
+
+  const dateRangeLabel = formatDateRange(mdStart, mdEnd);
+  const exactTooltip =
+    mdStart || mdEnd
+      ? [
+          mdStart ? `Inicio: ${mdStart.toLocaleString("es-MX")}` : null,
+          mdEnd ? `Fin: ${mdEnd.toLocaleString("es-MX")}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : "";
 
   return (
     <div className="flex flex-col gap-4">
@@ -108,6 +235,8 @@ export default function UploadMatchesPage() {
             <h1 className="truncate text-xl leading-tight font-semibold">
               {metaLoading ? "Cargando…" : (league?.name ?? "—")}
             </h1>
+
+            {/* Subtítulo (temporada • grupo • jornada) */}
             <p className="text-muted-foreground text-sm">
               {league?.season && <span>Temporada {league.season}</span>}
               {group?.name && (
@@ -123,6 +252,15 @@ export default function UploadMatchesPage() {
                 </>
               )}
             </p>
+
+            {/* Ventana de jornada (en un div separado para evitar <div> dentro de <p>) */}
+            <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs" title={exactTooltip}>
+              <CalendarDays className="size-4" aria-hidden="true" />
+              <span className="font-medium">Ventana:</span>
+              <span className="font-mono">{metaLoading ? "Cargando…" : dateRangeLabel}</span>
+            </div>
+
+            {/* Color de la liga (opcional) */}
             {league?.color ? (
               <div className="mt-1 flex items-center gap-2 text-xs">
                 <span
@@ -139,7 +277,9 @@ export default function UploadMatchesPage() {
 
         {/* Botón volver a jornadas */}
         <Button asChild variant="outline">
-          <Link href={`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays`}>Volver a jornadas</Link>
+          <Link href={`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays/${matchdayId}/matches`}>
+            Volver a partidos
+          </Link>
         </Button>
       </div>
 

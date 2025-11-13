@@ -18,6 +18,9 @@ export interface MatchDoc {
   kickoff: FirebaseFirestore.Timestamp;
   status: MatchStatus;
 
+  // 🔹 Nuevo (sin UI de selección por ahora)
+  assessors?: string[]; // IDs de referees con canAssess=true
+
   source?: string;
   importBatchId?: string;
 

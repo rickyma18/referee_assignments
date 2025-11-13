@@ -67,13 +67,9 @@ export function AccountSwitcher() {
         <DropdownMenuSeparator />
 
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => router.push("/account")} className={cn("cursor-pointer")}>
+          <DropdownMenuItem onClick={() => router.push("/dashboard/account")} className={cn("cursor-pointer")}>
             <BadgeCheck className="mr-2 size-4" />
             Cuenta
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push("/account/profile")} className={cn("cursor-pointer")}>
-            <User2 className="mr-2 size-4" />
-            Perfil
           </DropdownMenuItem>
         </DropdownMenuGroup>
 
