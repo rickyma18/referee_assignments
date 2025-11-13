@@ -289,7 +289,7 @@ export default function TeamsPage() {
               <th>Nombre</th>
               <th>Municipio</th>
               <th>Estadio</th>
-              <th>Sede (dirección)</th>
+              <th>Dirección</th>
               <th className="w-[220px] text-right">Acciones</th>
             </tr>
           </thead>

@@ -32,7 +32,7 @@ export function NavUser({
   const { isMobile } = useSidebar();
 
   const handleAccount = () => {
-    router.push("/account"); // 👈 ajusta la ruta si tu vista de cuenta está en otra parte
+    router.push("/dashboard/account"); // 👈 ajusta la ruta si tu vista de cuenta está en otra parte
   };
 
   const handleLogout = async () => {

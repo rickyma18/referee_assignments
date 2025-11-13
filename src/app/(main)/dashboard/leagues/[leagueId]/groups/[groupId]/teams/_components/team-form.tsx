@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DEFAULT_ZONES } from "@/config/zones.constants";
 import { createTeamAction, updateTeamAction } from "@/server/actions/teams.actions";
 
 type TeamInitial = {
@@ -50,8 +51,22 @@ export function TeamForm({ initial }: Props) {
   const [loading, setLoading] = React.useState(false);
   const [errors, setErrors] = React.useState<FieldErrors>({});
 
+  // 🔁 Zonas activas, ordenadas por "order"
+  const zones = React.useMemo(
+    () =>
+      DEFAULT_ZONES.filter((z) => z.active)
+        .sort((a, b) => a.order - b.order)
+        .map((z) => ({ id: z.id, name: z.name })),
+    [],
+  );
+
   const onChange = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((s) => ({ ...s, [field]: e.target.value }));
+  };
+
+  const onChangeMunicipality = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setForm((s) => ({ ...s, municipality: value }));
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -59,17 +74,25 @@ export function TeamForm({ initial }: Props) {
     setLoading(true);
     setErrors({});
 
+    // 🔒 Validación rápida en cliente para estadio
+    if (!form.stadium.trim()) {
+      setErrors((prev) => ({ ...prev, stadium: "El estadio es obligatorio" }));
+      toast.error("El estadio es obligatorio");
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isEdit && initial?.id) {
         const res = await updateTeamAction({
           id: initial.id,
-          groupId, // permitido cambiar grupo más adelante si lo habilitas aquí
+          groupId,
           name: form.name,
           municipality: form.municipality,
           stadium: form.stadium,
           venue: form.venue,
           logoUrl: form.logoUrl || undefined,
-          leagueId, // para revalidate exacto
+          leagueId,
         });
 
         if (!res.ok) {
@@ -80,7 +103,6 @@ export function TeamForm({ initial }: Props) {
 
         toast.success("Equipo actualizado");
         router.push(`/dashboard/leagues/${leagueId}/groups/${groupId}/teams`);
-        // router.refresh();
       } else {
         const res = await createTeamAction({
           groupId,
@@ -123,28 +145,44 @@ export function TeamForm({ initial }: Props) {
         <FieldError value={errors.name} />
       </div>
 
-      {/* Municipio */}
+      {/* Municipio / Zona (usando DEFAULT_ZONES) */}
       <div>
-        <Label htmlFor="municipality">Municipio</Label>
-        <Input
+        <Label htmlFor="municipality">Municipio / Zona</Label>
+        <select
           id="municipality"
           value={form.municipality}
-          onChange={onChange("municipality")}
-          placeholder="Ej. Zapopan"
-        />
+          onChange={onChangeMunicipality}
+          className="border-input bg-background focus-visible:ring-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-2 focus-visible:outline-none"
+        >
+          <option value="">Selecciona municipio / zona</option>
+          {zones.map((z) => (
+            <option key={z.id} value={z.name}>
+              {z.name}
+            </option>
+          ))}
+        </select>
         <FieldError value={errors.municipality} />
       </div>
 
-      {/* Estadio */}
+      {/* Estadio (OBLIGATORIO) */}
       <div>
-        <Label htmlFor="stadium">Estadio</Label>
-        <Input id="stadium" value={form.stadium} onChange={onChange("stadium")} placeholder="Ej. Estadio Municipal" />
+        <Label htmlFor="stadium">
+          Estadio <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          id="stadium"
+          value={form.stadium}
+          onChange={onChange("stadium")}
+          placeholder="Ej. Estadio Municipal"
+          required
+          minLength={3}
+        />
         <FieldError value={errors.stadium} />
       </div>
 
       {/* Sede (dirección exacta) */}
       <div>
-        <Label htmlFor="venue">Sede (dirección)</Label>
+        <Label htmlFor="venue">Dirección</Label>
         <Input
           id="venue"
           value={form.venue}
