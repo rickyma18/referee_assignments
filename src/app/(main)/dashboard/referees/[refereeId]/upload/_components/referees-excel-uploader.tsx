@@ -27,7 +27,9 @@ type RefRow = {
   CURP: string;
   NUI: string;
   FotoURL: string;
+  Tipo: string; // "ARBITRO" | "ASESOR" (opcional)
 };
+
 type ConfirmRefereesResponse = {
   ok: boolean;
   message?: string;
@@ -37,6 +39,32 @@ type ConfirmRefereesResponse = {
     errors: string[];
   };
 };
+
+// 🔹 Campos obligatorios (por clave de RefRow)
+const REQUIRED_FIELDS: Array<keyof RefRow> = ["Nombre", "Zonas", "Estado", "Categoría", "Correo"];
+
+const FIELD_LABELS: Record<keyof RefRow, string> = {
+  Nombre: "Nombre",
+  Zonas: "Zonas",
+  Roles: "Roles",
+  Estado: "Estado",
+  Categoría: "Categoría",
+  Teléfono: "Teléfono",
+  Correo: "Correo",
+  RFC: "RFC",
+  CURP: "CURP",
+  NUI: "NUI",
+  FotoURL: "FotoURL",
+  Tipo: "Tipo",
+};
+
+const VALID_ESTADOS = ["DISPONIBLE", "DUDOSO", "LESIONADO"] as const;
+const VALID_CATEGORIES = ["TDP", "LP"] as const;
+const VALID_ROLES = ["CENTRAL", "AA1", "AA2", "4TO"] as const;
+const VALID_TYPES = ["ARBITRO", "ASESOR"] as const;
+
+// Email muy básico, solo para filtrar burradas
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
   const [rows, setRows] = React.useState<RefRow[]>([]);
@@ -55,8 +83,6 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
     // Acepta variantes de encabezados (por si exportan con minúsculas)
     return json.map((r) => {
       const g = (k: string) => r[k] ?? r[k.toLowerCase()] ?? "";
-
-      // trim defensivo
       const s = (v: unknown) => String(v ?? "").trim();
 
       return {
@@ -71,6 +97,7 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
         CURP: s(g("CURP")),
         NUI: s(g("NUI")),
         FotoURL: s(g("FotoURL")),
+        Tipo: s(g("Tipo")), // 👈 NUEVO
       };
     });
   }
@@ -135,6 +162,7 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
       "CURP",
       "NUI",
       "FotoURL",
+      "Tipo", // 👈 NUEVO
     ];
 
     const sample: RefRow[] = [
@@ -150,19 +178,21 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
         CURP: "",
         NUI: "",
         FotoURL: "",
+        Tipo: "ARBITRO",
       },
       {
-        Nombre: "",
-        Zonas: "",
-        Roles: "",
-        Estado: "",
-        Categoría: "",
+        Nombre: "Carlos Asesor",
+        Zonas: "ZMG",
+        Roles: "CENTRAL",
+        Estado: "DISPONIBLE",
+        Categoría: "TDP",
         Teléfono: "",
-        Correo: "",
+        Correo: "asesor@ej.com",
         RFC: "",
         CURP: "",
         NUI: "",
         FotoURL: "",
+        Tipo: "ASESOR",
       },
     ];
 
@@ -180,6 +210,7 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
         r.CURP,
         r.NUI,
         r.FotoURL,
+        r.Tipo,
       ]),
     ];
 
@@ -196,11 +227,82 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
       { wch: 18 }, // CURP
       { wch: 12 }, // NUI
       { wch: 36 }, // FotoURL
+      { wch: 12 }, // Tipo
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
 
-    XLSX.writeFile(wb, "plantilla_arbitros.xlsx");
+    XLSX.writeFile(wb, "plantilla_arbitros_asesores.xlsx");
+  }
+
+  // ---------- Validación en cliente ----------
+  function runClientValidation() {
+    const validatedRows = rows.map((r) => {
+      const errors: string[] = [];
+
+      // Campos obligatorios vacíos
+      for (const field of REQUIRED_FIELDS) {
+        const value = r[field];
+        if (!String(value ?? "").trim()) {
+          errors.push(`La columna "${FIELD_LABELS[field]}" es obligatoria.`);
+        }
+      }
+
+      // Estado
+      if (r.Estado) {
+        const estadoUpper = r.Estado.toUpperCase();
+        if (!VALID_ESTADOS.includes(estadoUpper as (typeof VALID_ESTADOS)[number])) {
+          errors.push(`Estado inválido "${r.Estado}". Usa: DISPONIBLE, DUDOSO o LESIONADO.`);
+        }
+      }
+
+      // Categoría
+      if (r.Categoría) {
+        const catUpper = r.Categoría.toUpperCase();
+        if (!VALID_CATEGORIES.includes(catUpper as (typeof VALID_CATEGORIES)[number])) {
+          errors.push(`Categoría inválida "${r.Categoría}". Usa: TDP o LP.`);
+        }
+      }
+
+      // Roles
+      if (r.Roles) {
+        const rolesList = r.Roles.split(",")
+          .map((x) => x.trim())
+          .filter(Boolean);
+        if (!rolesList.length) {
+          errors.push("Debes indicar al menos un rol.");
+        } else {
+          const invalidRoles = rolesList.filter(
+            (role) => !VALID_ROLES.includes(role.toUpperCase() as (typeof VALID_ROLES)[number]),
+          );
+          if (invalidRoles.length) {
+            errors.push(`Roles inválidos: ${invalidRoles.join(", ")}. Usa: CENTRAL, AA1, AA2, 4TO.`);
+          }
+        }
+      }
+
+      // Correo
+      if (r.Correo && !EMAIL_REGEX.test(r.Correo)) {
+        errors.push(`Correo inválido "${r.Correo}".`);
+      }
+
+      // Tipo (opcional)
+      if (r.Tipo) {
+        const tipoUpper = r.Tipo.toUpperCase();
+        if (!VALID_TYPES.includes(tipoUpper as (typeof VALID_TYPES)[number])) {
+          errors.push(`Tipo inválido "${r.Tipo}". Usa: ARBITRO o ASESOR (o deja vacío).`);
+        }
+      }
+
+      return {
+        errors,
+        normalized: r,
+      };
+    });
+
+    const ok = !validatedRows.some((row) => row.errors.length > 0);
+
+    return { ok, rows: validatedRows };
   }
 
   // ---------- Actions ----------
@@ -208,6 +310,16 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
     if (rows.length === 0) return toast.error("Sube un archivo primero.");
     setBusy(true);
     try {
+      // 1) Validación en cliente (obligatorios + enums básicos)
+      const clientRes = runClientValidation();
+      setResult(clientRes);
+
+      if (!clientRes.ok) {
+        toast.error("Hay errores en columnas obligatorias. Corrige antes de confirmar.");
+        return;
+      }
+
+      // 2) Validación en servidor (reglas de negocio)
       const res = await validateRefereesDryRun(rows);
       setResult(res);
       if (res?.ok) toast.success("Validación OK. Puedes confirmar.");
@@ -231,10 +343,9 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
 
       if (res.ok) {
         const created = res.data?.created ?? rows.length; // fallback amistoso
-        toast.success(`Árbitros creados/actualizados: ${created}`);
+        toast.success(`Registros creados/actualizados: ${created}`);
         onClear();
       } else {
-        // Si viene listado de errores en data.errors, muéstralo
         const msg = res.message ?? (res.data?.errors?.length ? res.data.errors.join("; ") : "No se pudo confirmar.");
         toast.error(msg);
       }
@@ -252,15 +363,20 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
       <div className="rounded-lg border p-4 md:p-5">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h3 className="text-base font-semibold">Importar árbitros por Excel</h3>
+            <h3 className="text-base font-semibold">Importar árbitros y asesores por Excel</h3>
             <p className="text-muted-foreground text-sm">
-              Columnas: <span className="font-mono">Nombre</span>, <span className="font-mono">Zonas</span>,{" "}
-              <span className="font-mono">Roles</span>, <span className="font-mono">Estado</span>,{" "}
-              <span className="font-mono">Categoría</span>, <span className="font-mono">Teléfono</span>,{" "}
-              <span className="font-mono">Correo</span>, <span className="font-mono">RFC</span>,{" "}
+              Columnas (<span className="font-semibold">*</span> obligatorias):{" "}
+              <span className="font-mono">Nombre*</span>, <span className="font-mono">Zonas*</span>,{" "}
+              <span className="font-mono">Roles</span>, <span className="font-mono">Estado*</span>,{" "}
+              <span className="font-mono">Categoría*</span>, <span className="font-mono">Teléfono</span>,{" "}
+              <span className="font-mono">Correo*</span>, <span className="font-mono">RFC</span>,{" "}
               <span className="font-mono">CURP</span>, <span className="font-mono">NUI</span>,{" "}
-              <span className="font-mono">FotoURL</span>. Usa comas para múltiples{" "}
-              <span className="font-mono">Zonas</span> y <span className="font-mono">Roles</span>.
+              <span className="font-mono">FotoURL</span>, <span className="font-mono">Tipo</span> (opcional:
+              ARBITRO/ASESOR). Usa comas para múltiples <span className="font-mono">Zonas</span> y{" "}
+              <span className="font-mono">Roles</span>.
+            </p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Puedes dejar vacíos: Teléfono, RFC, CURP, NUI, FotoURL y Tipo (por defecto se asume árbitro).
             </p>
           </div>
           <div className="flex gap-2">
@@ -319,17 +435,18 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
             <thead className="bg-muted/50">
               <tr>
                 <th className="p-2 text-left">#</th>
-                <th className="p-2 text-left">Nombre</th>
-                <th className="p-2 text-left">Zonas</th>
-                <th className="p-2 text-left">Roles</th>
-                <th className="p-2 text-left">Estado</th>
-                <th className="p-2 text-left">Categoría</th>
+                <th className="p-2 text-left">Nombre*</th>
+                <th className="p-2 text-left">Zonas*</th>
+                <th className="p-2 text-left">Roles*</th>
+                <th className="p-2 text-left">Estado*</th>
+                <th className="p-2 text-left">Categoría*</th>
                 <th className="p-2 text-left">Teléfono</th>
-                <th className="p-2 text-left">Correo</th>
+                <th className="p-2 text-left">Correo*</th>
                 <th className="p-2 text-left">RFC</th>
                 <th className="p-2 text-left">CURP</th>
                 <th className="p-2 text-left">NUI</th>
                 <th className="p-2 text-left">Foto</th>
+                <th className="p-2 text-left">Tipo</th>
                 <th className="p-2 text-left">Validación</th>
               </tr>
             </thead>
@@ -353,6 +470,7 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
                     <td className="p-2">{r.CURP}</td>
                     <td className="p-2">{r.NUI}</td>
                     <td className="max-w-[160px] truncate p-2">{r.FotoURL || "—"}</td>
+                    <td className="p-2">{r.Tipo || "—"}</td>
                     <td className="p-2">
                       {ok ? (
                         <span className="inline-flex items-center gap-1 text-green-600">
@@ -384,7 +502,6 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
         </div>
       )}
 
-      {/* Separador opcional para respiración visual */}
       <Separator className="opacity-50" />
     </div>
   );

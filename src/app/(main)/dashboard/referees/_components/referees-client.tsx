@@ -55,13 +55,32 @@ export function RefereesClient({
   const pushWith = React.useCallback(
     (q: string, status: string) => {
       const base = "/dashboard/referees";
-      const qPart = q ? `q=${encodeURIComponent(q)}` : "";
-      const sPart = status ? `status=${status}` : "";
-      const qs = [qPart, sPart].filter(Boolean).join("&");
+      const sp = new URLSearchParams(Array.from(params.entries()));
+
+      // Actualizamos solo q y status, respetando otros params (como limit)
+      if (q) sp.set("q", q);
+      else sp.delete("q");
+
+      if (status) sp.set("status", status);
+      else sp.delete("status");
+
+      const qs = sp.toString();
       router.push(qs ? `${base}?${qs}` : base);
     },
-    [router],
+    [router, params],
   );
+
+  // 👉 Botón "Cargar más": empuja un limit grande en la URL
+  const handleLoadAll = React.useCallback(() => {
+    const base = "/dashboard/referees";
+    const sp = new URLSearchParams(Array.from(params.entries()));
+
+    // Ajusta este número al límite real que uses
+    sp.set("limit", "500");
+
+    const qs = sp.toString();
+    router.push(qs ? `${base}?${qs}` : base);
+  }, [params, router]);
 
   // 🧠 Columnas (memo para rendimiento)
   const columns: ColumnDef<any>[] = React.useMemo(
@@ -77,13 +96,17 @@ export function RefereesClient({
             .slice(0, 2)
             .join("")
             .toUpperCase();
+
+          const photoUrl: string | undefined =
+            row.original.photoUrl && row.original.photoUrl.trim() !== "" ? row.original.photoUrl : undefined;
+
           return (
             <Link href={`/dashboard/referees/${row.original.id}`} className="flex items-center gap-2 hover:underline">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={row.original.photoUrl ?? ""} />
+                <AvatarImage src={photoUrl} alt={n || "Árbitro"} />
                 <AvatarFallback>{initials || "AR"}</AvatarFallback>
               </Avatar>
-              <span>{n}</span>
+              <span>{n || "Sin nombre"}</span>
             </Link>
           );
         },
@@ -200,6 +223,12 @@ export function RefereesClient({
       <SectionHeader title={`Árbitros (${refs.arbitros.length})`} subtitle="Plantilla operativa" />
       <div className="overflow-hidden rounded-md border">
         <DataTable table={tableArbitros} columns={columns} />
+      </div>
+
+      <div className="flex justify-center py-4">
+        <Button variant="outline" onClick={handleLoadAll}>
+          Cargar más
+        </Button>
       </div>
 
       <Separator />

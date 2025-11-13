@@ -12,10 +12,11 @@ type SearchParams = {
   q?: string;
   status?: string;
   category?: string;
+  limit?: string; // 👈 añadimos limit como string (viene de la URL)
 };
 
 export default async function RefereesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  noStore(); // <- asegura que cada combinación q/status/category haga render fresco
+  noStore(); // <- asegura que cada combinación q/status/category/limit haga render fresco
 
   const sp = await searchParams;
 
@@ -23,7 +24,19 @@ export default async function RefereesPage({ searchParams }: { searchParams: Pro
   const status = (sp.status as any) ?? undefined;
   const category = (sp.category as any) ?? undefined;
 
-  const data = await listRefereesAction({ q, status, category, limit: 50 });
+  // 👇 parseamos el limit que viene de la URL
+  const rawLimit = sp.limit;
+  let limit = 50; // default
+
+  if (typeof rawLimit === "string") {
+    const n = Number(rawLimit);
+    // evita NaN y cosas locas
+    if (!Number.isNaN(n) && n > 0 && n <= 500) {
+      limit = n;
+    }
+  }
+
+  const data = await listRefereesAction({ q, status, category, limit });
 
   const setStatus = async (formData: FormData) => {
     "use server";
