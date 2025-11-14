@@ -45,6 +45,8 @@ function mapHeaders(record: Record<string, any>): ImportRow {
     municipality: (mapped["municipality"] ?? "").toString(),
     stadium: (mapped["stadium"] ?? "").toString(),
     venue: (mapped["venue"] ?? "").toString(),
+    // Soporta columnas como "logoUrl", "logo url", "LOGOURL", etc.
+    logoUrl: (mapped["logourl"] ?? "").toString(),
   };
 }
 
@@ -209,8 +211,15 @@ export default function ImportTeamsPage() {
   }
 
   function downloadTemplate() {
-    const header = ["name", "group", "municipality", "stadium", "venue"];
-    const example = ["Tapatíos FC", "", "Guadalajara", "Campo Tapatío", "Av. Patria #1800, Guadalajara"];
+    const header = ["name", "group", "municipality", "stadium", "venue", "logoUrl"];
+    const example = [
+      "Tapatíos FC",
+      "",
+      "Guadalajara",
+      "Campo Tapatío",
+      "Av. Patria #1800, Guadalajara",
+      "https://example.com/logos/tapatios.png",
+    ];
     const csv = [header.join(","), example.map((c) => `"${c}"`).join(",")].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -259,7 +268,12 @@ export default function ImportTeamsPage() {
       <div className="rounded-lg border p-4 md:p-5">
         <div className="text-sm">
           Columnas soportadas: <code>name</code>, <code>group</code>, <code>municipality</code>, <code>stadium</code>,{" "}
-          <code>venue</code>. Si <code>group</code> no viene, se usará el grupo actual (<code>{groupId}</code>).
+          <code>venue</code>, <code>logoUrl</code>. Si <code>group</code> no viene, se usará el grupo actual (
+          <code>{groupId}</code>).
+          <br />
+          <span className="text-muted-foreground">
+            <code>logoUrl</code> es opcional y debe ser una URL (por ejemplo, a un logo en tu CDN).
+          </span>
         </div>
       </div>
 
@@ -299,13 +313,14 @@ export default function ImportTeamsPage() {
               <th>municipality</th>
               <th>stadium</th>
               <th>venue</th>
+              <th>logoUrl</th>
               <th>estado</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-muted-foreground px-4 py-8 text-center">
+                <td colSpan={7} className="text-muted-foreground px-4 py-8 text-center">
                   Sube un archivo para previsualizar.
                 </td>
               </tr>
@@ -317,6 +332,7 @@ export default function ImportTeamsPage() {
                   <td>{r.municipality}</td>
                   <td>{r.stadium}</td>
                   <td className="max-w-[420px] truncate">{r.venue}</td>
+                  <td className="max-w-[260px] truncate">{r.logoUrl}</td>
                   <td>
                     {r.formErrors?.length ? (
                       <span className="text-destructive inline-flex items-center gap-1 text-xs">

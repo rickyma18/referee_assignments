@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { ColumnDef, getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, ChevronDown } from "lucide-react";
 
 import { DataTable } from "@/components/data-table/data-table";
 import {
@@ -169,6 +169,9 @@ export function RefereesClient({
   const tableArbitros = useReactTable({ data: refs.arbitros, columns, getCoreRowModel: getCoreRowModel() });
   const tableAsesores = useReactTable({ data: refs.asesores, columns, getCoreRowModel: getCoreRowModel() });
 
+  // 👇 Estado para mostrar/ocultar la tabla de árbitros
+  const [showArbitros, setShowArbitros] = React.useState(true);
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -208,10 +211,18 @@ export function RefereesClient({
       </div>
 
       {/* Sección: Árbitros */}
-      <SectionHeader title={`Árbitros (${refs.arbitros.length})`} subtitle="Plantilla operativa" />
-      <div className="overflow-hidden rounded-md border">
-        <DataTable table={tableArbitros} columns={columns} />
-      </div>
+      <SectionHeader
+        title={`Árbitros (${refs.arbitros.length})`}
+        subtitle="Plantilla operativa"
+        collapsible
+        isOpen={showArbitros}
+        onToggle={() => setShowArbitros((prev) => !prev)}
+      />
+      {showArbitros && (
+        <div className="overflow-hidden rounded-md border">
+          <DataTable table={tableArbitros} columns={columns} />
+        </div>
+      )}
 
       <Separator />
 
@@ -232,13 +243,37 @@ export function RefereesClient({
   );
 }
 
-function SectionHeader({ title, subtitle, right }: { title: string; subtitle?: string; right?: React.ReactNode }) {
+function SectionHeader({
+  title,
+  subtitle,
+  right,
+  collapsible,
+  isOpen,
+  onToggle,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+  collapsible?: boolean;
+  isOpen?: boolean;
+  onToggle?: () => void;
+}) {
   return (
     <div className="flex items-center justify-between">
-      <div>
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {subtitle ? <p className="text-muted-foreground text-sm">{subtitle}</p> : null}
-      </div>
+      <button
+        type={collapsible ? "button" : "button"}
+        className={`flex items-center gap-2 ${collapsible ? "cursor-pointer" : "cursor-default"}`}
+        onClick={collapsible && onToggle ? onToggle : undefined}
+        aria-expanded={collapsible ? !!isOpen : undefined}
+      >
+        {collapsible ? (
+          <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? "" : "-rotate-90"}`} aria-hidden="true" />
+        ) : null}
+        <div className="text-left">
+          <h2 className="text-lg font-semibold">{title}</h2>
+          {subtitle ? <p className="text-muted-foreground text-sm">{subtitle}</p> : null}
+        </div>
+      </button>
       {right}
     </div>
   );
