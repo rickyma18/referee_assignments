@@ -25,6 +25,13 @@ const ImportRowSchema = z.object({
   municipality: z.string().trim().optional().default(""),
   stadium: z.string().trim().optional().default(""),
   venue: z.string().trim().optional().default(""),
+  // Nuevo: logoUrl opcional (puede venir vacío)
+  logoUrl: z
+    .string()
+    .trim()
+    .optional()
+    .default("")
+    .transform((v) => (v && v.length > 0 ? v : "")),
 });
 
 export type ImportRow = z.infer<typeof ImportRowSchema>;
@@ -53,8 +60,8 @@ async function resolveGroupIdByName(leagueId: string, groupName: string): Promis
 /**
  * Importa equipos desde filas (CSV/Excel ya parseadas).
  * Política:
- *  - Si existe (name_lc, groupId): se ACTUALIZA (municipality/stadium/venue/logoUrl no se incluyen aquí).
- *  - Si no existe: se CREA.
+ *  - Si existe (name_lc, groupId): se ACTUALIZA (municipality/stadium/venue y, si viene, logoUrl).
+ *  - Si no existe: se CREA (incluyendo logoUrl si viene).
  *  - Si el grupo por nombre no existe y tampoco hay fallback: se RECHAZA.
  */
 export async function importTeamsAction(params: {
@@ -90,7 +97,7 @@ export async function importTeamsAction(params: {
       } catch (e) {
         const reason =
           e instanceof ZodError ? Object.values(e.flatten().fieldErrors).flat().join(", ") : "Fila inválida";
-        report.rejected.push({ name: raw?.name ?? "(sin nombre)", reason, group: raw?.group });
+        report.rejected.push({ name: raw?.name ?? "(sin nombre)", reason, group: (raw as any)?.group });
         continue;
       }
 
@@ -122,8 +129,10 @@ export async function importTeamsAction(params: {
       const exists = await teamsRepo.existsByNameInGroup(row.name, groupId);
       const name_lc = normTeamName(row.name);
 
+      const cleanedLogoUrl = row.logoUrl && row.logoUrl.trim().length > 0 ? row.logoUrl.trim() : "";
+
       if (exists) {
-        // Actualiza campos de texto libre (no logo en import)
+        // Actualiza campos de texto libre y logoUrl solo si viene
         const q = await adminDb
           .collection("teams")
           .where("groupId", "==", groupId)
@@ -141,12 +150,18 @@ export async function importTeamsAction(params: {
         }
 
         const ref = q.docs[0].ref;
-        const patch = {
+        const patch: any = {
           municipality: row.municipality ?? "",
           stadium: row.stadium ?? "",
           venue: row.venue ?? "",
           updatedAt: AdminFieldValue.serverTimestamp(),
         };
+
+        // Solo tocar logoUrl si viene algo en la fila
+        if (cleanedLogoUrl) {
+          patch.logoUrl = cleanedLogoUrl;
+        }
+
         await ref.update(patch);
         report.updated.push({ id: ref.id, name: row.name, groupId });
       } else {
@@ -158,7 +173,7 @@ export async function importTeamsAction(params: {
           municipality: row.municipality ?? "",
           stadium: row.stadium ?? "",
           venue: row.venue ?? "",
-          logoUrl: null,
+          logoUrl: cleanedLogoUrl || null,
           createdAt: AdminFieldValue.serverTimestamp(),
           updatedAt: AdminFieldValue.serverTimestamp(),
         };
