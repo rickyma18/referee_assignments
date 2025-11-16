@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+
 import { cookies } from "next/headers";
 
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
@@ -17,13 +18,13 @@ import {
   type ContentLayout,
   type NavbarStyle,
 } from "@/types/preferences/layout";
+
 import { AccountSwitcher } from "./_components/sidebar/account-switcher";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
 import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
-  // 👇 AQUI el await
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";
 
@@ -45,9 +46,12 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     <AuthGuard allowedRoles={["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"]}>
       <SidebarProvider defaultOpen={defaultOpen}>
         <AppSidebar variant={sidebarVariant} collapsible={sidebarCollapsible} />
+
         <SidebarInset
           data-content-layout={contentLayout}
           className={cn(
+            // 🔹 Que toda la zona derecha sea un contenedor de altura completa y sin overflow horizontal
+            "flex h-screen flex-col overflow-hidden",
             "data-[content-layout=centered]:!mx-auto data-[content-layout=centered]:max-w-screen-2xl",
             "max-[113rem]:peer-data-[variant=inset]:!mr-2 min-[101rem]:peer-data-[variant=inset]:peer-data-[state=collapsed]:!mr-auto",
           )}
@@ -72,7 +76,10 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
               </div>
             </div>
           </header>
-          <div className="h-full p-4 md:p-6">{children}</div>
+
+          {/* 🔹 Aquí vive el scroll VERTICAL del contenido del dashboard */}
+          {/* 🔹 Horizontal lo bloqueamos; sólo la tabla tendrá overflow-x-auto */}
+          <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     </AuthGuard>

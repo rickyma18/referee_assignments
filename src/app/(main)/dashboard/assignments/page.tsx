@@ -186,27 +186,33 @@ export default async function Page() {
   const { leagues, groups, matches, referees } = await getAssignmentsData();
 
   return (
-    <div className="space-y-6">
+    // 🔹 Evitamos que toda la página tenga scroll horizontal
+    <div className="max-w-full space-y-6 overflow-x-hidden">
       <EntityHeader
         loading={false}
         logoUrl="/media/FMF_Logo.png"
         title="Designaciones"
         subtitle="Asigna ternas a los partidos próximos"
         colorHex={null}
-        backHref="/dashboard"
         canDelete={false}
       />
 
-      <Suspense
-        fallback={
-          <div className="space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-[400px] w-full" />
+      {/* 🔹 Solo este contenedor tendrá scroll horizontal */}
+      <div className="w-full overflow-x-auto">
+        <Suspense
+          fallback={
+            <div className="min-w-[800px] space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-[400px] w-full" />
+            </div>
+          }
+        >
+          {/* min-w opcional para forzar que aparezca scrollbar si la tabla es muy ancha */}
+          <div className="min-w-[900px]">
+            <AssignmentsTable leagues={leagues} groups={groups} matches={matches} referees={referees} />
           </div>
-        }
-      >
-        <AssignmentsTable leagues={leagues} groups={groups} matches={matches} referees={referees} />
-      </Suspense>
+        </Suspense>
+      </div>
     </div>
   );
 }
