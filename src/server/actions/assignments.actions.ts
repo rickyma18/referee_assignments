@@ -5,18 +5,36 @@ import "server-only";
 import { getFirestore } from "firebase-admin/firestore";
 
 import { secureWrite } from "@/server/auth/secure-action";
-import { findRecentTeamConflicts, type Conflict } from "@/server/services/assignments/validation";
+import {
+  findRecentTeamConflicts,
+  findScheduleConflicts,
+  evaluateCentralRcs,
+  type Conflict,
+  type ScheduleConflict,
+  type RcsEvaluation,
+} from "@/server/services/assignments/validation";
 
 // Este es el "payload" que va dentro de `res.data` del ActionResult
 export type AssignManualTernaData =
   | {
       code: "OK";
+      rcsEvaluation?: RcsEvaluation;
     }
   | {
-      code: "MISSING_PARAMS" | "MATCH_NOT_FOUND" | "REFEREE_NOT_AVAILABLE" | "RECENT_TEAM_CONFLICT";
+      code:
+        | "MISSING_PARAMS"
+        | "MATCH_NOT_FOUND"
+        | "REFEREE_NOT_AVAILABLE"
+        | "RECENT_TEAM_CONFLICT"
+        | "SCHEDULE_CONFLICT"
+        | "RCS_BELOW_THRESHOLD_BLOCK"
+        | "RCS_BELOW_THRESHOLD_WARNING"
+        | "DUPLICATE_REFEREES"; // 👈 NUEVO
       error: string;
       conflicts?: Conflict[];
       unavailableRefs?: string[];
+      scheduleConflicts?: ScheduleConflict[];
+      rcsEvaluation?: RcsEvaluation;
     };
 
 /**
@@ -24,16 +42,18 @@ export type AssignManualTernaData =
  *
  * - La autorización fina (DELEGADO / SUPERUSUARIO) la dejas a Firestore Rules
  *   o la puedes agregar luego leyendo el usuario dentro del callback.
- * - Aplica la regla de "no repetir equipo en últimas 4 jornadas".
- * - NO aplica las reglas internas RA-XX.
+ * - Aplica:
+ *    - Regla de "no repetir equipo en últimas 4 jornadas" (bloqueo duro).
+ *    - Regla de "Choque de horario" (bloqueo duro).
+ *    - Evaluación MDS vs RCS_central (bloqueo o advertencia según temporada).
+ * - NO aplica las reglas internas RA-XX (municipios, equipos, etc.).
  *
  * Devuelve un ActionResult<AssignManualTernaData>, es decir:
  * - res.ok        -> éxito de la acción (no explotó, pasó secureWrite)
  * - res.message   -> mensaje genérico si secureWrite falla
- * - res.data      -> { code: "...", error?, conflicts?, unavailableRefs? }
+ * - res.data      -> { code: "...", error?, ... }
  */
 export async function assignManualTernaAction(formData: FormData) {
-  // secureWrite envuelve el resultado en un ActionResult
   return secureWrite<AssignManualTernaData>(async () => {
     const leagueId = String(formData.get("leagueId") ?? "");
     const groupId = String(formData.get("groupId") ?? "");
@@ -55,6 +75,13 @@ export async function assignManualTernaAction(formData: FormData) {
       return {
         code: "MISSING_PARAMS",
         error: "Faltan parámetros obligatorios para asignar la terna.",
+      };
+    }
+
+    if (centralRefereeId === aa1RefereeId || centralRefereeId === aa2RefereeId || aa1RefereeId === aa2RefereeId) {
+      return {
+        code: "DUPLICATE_REFEREES",
+        error: "Un árbitro no puede repetirse como central y asistente en la misma terna.",
       };
     }
 
@@ -85,6 +112,19 @@ export async function assignManualTernaAction(formData: FormData) {
     const homeTeamId: string = match.homeTeamId;
     const awayTeamId: string = match.awayTeamId;
 
+    // Kickoff como Date para chequeo de choques
+    const kickoffRaw = match.kickoff ?? null;
+    let kickoff: Date | null = null;
+    if (kickoffRaw instanceof Date) {
+      kickoff = kickoffRaw;
+    } else if (kickoffRaw?.toDate) {
+      try {
+        kickoff = kickoffRaw.toDate();
+      } catch {
+        kickoff = null;
+      }
+    }
+
     // 2) Validar que los árbitros existan y estén DISPONIBLES
     const unavailableRefs: string[] = [];
     const refsCol = db.collection("referees");
@@ -109,6 +149,8 @@ export async function assignManualTernaAction(formData: FormData) {
       };
     }
 
+    const ignoreRecentTeamConflicts = String(formData.get("ignoreRecentTeamConflicts") ?? "").toLowerCase() === "true";
+
     // 3) Regla de las últimas 4 jornadas (NO RA-XX)
     const conflicts = await findRecentTeamConflicts({
       leagueId,
@@ -119,17 +161,57 @@ export async function assignManualTernaAction(formData: FormData) {
       centralRefereeId,
       aa1RefereeId,
       aa2RefereeId,
+      currentMatchId: matchId,
     });
 
-    if (conflicts.length > 0) {
+    if (conflicts.length > 0 && !ignoreRecentTeamConflicts) {
       return {
         code: "RECENT_TEAM_CONFLICT",
-        error: "Hay conflictos con equipos pitados en las últimas 4 jornadas.",
+        error: "Conflicto: algún árbitro ya arbitró a este equipo en < 4 jornadas.",
         conflicts,
       };
     }
 
-    // 4) Si todo bien, actualizamos el partido con la terna
+    // 4) Regla de choque de horario (Choque) – esta sigue siendo bloqueo duro
+    if (kickoff) {
+      const scheduleConflicts = await findScheduleConflicts({
+        leagueId,
+        matchId,
+        kickoff,
+        centralRefereeId,
+        aa1RefereeId,
+        aa2RefereeId,
+      });
+
+      if (scheduleConflicts.length > 0) {
+        return {
+          code: "SCHEDULE_CONFLICT",
+          error: "Choque de horario: algún árbitro ya tiene otro partido en la misma fecha/hora.",
+          scheduleConflicts,
+        };
+      }
+    }
+
+    // 5) Evaluar MDS vs RCS_central (bloqueo/advertencia según temporada)
+    const rcsEvaluation = await evaluateCentralRcs({
+      leagueId,
+      groupId,
+      matchdayId,
+      matchId,
+      centralRefereeId,
+    });
+
+    if (rcsEvaluation.belowThreshold && rcsEvaluation.policy === "BLOCK") {
+      // Bloqueo duro por parámetro de temporada
+      return {
+        code: "RCS_BELOW_THRESHOLD_BLOCK",
+        error:
+          "El RCS del central está por debajo del mínimo permitido para este partido (bloqueo por configuración de temporada).",
+        rcsEvaluation,
+      };
+    }
+
+    // 6) Si todo bien (o solo advertencia), actualizamos el partido con la terna
     const now = new Date();
 
     await matchRef.update({
@@ -143,9 +225,19 @@ export async function assignManualTernaAction(formData: FormData) {
       updatedBy,
     });
 
-    // 🔚 Éxito lógico de la asignación
+    // 7) Respuesta lógica de la asignación
+    if (rcsEvaluation.belowThreshold && rcsEvaluation.policy === "WARN") {
+      return {
+        code: "RCS_BELOW_THRESHOLD_WARNING",
+        error: "Advertencia: el RCS del central está por debajo del MDS recomendado para este partido.",
+        rcsEvaluation,
+      };
+    }
+
+    // Sin problemas
     return {
       code: "OK",
+      rcsEvaluation,
     };
   });
 }

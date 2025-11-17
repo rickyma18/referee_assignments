@@ -24,9 +24,18 @@ export function ActionsCell({ row: m, meta }: Props) {
   // La terna "completa" sigue siendo central + AA1 + AA2; 4º y asesor son opcionales
   const hasTerna = Boolean(m.central && m.aa1 && m.aa2);
 
-  async function handleSave() {
+  async function doAssign(options?: { ignoreRecentTeamConflicts?: boolean }) {
     if (!m.central || !m.aa1 || !m.aa2) {
       toast.error("Debes seleccionar al menos Central y los dos Asistentes.");
+      return;
+    }
+
+    // 🧩 Nueva validación: no permitir repetidos en la terna principal
+    const coreIds = [m.central, m.aa1, m.aa2];
+    const uniqueCoreIds = new Set(coreIds);
+
+    if (uniqueCoreIds.size !== coreIds.length) {
+      toast.error("Un árbitro no puede repetirse como central y asistente en la misma terna.");
       return;
     }
 
@@ -53,7 +62,7 @@ export function ActionsCell({ row: m, meta }: Props) {
       if (aa1Name) fd.append("aa1RefereeName", aa1Name);
       if (aa2Name) fd.append("aa2RefereeName", aa2Name);
 
-      // Nuevos campos opcionales
+      // Nuevos campos opcionales (4º árbitro y asesor)
       if (m.fourth) {
         fd.append("fourthRefereeId", m.fourth);
         if (fourthName) fd.append("fourthRefereeName", fourthName);
@@ -62,6 +71,10 @@ export function ActionsCell({ row: m, meta }: Props) {
       if (m.assessor) {
         fd.append("assessorRefereeId", m.assessor);
         if (assessorName) fd.append("assessorRefereeName", assessorName);
+      }
+
+      if (options?.ignoreRecentTeamConflicts) {
+        fd.append("ignoreRecentTeamConflicts", "true");
       }
 
       const res = await assignManualTernaAction(fd);
@@ -77,23 +90,91 @@ export function ActionsCell({ row: m, meta }: Props) {
         return;
       }
 
-      if (data.code === "OK") {
-        toast.success("Terna asignada correctamente.");
-        meta.onSaved();
-        return;
-      }
-
+      // 🔹 Códigos de error/bloqueo “duro”
       if (data.code === "REFEREE_NOT_AVAILABLE") {
         toast.error(`Uno o más árbitros no están disponibles: ${(data.unavailableRefs ?? []).join(", ")}`);
         return;
       }
-
-      if (data.code === "RECENT_TEAM_CONFLICT") {
-        toast.error(data.error ?? "Conflicto con equipos en últimas 4 jornadas.");
-        console.log("Conflictos:", data.conflicts);
+      if (data.code === "DUPLICATE_REFEREES") {
+        toast.error(data.error ?? "Un árbitro no puede repetirse como central y asistente en la misma terna.");
         return;
       }
 
+      if (data.code === "SCHEDULE_CONFLICT") {
+        // Aquí NO damos opción de continuar: choque de horario = bloqueo duro
+        toast.error(data.error ?? "Choque de horario: algún árbitro ya tiene otro partido en la misma fecha/hora.");
+        console.log("Choques de horario:", data.scheduleConflicts);
+        return;
+      }
+
+      if (data.code === "RECENT_TEAM_CONFLICT") {
+        const conflicts = data.conflicts ?? [];
+
+        const details =
+          conflicts.length === 0
+            ? null
+            : conflicts
+                .map((c) => {
+                  const refName = meta.referees.find((r) => r.id === c.refereeId)?.name ?? c.refereeId;
+                  const roleLabel = c.refereeRole === "CENTRAL" ? "Central" : c.refereeRole === "AA1" ? "AA1" : "AA2";
+                  const team = c.teamName || c.teamId;
+                  const jornada = c.matchdayNumber ? `Jornada ${c.matchdayNumber}` : "";
+
+                  return `${refName} (${roleLabel}) ya arbitró a ${team}${jornada ? ` en ${jornada}` : ""}`;
+                })
+                .join("\n");
+
+        toast.error(
+          <div className="text-left whitespace-pre-line">
+            <strong>Conflicto detectado (últimas 4 jornadas):</strong>
+            <br />
+            {details ?? "Algún árbitro ya arbitró a este equipo recientemente."}
+          </div>,
+          {
+            action: {
+              label: "Continuar de todas formas",
+              onClick: () => {
+                // Segundo intento ignorando la regla de 4 jornadas
+                void doAssign({ ignoreRecentTeamConflicts: true });
+              },
+            },
+          },
+        );
+
+        console.log("Conflictos recientes (4 jornadas):", data.conflicts);
+        return;
+      }
+
+      if (data.code === "RCS_BELOW_THRESHOLD_BLOCK") {
+        // Bloqueo por configuración de temporada
+        toast.error(
+          data.error ?? "Bloqueado: el RCS del central está por debajo del mínimo permitido para este partido.",
+        );
+        console.log("Evaluación RCS (bloqueo):", data.rcsEvaluation);
+        return;
+      }
+
+      // 🔹 Advertencia NO bloqueante (se guardó, pero se avisa)
+      if (data.code === "RCS_BELOW_THRESHOLD_WARNING") {
+        toast.info(
+          data.error ?? "Advertencia: el RCS del central está por debajo del MDS recomendado para este partido.",
+        );
+        console.log("Evaluación RCS (warning):", data.rcsEvaluation);
+        meta.onSaved();
+        return;
+      }
+
+      // 🔹 Éxito normal
+      if (data.code === "OK") {
+        toast.success("Terna asignada correctamente.");
+        if (data.rcsEvaluation) {
+          console.log("Evaluación RCS:", data.rcsEvaluation);
+        }
+        meta.onSaved();
+        return;
+      }
+
+      // Otros códigos genéricos (MISSING_PARAMS, MATCH_NOT_FOUND, etc.)
       toast.error(data.error ?? "Error al asignar la terna.");
     } catch (err: any) {
       console.error(err);
@@ -101,6 +182,10 @@ export function ActionsCell({ row: m, meta }: Props) {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSave() {
+    void doAssign();
   }
 
   return (
