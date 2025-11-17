@@ -24,9 +24,8 @@ import { buildExportRows } from "./assignments-export";
 import {
   type LeagueDoc,
   type GroupDoc,
-  type AssignmentMatchRow,
-  type RefereeOption,
   type AssignmentRowState,
+  type RefereeOption,
   type AssignmentTableMeta,
   type AssignmentsTableProps,
 } from "./assignments-types";
@@ -37,9 +36,14 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
   const [filterLeagueId, setFilterLeagueId] = useState<string>("all");
   const [filterGroupId, setFilterGroupId] = useState<string>("all");
-  const [searchTeam, setSearchTeam] = useState<string>("");
 
-  // Estado interno de filas con selección editable
+  const [globalSearch, setGlobalSearch] = useState<string>("");
+
+  const [filterRefereeId, setFilterRefereeId] = useState<string>("all");
+
+  const [filterFrom, setFilterFrom] = useState<string>("");
+  const [filterTo, setFilterTo] = useState<string>("");
+
   const [rowData, setRowData] = useState<AssignmentRowState[]>(() =>
     matches.map((m) => ({
       ...m,
@@ -56,6 +60,47 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     leagues.forEach((l) => map.set(l.id, l));
     return map;
   }, [leagues]);
+
+  // Mapa de árbitros para buscar por nombre fácilmente
+  const refereesById = useMemo(() => {
+    const map = new Map<string, RefereeOption>();
+    referees.forEach((r) => map.set(r.id, r));
+    return map;
+  }, [referees]);
+
+  const getRefDisplay = useCallback(
+    (id: string) => {
+      const r = refereesById.get(id);
+      if (!r) return id;
+      const anyRef = r as any;
+      return anyRef.name ?? anyRef.label ?? id;
+    },
+    [refereesById],
+  );
+
+  // Helper para obtener la fecha del partido
+  const getMatchDate = useCallback((row: AssignmentRowState): Date | null => {
+    const anyRow = row as any;
+    const value = anyRow.kickoff ?? anyRow.date ?? anyRow.matchDate ?? anyRow.matchDateTime;
+    if (!value) return null;
+
+    if (value instanceof Date) return value;
+    // Firestore Timestamp
+    if (value?.toDate) {
+      try {
+        return value.toDate();
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      return new Date(value);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const isRangeActive = filterFrom !== "" || filterTo !== "";
 
   // Si cambian los matches desde el servidor (router.refresh), sincronizamos
   useEffect(() => {
@@ -103,12 +148,81 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     if (filterGroupId !== "all") {
       rows = rows.filter((m) => m.groupId === filterGroupId);
     }
-    if (searchTeam.trim().length > 0) {
-      const q = searchTeam.trim().toLowerCase();
-      rows = rows.filter((m) => m.homeTeamName.toLowerCase().includes(q) || m.awayTeamName.toLowerCase().includes(q));
+
+    // 🎯 filtro por árbitro (en cualquier posición de la terna)
+    if (filterRefereeId !== "all") {
+      rows = rows.filter((m) => [m.central, m.aa1, m.aa2, m.fourth, m.assessor].some((rid) => rid === filterRefereeId));
     }
+
+    // 🧭 comportamiento especial:
+    // - Si NO hay rango de fechas → solo partidos desde hoy (próximos)
+    // - Si SÍ hay rango → usamos únicamente ese rango (puede incluir pasados)
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    if (isRangeActive) {
+      // 📅 filtro por rango de fechas explícito
+      rows = rows.filter((m) => {
+        const d = getMatchDate(m);
+        if (!d) return true; // si no hay fecha, no lo sacamos del listado
+
+        const time = d.getTime();
+
+        if (filterFrom) {
+          const fromTime = new Date(`${filterFrom}T00:00:00`).getTime();
+          if (time < fromTime) return false;
+        }
+        if (filterTo) {
+          const toTime = new Date(`${filterTo}T23:59:59`).getTime();
+          if (time > toTime) return false;
+        }
+        return true;
+      });
+    } else {
+      // 👀 Vista general: solo próximos
+      rows = rows.filter((m) => {
+        const d = getMatchDate(m);
+        if (!d) return true;
+        return d.getTime() >= todayStart.getTime();
+      });
+    }
+
+    // 🔍 búsqueda global (equipo, liga, árbitros)
+    if (globalSearch.trim().length > 0) {
+      const q = globalSearch.trim().toLowerCase();
+      rows = rows.filter((m) => {
+        const leagueName = leagueById.get(m.leagueId)?.name ?? "";
+
+        const texts: string[] = [
+          m.homeTeamName ?? "",
+          m.awayTeamName ?? "",
+          leagueName,
+          String((m as any).matchdayNumber ?? ""),
+        ];
+
+        const refIds = [m.central, m.aa1, m.aa2, m.fourth, m.assessor].filter(Boolean);
+        for (const rid of refIds) {
+          texts.push(getRefDisplay(rid));
+        }
+
+        return texts.some((t) => t.toLowerCase().includes(q));
+      });
+    }
+
     return rows;
-  }, [rowData, filterLeagueId, filterGroupId, searchTeam]);
+  }, [
+    rowData,
+    filterLeagueId,
+    filterGroupId,
+    filterRefereeId,
+    filterFrom,
+    filterTo,
+    globalSearch,
+    leagueById,
+    getMatchDate,
+    getRefDisplay,
+    isRangeActive,
+  ]);
 
   const leagueOptions = useMemo(() => [{ id: "all", name: "Todas las ligas" }, ...leagues], [leagues]);
 
@@ -181,10 +295,21 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     URL.revokeObjectURL(url);
   }, [table, referees, leagueById]);
 
+  // 🔁 handler para limpiar todos los filtros rápido
+  const handleClearFilters = useCallback(() => {
+    setFilterLeagueId("all");
+    setFilterGroupId("all");
+    setFilterRefereeId("all");
+    setFilterFrom("");
+    setFilterTo("");
+    setGlobalSearch("");
+  }, []);
+
   return (
     <div className="space-y-4">
-      {/* Toolbar de filtros (shadcn Select como antes) */}
+      {/* Toolbar de filtros (shadcn Select + inputs) */}
       <div className="bg-card flex flex-wrap items-center gap-3 rounded-lg border px-3 py-3 md:px-4">
+        {/* Liga */}
         <Select
           value={filterLeagueId}
           onValueChange={(v) => {
@@ -204,6 +329,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
           </SelectContent>
         </Select>
 
+        {/* Grupo */}
         <Select
           value={filterGroupId}
           onValueChange={setFilterGroupId}
@@ -226,20 +352,45 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
           </SelectContent>
         </Select>
 
-        <div className="flex-1" />
-
+        {/* Fecha desde / hasta */}
         <Input
-          value={searchTeam}
-          onChange={(e) => setSearchTeam(e.target.value)}
-          placeholder="Buscar por equipo…"
-          className="w-full max-w-xs"
+          type="date"
+          value={filterFrom}
+          onChange={(e) => setFilterFrom(e.target.value)}
+          className="w-[140px]"
+          aria-label="Fecha desde"
+        />
+        <Input
+          type="date"
+          value={filterTo}
+          onChange={(e) => setFilterTo(e.target.value)}
+          className="w-[140px]"
+          aria-label="Fecha hasta"
+        />
+
+        <Button variant="ghost" size="sm" onClick={handleClearFilters} className="ml-auto">
+          Limpiar filtros
+        </Button>
+
+        {/* Búsqueda global */}
+        <Input
+          value={globalSearch}
+          onChange={(e) => setGlobalSearch(e.target.value)}
+          placeholder={
+            isRangeActive
+              ? "Buscar en el rango (equipo, árbitro, liga)…"
+              : "Buscar en próximos (equipo, árbitro, liga)…"
+          }
+          className="w-full max-w-xs md:ml-2"
         />
       </div>
 
       {/* Tabla + opciones + paginación */}
       <div className="bg-card flex flex-col gap-2 rounded-lg border">
         <div className="flex items-center gap-2 px-3 py-2">
-          <div className="text-sm font-medium">Partidos por asignar</div>
+          <div className="text-sm font-medium">
+            {isRangeActive ? "Partidos (vista por rango de fechas)" : "Partidos próximos por asignar"}
+          </div>
           <div className="flex-1" />
           <Button size="sm" variant="outline" onClick={handleExport}>
             <FileSpreadsheet className="mr-2 h-4 w-4" />

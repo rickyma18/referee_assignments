@@ -51,6 +51,9 @@ export function TeamForm({ initial }: Props) {
   const [loading, setLoading] = React.useState(false);
   const [errors, setErrors] = React.useState<FieldErrors>({});
 
+  // 🔁 Ref del formulario para disparar submit desde el atajo
+  const formRef = React.useRef<HTMLFormElement | null>(null);
+
   // 🔁 Zonas activas, ordenadas por "order"
   const zones = React.useMemo(
     () =>
@@ -130,8 +133,28 @@ export function TeamForm({ initial }: Props) {
     }
   };
 
+  // 🔹 Atajo Ctrl+S / Cmd+S para guardar
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+
+        if (loading) return;
+
+        // Lanza el submit del formulario
+        if (formRef.current) {
+          formRef.current.requestSubmit();
+          toast.info(isEdit ? "Guardando equipo…" : "Creando equipo…");
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [loading, isEdit]);
+
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <form ref={formRef} onSubmit={onSubmit} className="space-y-6">
       {/* Nombre */}
       <div>
         <Label htmlFor="name">Nombre</Label>

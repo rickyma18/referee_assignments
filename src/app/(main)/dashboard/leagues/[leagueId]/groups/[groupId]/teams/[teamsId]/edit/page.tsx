@@ -75,6 +75,25 @@ export default function EditTeamPage() {
   } | null>(null);
   const [loadingTeam, setLoadingTeam] = useState(true);
 
+  // 🔹 Atajo Ctrl+S / Cmd+S para guardar
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ctrl+S o Cmd+S
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+
+        // Disparamos evento global para que lo escuche el TeamForm
+        window.dispatchEvent(new CustomEvent("team-form-save"));
+
+        // (Opcional) pequeño aviso
+        toast.info("Guardando equipo…");
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   // liga
   useEffect(() => {
     (async () => {

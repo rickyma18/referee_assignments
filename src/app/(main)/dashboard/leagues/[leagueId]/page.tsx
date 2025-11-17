@@ -178,9 +178,6 @@ export default function LeagueDetailPage() {
           <Button asChild variant="outline">
             <Link href="/dashboard/leagues">Volver a ligas</Link>
           </Button>
-          <Button asChild variant="outline">
-            <Link href={`/dashboard/leagues/${l.id}/groups`}>Ver grupos</Link>
-          </Button>
           {canEdit && (
             <>
               <Button asChild>

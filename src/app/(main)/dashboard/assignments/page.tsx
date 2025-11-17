@@ -103,8 +103,7 @@ async function getAssignmentsData(): Promise<{
     });
   }
 
-  // 3) Partidos próximos
-  const now = new Date();
+  // 3) Partidos (todos; la vista de "próximos" se controla en el cliente)
   const matches: AssignmentMatchRow[] = [];
 
   for (const lg of leaguesSnap.docs) {
@@ -124,11 +123,9 @@ async function getAssignmentsData(): Promise<{
         const matchdayId = md.id;
         const matchdayNumber: number | null = typeof mdData?.number === "number" ? mdData.number : null;
 
-        const matchesSnap = await md.ref
-          .collection("matches")
-          .where("kickoff", ">=", now)
-          .orderBy("kickoff", "asc")
-          .get();
+        // 🔴 Antes filtrabas aquí por "kickoff >= now"
+        // 🔵 Ahora solo ordenamos por fecha para que el cliente decida qué mostrar
+        const matchesSnap = await md.ref.collection("matches").orderBy("kickoff", "asc").get();
 
         matchesSnap.forEach((m) => {
           const data = m.data() as any;

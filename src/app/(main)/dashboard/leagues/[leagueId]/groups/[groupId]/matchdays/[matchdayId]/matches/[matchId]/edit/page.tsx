@@ -44,7 +44,7 @@ async function getLeagueGroup(db: FirebaseFirestore.Firestore, leagueId: string,
       name: league?.name ?? "Liga",
       season: league?.season ?? null,
       logoUrl: league?.logoUrl ?? null,
-      color: league?.color ?? null, // ajusta si tu campo se llama distinto
+      color: league?.color ?? null,
     },
     group: group ? { id: groupSnap.id, name: group?.name ?? group?.code ?? "Grupo" } : null,
   };
@@ -62,7 +62,11 @@ async function getMatchday(db: FirebaseFirestore.Firestore, leagueId: string, gr
 
   if (!md.exists) return null;
   const d = md.data() as any;
-  return { number: d?.number ?? null, startDate: toDateSafe(d?.startDate), endDate: toDateSafe(d?.endDate) };
+  return {
+    number: d?.number ?? null,
+    startDate: toDateSafe(d?.startDate),
+    endDate: toDateSafe(d?.endDate),
+  };
 }
 
 async function getMatch(
@@ -118,17 +122,14 @@ export default async function Page({
 }: {
   params: Promise<{ leagueId: string; groupId: string; matchdayId: string; matchId: string }>;
 }) {
-  // ⬇️ Desenrollamos el Promise que entrega Next (evita el error)
   const { leagueId, groupId, matchdayId, matchId } = await params;
 
   const db = getFirestore();
 
-  // Header: liga, grupo, jornada
   const { league, group } = await getLeagueGroup(db, leagueId, groupId);
   const matchday = await getMatchday(db, leagueId, groupId, matchdayId);
   if (!league) notFound();
 
-  // Partido: initial
   const match = await getMatch(db, leagueId, groupId, matchdayId, matchId);
   if (!match) notFound();
 
@@ -136,7 +137,6 @@ export default async function Page({
   const fecha = kickoff ? `${kickoff.getFullYear()}-${pad2(kickoff.getMonth() + 1)}-${pad2(kickoff.getDate())}` : "";
   const hora = kickoff ? `${pad2(kickoff.getHours())}:${pad2(kickoff.getMinutes())}` : "";
 
-  // Nombres de equipos (fallback si no vienen guardados en el match)
   const names = await getTeamNames(db, leagueId, match.homeTeamId, match.awayTeamId);
 
   const initial = {
@@ -145,14 +145,22 @@ export default async function Page({
     groupId,
     matchdayId,
     matchId,
+
+    // combos
+    homeTeamId: match.homeTeamId ?? "",
+    awayTeamId: match.awayTeamId ?? "",
+    venueId: match.venueId ?? "",
+
+    // labels para preview por si acaso
+    homeTeamName: match.homeTeamName ?? names.home ?? "Local",
+    awayTeamName: match.awayTeamName ?? names.away ?? "Visitante",
+
     venueName: match.venueName ?? match.venue ?? match.stadium ?? "",
     status: match.status ?? "SCHEDULED",
     homeGoals: typeof match.homeGoals === "number" ? match.homeGoals : "",
     awayGoals: typeof match.awayGoals === "number" ? match.awayGoals : "",
     fecha,
     hora,
-    homeTeamName: match.homeTeamName ?? names.home ?? "Local",
-    awayTeamName: match.awayTeamName ?? names.away ?? "Visitante",
   };
 
   return (
@@ -164,7 +172,9 @@ export default async function Page({
         groupName: group?.name ?? null,
         matchdayNumber: matchday?.number ?? null,
         leagueLogoUrl: league.logoUrl,
-        leagueColorHex: league.color, // ajusta si tu campo real se llama distinto
+        leagueColorHex: league.color,
+        matchdayStart: matchday?.startDate ?? null,
+        matchdayEnd: matchday?.endDate ?? null,
       }}
     />
   );

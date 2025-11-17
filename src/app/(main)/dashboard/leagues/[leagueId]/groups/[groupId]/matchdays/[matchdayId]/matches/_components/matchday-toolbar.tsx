@@ -1,91 +1,118 @@
+// src/app/(main)/dashboard/leagues/[leagueId]/groups/[groupId]/matchdays/[matchdayId]/matches/_components/matchday-toolbar.tsx
 "use client";
 
 import * as React from "react";
 
-import { Shuffle } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
-export function MatchdayToolbar({
-  number,
-  startDate,
-  endDate,
-  total,
-}: {
+type Props = {
   number: number | null;
   startDate: Date | null;
   endDate: Date | null;
   total: number;
-}) {
-  const [query, setQuery] = React.useState("");
-  const [status, setStatus] = React.useState<"ALL" | "SCHEDULED" | "LIVE" | "FINISHED" | "POSTPONED">("ALL");
+  // 👇 nuevo: estado actual del filtro leído por el server
+  estadoActual?: string;
+};
 
-  React.useEffect(() => {
-    const ev = new CustomEvent("matchday:filters", { detail: { query, status } });
-    window.dispatchEvent(ev);
-  }, [query, status]);
+const formatDate = (d: Date | null): string => {
+  if (!d) return "Sin fecha";
+  return d.toLocaleDateString("es-MX", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  });
+};
 
-  const title = typeof number === "number" ? `Jornada ${number}` : "Jornada";
-  const range = startDate && endDate ? `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}` : "";
+const ESTADOS: { key: string; label: string }[] = [
+  { key: "todos", label: "Todos" },
+  { key: "programados", label: "Programados" },
+  { key: "en-juego", label: "En juego" },
+  { key: "finalizados", label: "Finalizados" },
+  // 👇 ya NO incluimos "pospuestos"
+  // { key: "pospuestos", label: "Pospuestos" },
+];
+
+export function MatchdayToolbar({ number, startDate, endDate, total, estadoActual }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const active = (estadoActual ?? searchParams.get("estado") ?? "todos").toLowerCase();
+
+  const handleClickEstado = (key: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (!key || key === "todos") {
+      params.delete("estado");
+    } else {
+      params.set("estado", key);
+    }
+
+    const qs = params.toString();
+    const href = qs ? `${pathname}?${qs}` : pathname;
+    router.push(href);
+  };
 
   return (
-    <div className="bg-background/80 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 -mx-2 px-2 pt-2 pb-3 backdrop-blur">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-xl font-bold">{title}</h1>
-        {range && <span className="text-muted-foreground text-sm">({range})</span>}
-        <span className="text-muted-foreground ml-auto text-sm">{total} partidos</span>
+    <div className="bg-card flex flex-col gap-3 rounded-xl border px-4 py-3 md:flex-row md:items-center md:justify-between">
+      <div className="space-y-1">
+        <div className="text-sm font-semibold">
+          Jornada {number ?? "—"}{" "}
+          <span className="text-muted-foreground text-xs">
+            ({formatDate(startDate)} – {formatDate(endDate)})
+          </span>
+        </div>
+        <div className="text-muted-foreground text-xs">
+          {total} partido{total === 1 ? "" : "s"} programado{total === 1 ? "" : "s"} en esta jornada
+        </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar por equipo, sede..."
-          className="w-full sm:w-80"
-        />
-        <div className="flex items-center gap-1">
-          {(["ALL", "SCHEDULED", "LIVE", "FINISHED", "POSTPONED"] as const).map((s) => (
-            <Badge
-              key={s}
-              variant={status === s ? "default" : "outline"}
-              onClick={() => setStatus(s)}
-              className="cursor-pointer"
-            >
-              {s}
-            </Badge>
-          ))}
-        </div>
-        <Button size="sm" variant="outline" className="ml-auto">
-          <Shuffle className="mr-2 h-4 w-4" />
-          Ordenar por hora
-        </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        {ESTADOS.map((opt) => (
+          <Button
+            key={opt.key}
+            type="button"
+            variant={active === opt.key ? "default" : "outline"}
+            size="sm"
+            className={cn(
+              "rounded-full text-xs",
+              active === opt.key && "border-primary bg-primary text-primary-foreground",
+            )}
+            onClick={() => handleClickEstado(opt.key)}
+          >
+            {opt.label}
+          </Button>
+        ))}
       </div>
     </div>
   );
 }
 
+// Skeleton que ya usabas en el Suspense
 export function MatchCardSkeleton() {
   return (
-    <div className="animate-pulse space-y-4 overflow-hidden rounded-2xl border p-5 shadow-sm">
-      <div className="bg-muted h-5 w-24 rounded" />
-      <div className="bg-muted h-px w-full" />
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="bg-muted h-10 w-10 rounded-full" />
-          <div className="bg-muted h-4 w-24 rounded" />
-        </div>
-        <div className="bg-muted h-4 w-6 rounded" />
-        <div className="flex items-center justify-end gap-2">
-          <div className="bg-muted h-4 w-24 rounded" />
-          <div className="bg-muted h-10 w-10 rounded-full" />
+    <div className="bg-card rounded-xl border p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-5 w-16 rounded-full" />
+      </div>
+      <div className="mb-3 flex items-center gap-3">
+        <Skeleton className="h-10 w-10 rounded-full" />
+        <div className="flex-1 space-y-1">
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-3 w-1/3" />
         </div>
       </div>
-      <div className="bg-muted h-4 w-48 rounded" />
-      <div className="flex justify-end gap-2 pt-2">
-        <div className="bg-muted h-8 w-20 rounded" />
-        <div className="bg-muted h-8 w-16 rounded" />
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-10 w-10 rounded-full" />
+        <div className="flex-1 space-y-1">
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-3 w-1/3" />
+        </div>
       </div>
     </div>
   );
