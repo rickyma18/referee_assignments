@@ -1,11 +1,15 @@
+// src/server/repositories/referees.repo.ts
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
 import "@/server/admin/firebase-admin";
+import { RefereeTierValues } from "@/domain/referees/referee-tier";
 import { RefereeCreateZ, RefereeUpdateZ, RefereeZ, RefStatus, RefRole } from "@/domain/referees/referee.zod";
 import { toPlain } from "@/lib/serialize"; // 👈 tu helper
 
 const COL = "referees";
 const db = getFirestore();
+
+type RefTier = (typeof RefereeTierValues)[number];
 
 function normalizeNameLc(name: string) {
   return name
@@ -37,7 +41,7 @@ export async function create(input: unknown) {
   }
 
   const payload = {
-    ...data, // incluye canAssess
+    ...data, // incluye canAssess y tier
     name_lc,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -62,7 +66,7 @@ export async function update(input: unknown) {
   }
 
   const patch = {
-    ...rest, // incluye canAssess
+    ...rest, // incluye canAssess y tier
     ...(name_lc ? { name_lc } : {}),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -100,6 +104,15 @@ export async function remove(id: string) {
 
 export async function setStatus(id: string, status: RefStatus) {
   await db.collection(COL).doc(id).set({ status, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { ok: true as const };
+}
+
+/**
+ * Cambia solo el tier del árbitro.
+ * Usado por el board de drag & drop.
+ */
+export async function setTier(id: string, tier: RefTier) {
+  await db.collection(COL).doc(id).set({ tier, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { ok: true as const };
 }
 

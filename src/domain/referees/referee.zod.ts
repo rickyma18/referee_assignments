@@ -1,6 +1,8 @@
 // src/domain/referees/referee.zod.ts
 import { z } from "zod";
 
+import { RefereeTierValues } from "./referee-tier";
+
 // ------------------------------
 // Enums controlados (roles, estado, categoría)
 // ------------------------------
@@ -24,7 +26,7 @@ const optionalEmpty = (schema: z.ZodTypeAny) => z.union([schema, z.literal(""), 
 const optionalEmptyEmail = optionalEmpty(z.string().email("Email inválido")).describe("email | '' | undefined");
 
 // Teléfono muy permisivo (+, espacios, guiones, paréntesis, 7–20 chars)
-const optionalEmptyPhone = optionalEmpty(z.string().regex(/^[\d+\-\s()]{7,20}$/, "Teléfono inválido")).describe(
+const optionalEmptyPhone = optionalEmpty(z.string().regex(/^[[\d+\-\s()]{7,20}$/, "Teléfono inválido")).describe(
   "phone | '' | undefined",
 );
 
@@ -58,6 +60,8 @@ const RefereeBaseObj = z.object({
 
   // Puede fungir como asesor (excluyente con roles de partido)
   canAssess: z.boolean().default(false),
+
+  tier: z.enum(RefereeTierValues).default("DEBUTANTE"),
 });
 
 // --------------------------------------------------------

@@ -1,0 +1,152 @@
+// src/app/(main)/dashboard/teams/tiers/page.tsx
+
+import { Suspense } from "react";
+
+import { getFirestore } from "firebase-admin/firestore";
+
+import "@/server/admin/firebase-admin";
+import { EntityHeader } from "@/components/entity-header";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { TeamTier } from "@/domain/teams/team-tier";
+import type { Team } from "@/domain/teams/team.types";
+import { getByGroup } from "@/server/repositories/teams.repo";
+
+import { TeamTiersBoard } from "./_components/team-tiers-board";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+type PageProps = {
+  searchParams?: {
+    leagueId?: string;
+    groupId?: string;
+  };
+};
+
+type LeagueDoc = {
+  id: string;
+  name: string;
+  season?: string | null;
+  colorHex?: string | null;
+};
+
+type GroupDoc = {
+  id: string;
+  name: string;
+  leagueId: string;
+};
+
+export type TeamForBoard = {
+  id: string;
+  name: string;
+  logoUrl?: string | null;
+  tier?: TeamTier | null;
+};
+
+async function getLeaguesAndGroups(): Promise<{
+  leagues: LeagueDoc[];
+  groups: GroupDoc[];
+}> {
+  const db = getFirestore();
+
+  const leaguesSnap = await db.collection("leagues").get();
+
+  const leagues: LeagueDoc[] = leaguesSnap.docs.map((d) => {
+    const data = d.data() as any;
+    return {
+      id: d.id,
+      name: data?.name ?? "Liga",
+      season: data?.season ?? null,
+      colorHex: data?.color ?? null,
+    };
+  });
+
+  const groups: GroupDoc[] = [];
+  for (const lg of leaguesSnap.docs) {
+    const grpSnap = await lg.ref.collection("groups").get();
+    grpSnap.forEach((g) => {
+      const data = g.data() as any;
+      groups.push({
+        id: g.id,
+        name: data?.name ?? data?.code ?? "Grupo",
+        leagueId: lg.id,
+      });
+    });
+  }
+
+  return { leagues, groups };
+}
+
+async function getTeamsForBoard(groupId: string | undefined): Promise<TeamForBoard[]> {
+  if (!groupId) return [];
+  const { items } = await getByGroup({ groupId, pageSize: 500 });
+  return items.map((t) => ({
+    id: t.id,
+    name: t.name,
+    logoUrl: (t as any).logoUrl ?? null,
+    tier: (t as any).tier ?? null,
+  }));
+}
+
+export default async function Page({ searchParams }: PageProps) {
+  const spLeagueId = searchParams?.leagueId;
+  const spGroupId = searchParams?.groupId;
+
+  const { leagues, groups } = await getLeaguesAndGroups();
+
+  // League inicial
+  const initialLeagueId =
+    spLeagueId && leagues.some((l) => l.id === spLeagueId)
+      ? spLeagueId
+      : leagues.length > 0
+        ? leagues[0].id
+        : undefined;
+
+  // Group inicial (del league inicial)
+  const groupsForInitialLeague = initialLeagueId ? groups.filter((g) => g.leagueId === initialLeagueId) : [];
+
+  const initialGroupId =
+    spGroupId && groups.some((g) => g.id === spGroupId)
+      ? spGroupId
+      : groupsForInitialLeague.length > 0
+        ? groupsForInitialLeague[0].id
+        : undefined;
+
+  const teams = await getTeamsForBoard(initialGroupId);
+
+  const league = initialLeagueId ? (leagues.find((l) => l.id === initialLeagueId) ?? null) : null;
+  const group = initialGroupId ? (groups.find((g) => g.id === initialGroupId) ?? null) : null;
+
+  const headerTitle = "Tier List de equipos";
+
+  const subtitle =
+    "Organiza los equipos por nivel de complejidad (Tranquilos, Regulares, Complicados…) para la sugerencia automática de ternas.";
+
+  return (
+    <div className="max-w-full space-y-6 overflow-x-hidden">
+      <EntityHeader
+        loading={false}
+        logoUrl={league?.colorHex ? undefined : "/media/FMF_Logo.png"}
+        title={headerTitle}
+        canDelete={false}
+      />
+
+      <Suspense
+        fallback={
+          <div className="space-y-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-[400px] w-full" />
+          </div>
+        }
+      >
+        <TeamTiersBoard
+          leagues={leagues}
+          groups={groups}
+          initialLeagueId={initialLeagueId}
+          initialGroupId={initialGroupId}
+          initialTeams={teams}
+        />
+      </Suspense>
+    </div>
+  );
+}

@@ -14,5 +14,4 @@ export const DEFAULT_ZONES: Array<{ id: string; name: string; order: number; act
   { id: "tonala", name: "Tonalá", order: 13, active: true },
   { id: "zapopan", name: "Zapopan", order: 14, active: true },
   { id: "zmg", name: "ZMG", order: 15, active: true },
-  { id: "tequila", name: "Tequila", order: 16, active: true },
 ];

@@ -1,10 +1,12 @@
 // src/server/actions/referees.actions.ts
 "use server";
 import "server-only";
+
 import { revalidatePath } from "next/cache";
 
 import { z } from "zod";
 
+import { RefereeTierValues } from "@/domain/referees/referee-tier";
 import { RefereeCreateZ, RefereeUpdateZ, RefStatusZ, RefCategoryZ } from "@/domain/referees/referee.zod";
 import { secureWrite } from "@/server/auth/secure-action";
 import * as repo from "@/server/repositories/referees.repo";
@@ -20,6 +22,8 @@ type UiListParams = { q?: string; status?: string; category?: string; limit?: nu
 type RefStatus = z.infer<typeof RefStatusZ>; // "DISPONIBLE" | "DUDOSO" | "LESIONADO"
 type RefCategory = z.infer<typeof RefCategoryZ>; // "TDP" | "LP"
 
+const RefTierZ = z.enum(RefereeTierValues);
+
 // Helpers de narrowing (sin throw)
 function pickStatus(v: unknown): RefStatus | undefined {
   return typeof v === "string" && (RefStatusZ.options as readonly string[]).includes(v) ? (v as RefStatus) : undefined;
@@ -33,7 +37,6 @@ function pickCategory(v: unknown): RefCategory | undefined {
 
 /** Lista árbitros como POJOs serializables */
 export async function listRefereesAction(params: UiListParams) {
-  // Convierte a los tipos que el repo espera
   const repoParams: repo.ListParams = {
     q: params.q ?? undefined,
     status: pickStatus(params.status),
@@ -43,16 +46,16 @@ export async function listRefereesAction(params: UiListParams) {
 
   const rows = await repo.list(repoParams);
 
-  // 🧭 Soporta ambas variantes del repo:
+  // Soporta ambas variantes del repo:
   // A) repo.list -> { items, nextCursor }
   // B) repo.list -> Array
   if (Array.isArray(rows)) {
     const items = rows.map((r: any) => serializeFirestore(r));
     return { items, nextCursor: null as null | string };
-  } else {
-    const items = (rows.items ?? []).map((r: any) => serializeFirestore(r));
-    return { items, nextCursor: rows.nextCursor ?? null };
   }
+
+  const items = (rows.items ?? []).map((r: any) => serializeFirestore(r));
+  return { items, nextCursor: rows.nextCursor ?? null };
 }
 
 export async function getRefereeAction(id: string) {
@@ -90,7 +93,6 @@ export async function updateRefereeAction(input: unknown): Promise<ActionResult>
     }
 
     let updated = (res as any).data;
-    // 👇 esto es lo que pide el linter
     updated ??= await repo.getById(data.id);
 
     revalidatePath("/dashboard/referees");
@@ -116,6 +118,7 @@ export async function deleteRefereeAction(id: string): Promise<ActionResult> {
   return secureWrite(async () => {
     const res = await repo.remove(id);
     if (!res?.ok) return { ok: false, message: (res as any)?.message ?? "No se pudo eliminar" };
+
     revalidatePath("/dashboard/referees");
     return { ok: true };
   });
@@ -125,4 +128,26 @@ export async function listAssessorsAction(params?: { q?: string }) {
   const rows = await repo.list({ q: params?.q, canAssessOnly: true, limit: 50 });
   const items = (rows.items ?? []).map((r: any) => serializeFirestore({ id: r.id, name: r.name }));
   return { items };
+}
+
+/**
+ * Cambia el tier del árbitro.
+ * Usado por el board de drag-and-drop de tiers.
+ */
+export async function setRefereeTierAction(id: string, tier: unknown): Promise<ActionResult> {
+  return secureWrite(async () => {
+    const t = RefTierZ.parse(tier);
+
+    const res = await repo.setTier(id, t);
+    if (!res?.ok) {
+      return { ok: false, message: (res as any)?.message ?? "No se pudo cambiar el tier" };
+    }
+
+    const after = await repo.getById(id);
+
+    // 👇 Ya NO revalidamos la página completa de tiers para evitar el “flash” de tema.
+    // revalidatePath("/dashboard/referees/tiers");
+
+    return { ok: true, data: after ? serializeFirestore(after) : undefined };
+  });
 }

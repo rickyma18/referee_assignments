@@ -63,6 +63,13 @@ export const sidebarItems: SidebarItem[] = [
   },
 
   {
+    title: "Tier List Árbitros",
+    href: "/dashboard/referees/tiers",
+    icon: UserRound,
+    requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
+  },
+
+  {
     title: "Ligas",
     href: "/dashboard/leagues",
     icon: Layers,
@@ -85,6 +92,13 @@ export const sidebarItems: SidebarItem[] = [
     icon: FaFutbol,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE"],
     dynamic: "teamsByGroup", // ⬅️ marca como dinámico
+  },
+
+  {
+    title: "Tier List Equipos",
+    href: "/dashboard/teams/tiers",
+    icon: FaFutbol,
+    requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
   },
   {
     title: "Jornadas",

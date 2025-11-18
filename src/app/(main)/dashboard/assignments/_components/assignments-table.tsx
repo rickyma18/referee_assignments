@@ -8,7 +8,7 @@ import { useTransition, useMemo, useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation";
 
 import { getCoreRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -18,6 +18,7 @@ import { DataTableViewOptions } from "@/components/data-table/data-table-view-op
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { suggestAssignmentsForMatchesAction } from "@/server/actions/assignments-suggestions.actions";
 
 import { createAssignmentsColumns } from "./assignments-columns";
 import { buildExportRows } from "./assignments-export";
@@ -43,6 +44,8 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
   const [filterFrom, setFilterFrom] = useState<string>("");
   const [filterTo, setFilterTo] = useState<string>("");
+
+  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
 
   const [rowData, setRowData] = useState<AssignmentRowState[]>(() =>
     matches.map((m) => ({
@@ -261,6 +264,79 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     } satisfies AssignmentTableMeta,
   });
 
+  /* ---------- Generar ternas sugeridas ---------- */
+
+  const handleGenerateSuggestions = useCallback(async () => {
+    try {
+      setIsGeneratingSuggestions(true);
+
+      // Filas actuales SIN paginación (pero ya filtradas por liga/grupo/fechas)
+      const coreRows = table.getPrePaginationRowModel().rows;
+      const rows = coreRows.map((r) => r.original);
+
+      // 🎯 SOLO partidos sin terna (nada en central / AA1 / AA2)
+      const rowsWithoutTerna = rows.filter((m) => !m.central && !m.aa1 && !m.aa2);
+
+      if (rowsWithoutTerna.length === 0) {
+        toast.info("Todos los partidos de la vista actual ya tienen terna.");
+        return;
+      }
+
+      const payload = {
+        matches: rowsWithoutTerna.map((m) => ({
+          leagueId: m.leagueId,
+          groupId: m.groupId,
+          matchdayId: m.matchdayId,
+          matchId: m.id,
+        })),
+      };
+
+      const res = await suggestAssignmentsForMatchesAction(payload);
+
+      if (!res.ok) {
+        toast.error(res.message ?? "No se pudieron generar las ternas sugeridas.");
+        return;
+      }
+
+      const suggestions = res.data ?? [];
+
+      if (suggestions.length === 0) {
+        toast.info("No se generaron sugerencias para los partidos sin terna.");
+        return;
+      }
+
+      const byMatchId = new Map<string, (typeof suggestions)[number]>();
+      for (const s of suggestions) {
+        byMatchId.set(s.matchId, s);
+      }
+
+      setRowData((prev) =>
+        prev.map((row) => {
+          const sug = byMatchId.get(row.id);
+          // 🔒 extra: si por cualquier cosa este partido ya tiene terna, no lo tocamos
+          if (!sug || !sug.hasSuggestion || row.central || row.aa1 || row.aa2) {
+            return row;
+          }
+
+          return {
+            ...row,
+            central: sug.centralRefereeId ?? row.central,
+            aa1: sug.aa1RefereeId ?? row.aa1,
+            aa2: sug.aa2RefereeId ?? row.aa2,
+            assessor: sug.assessorRefereeId ?? row.assessor,
+          };
+        }),
+      );
+
+      toast.success("Ternas sugeridas generadas para los partidos sin terna. Revisa y guarda las que necesites.");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message ?? "Error al generar ternas sugeridas.");
+    } finally {
+      setIsGeneratingSuggestions(false);
+    }
+  }, [table]);
+
   /* ---------- Exportar a Excel ---------- */
 
   const handleExport = useCallback(() => {
@@ -392,6 +468,15 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
             {isRangeActive ? "Partidos (vista por rango de fechas)" : "Partidos próximos por asignar"}
           </div>
           <div className="flex-1" />
+          <Button
+            size="sm"
+            variant="default"
+            onClick={handleGenerateSuggestions}
+            disabled={isGeneratingSuggestions || isPending}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            {isGeneratingSuggestions ? "Generando…" : "Generar ternas sugeridas"}
+          </Button>
           <Button size="sm" variant="outline" onClick={handleExport}>
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Exportar Excel
