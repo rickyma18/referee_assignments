@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { RefereeTierValues } from "@/domain/referees/referee-tier";
 import { RefereeCreateZ, RefereeUpdateZ, RefStatusZ, RefCategoryZ } from "@/domain/referees/referee.zod";
+import { requireSuperuser } from "@/server/auth/require-role"; // 👈 nuevo import
 import { secureWrite } from "@/server/auth/secure-action";
 import * as repo from "@/server/repositories/referees.repo";
 import { getById } from "@/server/repositories/referees.repo";
@@ -150,4 +151,51 @@ export async function setRefereeTierAction(id: string, tier: unknown): Promise<A
 
     return { ok: true, data: after ? serializeFirestore(after) : undefined };
   });
+}
+
+export async function setRefereeRcsOverrideAction(input: { id: unknown; rcsOverride: unknown }): Promise<ActionResult> {
+  try {
+    await requireSuperuser(); // 🔐 bloquea a delegados/asistentes
+
+    const id = z.string().min(1, "ID requerido").parse(input.id);
+
+    const raw = input.rcsOverride;
+    let value: number | null = null;
+
+    if (raw === null || typeof raw === "undefined" || (typeof raw === "string" && raw.trim() === "")) {
+      value = null; // borrar override
+    } else if (typeof raw === "number") {
+      value = raw;
+    } else if (typeof raw === "string") {
+      const normalized = raw.replace(",", ".").trim();
+      const n = Number(normalized);
+      if (Number.isNaN(n)) {
+        throw new Error("Valor de RCS inválido");
+      }
+      value = n;
+    } else {
+      throw new Error("Valor de RCS inválido");
+    }
+
+    if (value != null) {
+      if (!Number.isFinite(value)) {
+        throw new Error("Valor de RCS inválido");
+      }
+      // 🔧 aquí puedes ajustar el rango que quieras
+      if (value < 0 || value > 10) {
+        throw new Error("El RCS debe estar entre 0 y 10");
+      }
+    }
+
+    const res = await repo.setRcsOverride(id, value);
+    if (!res.ok) {
+      return { ok: false, message: res.message ?? "No se pudo actualizar el RCS" };
+    }
+
+    // No revalidamos nada global, esto es una vista interna de superusuario
+    return { ok: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Error inesperado";
+    return { ok: false, message };
+  }
 }

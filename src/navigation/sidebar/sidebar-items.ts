@@ -59,6 +59,13 @@ export const sidebarItems: SidebarItem[] = [
         href: "/dashboard/referees/import",
         requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
       },
+
+      // 🔥 Nuevo ítem EXCLUSIVO para superusuario
+      {
+        title: "Ajustar RCS (oculto)",
+        href: "/dashboard/referees/rcs",
+        requiredRoles: ["SUPERUSUARIO"],
+      },
     ],
   },
 

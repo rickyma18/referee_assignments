@@ -193,7 +193,9 @@ async function computeMdsForMatch(options: {
  */
 async function loadRefereeCandidates(): Promise<CandidateRef[]> {
   const db = getFirestore();
-  const snap = await db.collection("referees").get();
+
+  // 🔥 Optimización: solo árbitros con status DISPONIBLE
+  const snap = await db.collection("referees").where("status", "==", "DISPONIBLE").get();
 
   const candidates: CandidateRef[] = [];
 
@@ -209,10 +211,16 @@ async function loadRefereeCandidates(): Promise<CandidateRef[]> {
     const tierRaw = (data?.tier ?? null) as string | null;
     const tier = tierRaw && typeof tierRaw === "string" ? tierRaw : null;
 
-    const rcsCentral = refereeTierToRcsCentral(tier as any);
+    let rcsCentral = refereeTierToRcsCentral(tier as any);
+
+    // Si más adelante decides meter override, ya lo tienes igual que en el otro helper:
+    const overrideRaw = data?.rcsOverrideCentral;
+    if (typeof overrideRaw === "number" && Number.isFinite(overrideRaw)) {
+      rcsCentral = overrideRaw;
+    }
 
     const canAssess = Boolean(data?.canAssess);
-    const category = (data?.category ?? null) as string | null; // 👈 aquí leemos category del árbitro
+    const category = (data?.category ?? null) as string | null;
 
     candidates.push({
       id: doc.id,

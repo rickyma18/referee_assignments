@@ -204,18 +204,22 @@ export async function findRecentTeamConflicts(params: FindRecentTeamConflictsPar
     currentMatchId,
   } = params;
 
-  const minMatchday = currentMatchdayNumber - (windowSize - 1);
-  // 👇 Ahora incluimos la jornada actual en el rango
-  const maxMatchday = currentMatchdayNumber;
-
   if (!Number.isFinite(currentMatchdayNumber) || currentMatchdayNumber <= 0) {
     return [];
   }
 
+  const minMatchday = currentMatchdayNumber - (windowSize - 1);
+  const maxMatchday = currentMatchdayNumber; // incluimos la actual
+
   const db = getFirestore();
   const groupRef = db.collection("leagues").doc(leagueId).collection("groups").doc(groupId);
 
-  const matchdaysSnap = await groupRef.collection("matchdays").get();
+  // 🔥 Solo jornadas dentro de la ventana [minMatchday, maxMatchday]
+  const matchdaysSnap = await groupRef
+    .collection("matchdays")
+    .where("number", ">=", minMatchday)
+    .where("number", "<=", maxMatchday)
+    .get();
 
   const conflicts: Conflict[] = [];
   const ternaRefIds = new Set([centralRefereeId, aa1RefereeId, aa2RefereeId].filter(Boolean));
@@ -224,9 +228,6 @@ export async function findRecentTeamConflicts(params: FindRecentTeamConflictsPar
     const mdData = md.data() as any;
     const mdNumber = typeof mdData.number === "number" ? mdData.number : null;
     if (mdNumber == null) continue;
-
-    // Solo jornadas dentro de la ventana (incluyendo la actual)
-    if (mdNumber < minMatchday || mdNumber > maxMatchday) continue;
 
     const matchesSnap = await md.ref.collection("matches").get();
 
@@ -258,31 +259,32 @@ export async function findScheduleConflicts(params: FindScheduleConflictsParams)
   const { leagueId, matchId, kickoff, centralRefereeId, aa1RefereeId, aa2RefereeId } = params;
 
   const db = getFirestore();
-  const leagueRef = db.collection("leagues").doc(leagueId);
-
-  const groupsSnap = await leagueRef.collection("groups").get();
 
   const conflicts: ScheduleConflict[] = [];
   const ternaRefIds = new Set([centralRefereeId, aa1RefereeId, aa2RefereeId].filter(Boolean));
 
-  for (const g of groupsSnap.docs) {
-    const groupId = g.id;
-    const matchdaysSnap = await g.ref.collection("matchdays").get();
+  // 🔥 Un solo query por toda la liga filtrando por leagueId + kickoff
+  const matchesSnap = await db
+    .collectionGroup("matches")
+    .where("leagueId", "==", leagueId)
+    .where("kickoff", "==", kickoff)
+    .get();
 
-    for (const md of matchdaysSnap.docs) {
-      const matchesSnap = await md.ref.collection("matches").where("kickoff", "==", kickoff).get();
+  for (const m of matchesSnap.docs) {
+    // Nos saltamos el mismo partido
+    if (m.id === matchId) continue;
 
-      for (const m of matchesSnap.docs) {
-        collectScheduleConflictsFromMatch({
-          matchDoc: m,
-          leagueId,
-          groupId,
-          matchIdToSkip: matchId,
-          ternaRefIds,
-          conflicts,
-        });
-      }
-    }
+    const data = m.data() as any;
+    const groupId: string = (data.groupId ?? data.groupID ?? data.group_id ?? "").toString() ?? "unknown-group";
+
+    collectScheduleConflictsFromMatch({
+      matchDoc: m,
+      leagueId,
+      groupId,
+      matchIdToSkip: matchId,
+      ternaRefIds,
+      conflicts,
+    });
   }
 
   return conflicts;

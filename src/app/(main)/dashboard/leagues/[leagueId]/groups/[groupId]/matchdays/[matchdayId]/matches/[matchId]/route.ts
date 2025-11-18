@@ -32,6 +32,7 @@ export async function DELETE(
     }
 
     // 2) Fallback: encontrar el doc por collectionGroup con los 3 IDs
+    //    (por si en algún momento se desfasó la ruta pero los campos leagueId/groupId/matchdayId están bien)
     const q = await db
       .collectionGroup("matches")
       .where("leagueId", "==", leagueId)
@@ -45,14 +46,9 @@ export async function DELETE(
       return NextResponse.json({ ok: true, mode: "fallback", path: found.ref.path });
     }
 
-    // 3) Ultra fallback: buscar por id en todo collectionGroup (por si el matchday guardado difiere)
-    const anyQ = await db.collectionGroup("matches").get();
-    const anywhere = anyQ.docs.find((d) => d.id === matchId);
-    if (anywhere) {
-      console.warn("[DELETE match] Doc encontrado en otra ruta:", anywhere.ref.path);
-      await anywhere.ref.delete();
-      return NextResponse.json({ ok: true, mode: "anywhere", path: anywhere.ref.path });
-    }
+    // ❌ Eliminado el "ultra fallback" que escaneaba TODO el collectionGroup("matches")
+    // Eso podía disparar miles de lecturas solo para borrar un doc.
+    // Si llegamos aquí, de verdad no existe en la estructura esperada.
 
     return NextResponse.json({ ok: false, message: "El partido no existe." }, { status: 404 });
   } catch (err: any) {

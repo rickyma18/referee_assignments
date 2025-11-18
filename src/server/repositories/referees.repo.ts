@@ -151,3 +151,28 @@ export async function listAssessorsSimple(search?: string) {
   const res = await list({ q: search, canAssessOnly: true, limit: 50 });
   return res.items.map((r: any) => ({ id: r.id, name: r.name ?? "—" }));
 }
+
+export async function setRcsOverride(
+  id: string,
+  rcsOverrideCentral: number | null,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const patch: any = {
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    if (rcsOverrideCentral == null) {
+      // Borramos el campo para volver al comportamiento por defecto
+      patch.rcsOverrideCentral = FieldValue.delete();
+    } else {
+      patch.rcsOverrideCentral = rcsOverrideCentral;
+    }
+
+    await db.collection(COL).doc(id).set(patch, { merge: true });
+
+    return { ok: true as const };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error al guardar override de RCS";
+    return { ok: false as const, message: msg };
+  }
+}

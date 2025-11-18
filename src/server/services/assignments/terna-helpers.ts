@@ -147,7 +147,7 @@ export async function computeMdsForMatch(options: {
  */
 export async function loadRefereeCandidates(): Promise<CandidateRef[]> {
   const db = getFirestore();
-  const snap = await db.collection("referees").get();
+  const snap = await db.collection("referees").where("status", "==", "DISPONIBLE").get();
 
   const candidates: CandidateRef[] = [];
 
@@ -163,10 +163,17 @@ export async function loadRefereeCandidates(): Promise<CandidateRef[]> {
     const tierRaw = (data?.tier ?? null) as string | null;
     const tier = tierRaw && typeof tierRaw === "string" ? tierRaw : null;
 
-    const rcsCentral = refereeTierToRcsCentral(tier as any);
+    // 🔹 RCS base desde tier
+    let rcsCentral = refereeTierToRcsCentral(tier as any);
+
+    // 🔹 Override oculto solo usado por el motor (no sale en el UI normal)
+    const overrideRaw = data?.rcsOverrideCentral;
+    if (typeof overrideRaw === "number" && Number.isFinite(overrideRaw)) {
+      rcsCentral = overrideRaw;
+    }
 
     const canAssess = Boolean(data?.canAssess);
-    const category = (data?.category ?? null) as string | null; // 👈 aquí leemos category del árbitro
+    const category = (data?.category ?? null) as string | null; // para priorizar TDP
 
     candidates.push({
       id: doc.id,

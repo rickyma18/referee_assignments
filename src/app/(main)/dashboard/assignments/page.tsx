@@ -1,7 +1,7 @@
 // src/app/(main)/dashboard/assignments/page.tsx
 import { Suspense } from "react";
 
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 
 import "@/server/admin/firebase-admin";
 import { EntityHeader } from "@/components/entity-header";
@@ -89,10 +89,14 @@ async function getAssignmentsData(): Promise<{
     };
   });
 
-  // 2) Grupos (por liga)
+  // 2) Grupos (por liga) — UNA sola lectura por liga
   const groups: GroupDoc[] = [];
+  const groupsByLeague = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
+
   for (const lg of leaguesSnap.docs) {
     const grpSnap = await lg.ref.collection("groups").get();
+    groupsByLeague.set(lg.id, grpSnap.docs);
+
     grpSnap.forEach((g) => {
       const data = g.data() as any;
       groups.push({
@@ -111,8 +115,10 @@ async function getAssignmentsData(): Promise<{
     const leagueData = lg.data() as any;
     const leagueName = leagueData?.name ?? "Liga";
 
-    const groupsSnap = await lg.ref.collection("groups").get();
-    for (const g of groupsSnap.docs) {
+    // Reutilizamos los grupos ya leídos para esta liga
+    const groupDocs = groupsByLeague.get(leagueId) ?? [];
+
+    for (const g of groupDocs) {
       const groupId = g.id;
       const groupData = g.data() as any;
       const groupName = groupData?.name ?? groupData?.code ?? "Grupo";
@@ -123,8 +129,7 @@ async function getAssignmentsData(): Promise<{
         const matchdayId = md.id;
         const matchdayNumber: number | null = typeof mdData?.number === "number" ? mdData.number : null;
 
-        // 🔴 Antes filtrabas aquí por "kickoff >= now"
-        // 🔵 Ahora solo ordenamos por fecha para que el cliente decida qué mostrar
+        // Ahora solo ordenamos por fecha para que el cliente decida qué mostrar
         const matchesSnap = await md.ref.collection("matches").orderBy("kickoff", "asc").get();
 
         matchesSnap.forEach((m) => {
@@ -157,24 +162,22 @@ async function getAssignmentsData(): Promise<{
     }
   }
 
-  // 4) Árbitros disponibles (solo DISPONIBLE)
-  const refereesSnap = await db.collection("referees").get();
-  const referees: RefereeOption[] = refereesSnap.docs
-    .map((d) => {
-      const data = d.data() as any;
-      const status = (data?.status ?? "").toString().toUpperCase();
+  // 4) Árbitros disponibles (solo DISPONIBLE) — ya filtramos en la query
+  const refereesSnap = await db.collection("referees").where("status", "==", "DISPONIBLE").get();
+  const referees: RefereeOption[] = refereesSnap.docs.map((d) => {
+    const data = d.data() as any;
+    const status = (data?.status ?? "").toString().toUpperCase();
 
-      const rawName = (data?.name as string | undefined) ?? `${data?.firstName ?? ""} ${data?.lastName ?? ""}`.trim();
-      const name = rawName && rawName.trim().length > 0 ? rawName : "Sin nombre";
+    const rawName = (data?.name as string | undefined) ?? `${data?.firstName ?? ""} ${data?.lastName ?? ""}`.trim();
+    const name = rawName && rawName.trim().length > 0 ? rawName : "Sin nombre";
 
-      return {
-        id: d.id,
-        name,
-        status,
-        canAssess: Boolean(data?.canAssess), // 👈 NUEVO: viene del doc de referee
-      };
-    })
-    .filter((r) => r.status === "DISPONIBLE");
+    return {
+      id: d.id,
+      name,
+      status,
+      canAssess: Boolean(data?.canAssess),
+    };
+  });
 
   return { leagues, groups, matches, referees };
 }
