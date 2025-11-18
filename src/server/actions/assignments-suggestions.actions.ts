@@ -1,13 +1,11 @@
+// src/server/actions/assignments-suggest.actions.ts (o como se llame)
 "use server";
 import "server-only";
 
 import { z, ZodError } from "zod";
 
-import {
-  suggestTernasForMatchesBalanced,
-  type SuggestedTerna,
-  type SuggestTernaForMatchParams,
-} from "@/server/services/assignments/suggestions";
+import { suggestTernasForMatchesBalanced } from "@/server/services/assignments/terna-batch";
+import type { SuggestedTerna, SuggestTernaForMatchParams } from "@/server/services/assignments/terna-types";
 
 import { requireEditRole } from "../auth/require-role";
 

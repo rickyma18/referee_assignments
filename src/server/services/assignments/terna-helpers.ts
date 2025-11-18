@@ -1,5 +1,4 @@
 // src/server/services/assignments/terna-helpers.ts
-"use server";
 import "server-only";
 
 import { getFirestore } from "firebase-admin/firestore";
@@ -12,6 +11,15 @@ import type { CandidateRef } from "./terna-types";
 /* ------------------------------------------------------------------ */
 /* Helpers genéricos                                                   */
 /* ------------------------------------------------------------------ */
+function hashStringToInt(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    const chr = input.charCodeAt(i);
+    hash = (hash << 5) - hash + chr;
+    hash |= 0; // fuerza a int32
+  }
+  return hash;
+}
 
 export function toDateSafe(input: any): Date | null {
   if (!input) return null;
@@ -31,15 +39,17 @@ export function toDateSafe(input: any): Date | null {
 }
 
 /**
- * Detecta si la liga es TDP (varonil o femenil) a partir del nombre
- * o, si lo usas después, de un campo category en el doc de la liga.
+ * Detecta si la liga es TDP (varonil o femenil) a partir del nombre,
+ * slug o, si lo usas después, de un campo category en el doc de la liga.
  */
 export function isTdpLeague(leagueData: any): boolean {
   const leagueName = (leagueData?.name ?? "").toString().toUpperCase();
   const leagueCategory = (leagueData?.category ?? "").toString().toUpperCase();
+  const leagueSlug = (leagueData?.slug ?? "").toString().toUpperCase();
 
   if (leagueCategory.includes("TDP")) return true;
   if (leagueName.includes("TDP")) return true;
+  if (leagueSlug.includes("TDP")) return true;
 
   return false;
 }
@@ -56,9 +66,17 @@ export function shouldAssignAssessor(options: { leagueData: any; matchData: any 
 
   const leagueName = (leagueData?.name ?? "").toString().toUpperCase();
   const leagueCategory = (leagueData?.category ?? "").toString().toUpperCase();
+  const leagueSlug = (leagueData?.slug ?? "").toString().toUpperCase();
+
+  // Detectar si es femenil (por nombre / categoría / slug)
+  const isFemenil =
+    leagueName.includes("FEM") ??
+    leagueName.includes("FEMENIL") ??
+    leagueCategory.includes("FEM") ??
+    leagueSlug.includes("FEMENIL") ??
+    leagueSlug.includes("FEM");
 
   // ❌ TDP femenil -> NO asesor
-  const isFemenil = leagueName.includes("FEM") ?? leagueName.includes("FEMENIL") ?? leagueCategory.includes("FEM");
   if (isTdpLeague(leagueData) && isFemenil) {
     return false;
   }
@@ -87,7 +105,6 @@ export function shouldAssignAssessor(options: { leagueData: any; matchData: any 
  *
  * NOTA: Este helper NO persiste el MDS en el partido (es puro cálculo).
  */
-
 export async function computeMdsForMatch(options: {
   leagueId: string;
   groupId: string;
@@ -143,7 +160,7 @@ export async function computeMdsForMatch(options: {
  * Carga todos los árbitros y los convierte en CandidateRef.
  *
  * - Solo usa status / rolesAllowed / tier.
- * - El RCS se deriva de tier (refereeTierToRcsCentral).
+ * - El RCS se deriva de tier (refereeTierToRcsCentral) + override opcional.
  */
 export async function loadRefereeCandidates(): Promise<CandidateRef[]> {
   const db = getFirestore();
@@ -240,6 +257,7 @@ export function getAssessorCandidates(refs: CandidateRef[]): CandidateRef[] {
 
 /**
  * Aplica el filtro de MDS vs RCS para el central.
+ * (En TDP Femenil lo estamos saltando en terna-batch.ts)
  */
 export function filterCentralByMds(candidates: CandidateRef[], mds: number | null, tolerance: number): CandidateRef[] {
   if (mds == null) return candidates;
@@ -277,12 +295,16 @@ export function filterAssistantsByMds(
  * - mayor RCS
  * - luego nombre alfabético (para tener determinismo)
  */
-export function sortByRcsAndName(candidates: CandidateRef[]): CandidateRef[] {
+export function sortByRcs(candidates: CandidateRef[]): CandidateRef[] {
   return [...candidates].sort((a, b) => {
     const ra = a.rcsCentral ?? 0;
     const rb = b.rcsCentral ?? 0;
-    if (ra !== rb) return rb - ra; // DESC
-    return a.name.localeCompare(b.name, "es", { sensitivity: "base" });
+    if (ra !== rb) return rb - ra; // RCS más alto primero
+
+    // desempate: hash del id, NO por nombre
+    const ha = hashStringToInt(a.id);
+    const hb = hashStringToInt(b.id);
+    return ha - hb;
   });
 }
 
@@ -296,7 +318,8 @@ export function sortByRcsAndName(candidates: CandidateRef[]): CandidateRef[] {
  */
 export function sortWithLeaguePriority(candidates: CandidateRef[], leagueData: any): CandidateRef[] {
   if (!isTdpLeague(leagueData)) {
-    return sortByRcsAndName(candidates);
+    // antes: return sortByRcsAndName(candidates);
+    return sortByRcs(candidates);
   }
 
   return [...candidates].sort((a, b) => {
@@ -306,13 +329,18 @@ export function sortWithLeaguePriority(candidates: CandidateRef[], leagueData: a
     const aIsTdp = aCat.includes("TDP") ? 1 : 0;
     const bIsTdp = bCat.includes("TDP") ? 1 : 0;
 
+    // 1) TDP primero
     if (aIsTdp !== bIsTdp) return bIsTdp - aIsTdp;
 
+    // 2) RCS más alto primero
     const ra = a.rcsCentral ?? 0;
     const rb = b.rcsCentral ?? 0;
     if (ra !== rb) return rb - ra;
 
-    return a.name.localeCompare(b.name, "es", { sensitivity: "base" });
+    // 3) desempate: hash del id (no nombre)
+    const ha = hashStringToInt(a.id);
+    const hb = hashStringToInt(b.id);
+    return ha - hb;
   });
 }
 
