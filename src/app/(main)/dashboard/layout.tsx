@@ -6,6 +6,8 @@ import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sideb
 import { AuthGuard } from "@/components/auth-guard";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { ToastViewport } from "@/components/ui/toast";
+import { ToastProvider } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
 import {
@@ -23,6 +25,8 @@ import { AccountSwitcher } from "./_components/sidebar/account-switcher";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
 import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
+
+// 👇 imports nuevos
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
@@ -44,44 +48,50 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
 
   return (
     <AuthGuard allowedRoles={["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"]}>
-      <SidebarProvider defaultOpen={defaultOpen}>
-        <AppSidebar variant={sidebarVariant} collapsible={sidebarCollapsible} />
+      {/* 👇 Todo el dashboard envuelto en el provider de toasts */}
+      <ToastProvider>
+        <SidebarProvider defaultOpen={defaultOpen}>
+          <AppSidebar variant={sidebarVariant} collapsible={sidebarCollapsible} />
 
-        <SidebarInset
-          data-content-layout={contentLayout}
-          className={cn(
-            // 🔹 Que toda la zona derecha sea un contenedor de altura completa y sin overflow horizontal
-            "flex h-screen flex-col overflow-hidden",
-            "data-[content-layout=centered]:!mx-auto data-[content-layout=centered]:max-w-screen-2xl",
-            "max-[113rem]:peer-data-[variant=inset]:!mr-2 min-[101rem]:peer-data-[variant=inset]:peer-data-[state=collapsed]:!mr-auto",
-          )}
-        >
-          <header
-            data-navbar-style={navbarStyle}
+          <SidebarInset
+            data-content-layout={contentLayout}
             className={cn(
-              "flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12",
-              "data-[navbar-style=sticky]:bg-background/50 data-[navbar-style=sticky]:sticky data-[navbar-style=sticky]:top-0 data-[navbar-style=sticky]:z-50 data-[navbar-style=sticky]:overflow-hidden data-[navbar-style=sticky]:rounded-t-[inherit] data-[navbar-style=sticky]:backdrop-blur-md",
+              // 🔹 Que toda la zona derecha sea un contenedor de altura completa y sin overflow horizontal
+              "flex h-screen flex-col overflow-hidden",
+              "data-[content-layout=centered]:!mx-auto data-[content-layout=centered]:max-w-screen-2xl",
+              "max-[113rem]:peer-data-[variant=inset]:!mr-2 min-[101rem]:peer-data-[variant=inset]:peer-data-[state=collapsed]:!mr-auto",
             )}
           >
-            <div className="flex w-full items-center justify-between px-4 lg:px-6">
-              <div className="flex items-center gap-1 lg:gap-2">
-                <SidebarTrigger className="-ml-1" />
-                <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
-                <SearchDialog />
+            <header
+              data-navbar-style={navbarStyle}
+              className={cn(
+                "flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12",
+                "data-[navbar-style=sticky]:bg-background/50 data-[navbar-style=sticky]:sticky data-[navbar-style=sticky]:top-0 data-[navbar-style=sticky]:z-50 data-[navbar-style=sticky]:overflow-hidden data-[navbar-style=sticky]:rounded-t-[inherit] data-[navbar-style=sticky]:backdrop-blur-md",
+              )}
+            >
+              <div className="flex w-full items-center justify-between px-4 lg:px-6">
+                <div className="flex items-center gap-1 lg:gap-2">
+                  <SidebarTrigger className="-ml-1" />
+                  <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
+                  <SearchDialog />
+                </div>
+                <div className="flex items-center gap-2">
+                  <LayoutControls {...layoutPreferences} />
+                  <ThemeSwitcher />
+                  <AccountSwitcher />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <LayoutControls {...layoutPreferences} />
-                <ThemeSwitcher />
-                <AccountSwitcher />
-              </div>
-            </div>
-          </header>
+            </header>
 
-          {/* 🔹 Aquí vive el scroll VERTICAL del contenido del dashboard */}
-          {/* 🔹 Horizontal lo bloqueamos; sólo la tabla tendrá overflow-x-auto */}
-          <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6">{children}</div>
-        </SidebarInset>
-      </SidebarProvider>
+            {/* 🔹 Aquí vive el scroll VERTICAL del contenido del dashboard */}
+            {/* 🔹 Horizontal lo bloqueamos; sólo la tabla tendrá overflow-x-auto */}
+            <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6">{children}</div>
+          </SidebarInset>
+        </SidebarProvider>
+
+        {/* 👇 Los toasts se pintan una sola vez aquí, globales al dashboard */}
+        <ToastViewport />
+      </ToastProvider>
     </AuthGuard>
   );
 }
