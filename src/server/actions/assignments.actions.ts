@@ -241,3 +241,86 @@ export async function assignManualTernaAction(formData: FormData) {
     };
   });
 }
+
+/**
+ * ✔ Acción para confirmar en lote las ternas sugeridas / editadas desde la tabla.
+ *
+ * - Recibe la lista de partidos con la terna que está actualmente en el UI.
+ * - SOLO hace update de central/aa1/aa2 + nombres + updatedAt/updatedBy.
+ * - No borra campos extra del partido.
+ */
+export async function confirmSuggestedAssignmentsAction(payload: {
+  matches: {
+    leagueId: string;
+    groupId: string;
+    matchdayId: string;
+    matchId: string;
+    centralRefereeId: string;
+    aa1RefereeId: string;
+    aa2RefereeId: string;
+    centralRefereeName?: string | null;
+    aa1RefereeName?: string | null;
+    aa2RefereeName?: string | null;
+  }[];
+  userId?: string | null;
+}) {
+  return secureWrite<{ updatedCount: number }>(async () => {
+    const { matches, userId } = payload;
+
+    if (!matches || matches.length === 0) {
+      return { updatedCount: 0 };
+    }
+
+    const db = getFirestore();
+    const batch = db.batch();
+    const now = new Date();
+
+    let updatedCount = 0;
+
+    for (const m of matches) {
+      // Validaciones mínimas
+      if (!m.leagueId || !m.groupId || !m.matchdayId || !m.matchId) continue;
+      if (!m.centralRefereeId || !m.aa1RefereeId || !m.aa2RefereeId) continue;
+
+      // Evitar ternas con árbitros duplicados
+      if (
+        m.centralRefereeId === m.aa1RefereeId ||
+        m.centralRefereeId === m.aa2RefereeId ||
+        m.aa1RefereeId === m.aa2RefereeId
+      ) {
+        continue;
+      }
+
+      const matchRef = db
+        .collection("leagues")
+        .doc(m.leagueId)
+        .collection("groups")
+        .doc(m.groupId)
+        .collection("matchdays")
+        .doc(m.matchdayId)
+        .collection("matches")
+        .doc(m.matchId);
+
+      batch.update(matchRef, {
+        centralRefereeId: m.centralRefereeId,
+        aa1RefereeId: m.aa1RefereeId,
+        aa2RefereeId: m.aa2RefereeId,
+        centralRefereeName: m.centralRefereeName ?? null,
+        aa1RefereeName: m.aa1RefereeName ?? null,
+        aa2RefereeName: m.aa2RefereeName ?? null,
+        updatedAt: now,
+        updatedBy: userId ?? null,
+      });
+
+      updatedCount += 1;
+    }
+
+    if (updatedCount === 0) {
+      return { updatedCount: 0 };
+    }
+
+    await batch.commit();
+
+    return { updatedCount };
+  });
+}

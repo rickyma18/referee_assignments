@@ -8,7 +8,7 @@ import { useTransition, useMemo, useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation";
 
 import { getCoreRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
-import { FileSpreadsheet, Sparkles } from "lucide-react";
+import { FileSpreadsheet, Sparkles, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { suggestAssignmentsForMatchesAction } from "@/server/actions/assignments-suggestions.actions";
+import { confirmSuggestedAssignmentsAction } from "@/server/actions/assignments.actions";
 
 import { createAssignmentsColumns } from "./assignments-columns";
 import { buildExportRows } from "./assignments-export";
@@ -46,6 +47,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
   const [filterTo, setFilterTo] = useState<string>("");
 
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+  const [isConfirmingAll, setIsConfirmingAll] = useState(false);
 
   const [rowData, setRowData] = useState<AssignmentRowState[]>(() =>
     matches.map((m) => ({
@@ -107,16 +109,22 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
   // Si cambian los matches desde el servidor (router.refresh), sincronizamos
   useEffect(() => {
-    setRowData(
-      matches.map((m) => ({
+    setRowData((prev) => {
+      // Si es el mismo lote de partidos (misma cantidad y mismos IDs), NO resetees
+      if (prev.length === matches.length) {
+        const sameIds = prev.every((row, idx) => row.id === matches[idx]?.id);
+        if (sameIds) return prev;
+      }
+
+      return matches.map((m) => ({
         ...m,
         central: m.centralRefereeId ?? "",
         aa1: m.aa1RefereeId ?? "",
         aa2: m.aa2RefereeId ?? "",
         fourth: m.fourthRefereeId ?? "",
         assessor: m.assessorRefereeId ?? "",
-      })),
-    );
+      }));
+    });
   }, [matches]);
 
   const filteredGroups = useMemo(() => {
@@ -337,6 +345,77 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     }
   }, [table]);
 
+  /* ---------- Confirmar todas las ternas (sugeridas / editadas) ---------- */
+
+  const handleConfirmAll = useCallback(async () => {
+    try {
+      setIsConfirmingAll(true);
+
+      // Filas actuales SIN paginación (pero ya filtradas)
+      const coreRows = table.getPrePaginationRowModel().rows;
+      const rows = coreRows.map((r) => r.original);
+
+      // Tomamos solo las que:
+      // 1) Tienen terna completa en el UI (central / aa1 / aa2)
+      // 2) Cambiaron respecto a lo que venía desde el servidor (centralRefereeId/aa1RefereeId/aa2RefereeId)
+      const toConfirm = rows.filter((row) => {
+        if (!row.central || !row.aa1 || !row.aa2) return false;
+
+        const origCentral = row.centralRefereeId ?? "";
+        const origAa1 = row.aa1RefereeId ?? "";
+        const origAa2 = row.aa2RefereeId ?? "";
+
+        const changed = row.central !== origCentral || row.aa1 !== origAa1 || row.aa2 !== origAa2;
+
+        return changed;
+      });
+
+      if (toConfirm.length === 0) {
+        toast.info("No hay cambios de ternas por confirmar en la vista actual.");
+        return;
+      }
+
+      const payloadMatches = toConfirm.map((row) => ({
+        leagueId: row.leagueId,
+        groupId: row.groupId,
+        matchdayId: row.matchdayId,
+        matchId: row.id,
+        centralRefereeId: row.central,
+        aa1RefereeId: row.aa1,
+        aa2RefereeId: row.aa2,
+        centralRefereeName: row.central ? getRefDisplay(row.central) : null,
+        aa1RefereeName: row.aa1 ? getRefDisplay(row.aa1) : null,
+        aa2RefereeName: row.aa2 ? getRefDisplay(row.aa2) : null,
+      }));
+
+      const res = await confirmSuggestedAssignmentsAction({
+        matches: payloadMatches,
+      });
+
+      if (!res.ok) {
+        toast.error(res.message ?? "Error al confirmar las ternas.");
+        return;
+      }
+
+      const updatedCount = res.data?.updatedCount ?? toConfirm.length;
+
+      if (updatedCount === 0) {
+        toast.info("No se confirmó ninguna terna. Verifica que haya cambios pendientes.");
+      } else {
+        toast.success(`Se confirmaron ${updatedCount} ternas.`);
+      }
+
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message ?? "Error al confirmar las ternas.");
+    } finally {
+      setIsConfirmingAll(false);
+    }
+  }, [table, getRefDisplay, startTransition, router]);
+
   /* ---------- Exportar a Excel ---------- */
 
   const handleExport = useCallback(() => {
@@ -463,7 +542,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
       {/* Tabla + opciones + paginación */}
       <div className="bg-card flex flex-col gap-2 rounded-lg border">
-        <div className="flex items-center gap-2 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2">
           <div className="text-sm font-medium">
             {isRangeActive ? "Partidos (vista por rango de fechas)" : "Partidos próximos por asignar"}
           </div>
@@ -476,6 +555,10 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
           >
             <Sparkles className="mr-2 h-4 w-4" />
             {isGeneratingSuggestions ? "Generando…" : "Generar ternas sugeridas"}
+          </Button>
+          <Button size="sm" variant="secondary" onClick={handleConfirmAll} disabled={isConfirmingAll || isPending}>
+            <CheckCircle2 className="mr-2 h-4 w-4" />
+            {isConfirmingAll ? "Confirmando…" : "Confirmar todas las ternas"}
           </Button>
           <Button size="sm" variant="outline" onClick={handleExport}>
             <FileSpreadsheet className="mr-2 h-4 w-4" />
