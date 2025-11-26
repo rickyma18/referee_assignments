@@ -69,7 +69,6 @@ This system is actively developed and maintained by **SAURIC S.A. de C.V.**
 - Collapsible sidebar  
 
 ---
-
 # 🔧 Assignment Engine
 
 Below is the simplified flowchart of the assignment engine:
@@ -78,7 +77,7 @@ Below is the simplified flowchart of the assignment engine:
 flowchart TD
     A[Load Match] --> B[Load Candidate Pool]
     B --> C[Filter by Availability]
-    C --> D[Split by Role (Central, A1, A2)]
+    C --> D[Split by Role: Central / A1 / A2]
     D --> E[Apply Internal Rules RA-XX]
     E --> F[Compute MDS Score]
     F --> G[Sort Candidates by Priority]
@@ -90,107 +89,3 @@ flowchart TD
     J --> K{Valid Crew?}
     K -- Yes --> L[Return Suggested Terna]
     K -- No --> M[Fallback Logic / Manual Review]
-# 🧰 Tech Stack
-
-## **Frontend**
-- Next.js 16 · TypeScript  
-- Shadcn UI  
-- Tailwind CSS v4  
-
-## **Backend**
-- Firebase Admin SDK  
-- Firestore  
-- Next.js Server Actions  
-- Zod validation  
-
-## **State & Forms**
-- Zustand  
-- React Hook Form  
-
-## **Tables**
-- TanStack Table v8  
-
-## **Tooling**
-- ESLint · Prettier · Husky  
-- GitHub Actions  
-
----
-
-# 🖼 Screenshots
-
-## 📌 Leagues
-<img src="public/screenshots/leagues.png" width="800" />
-
-## 📌 Teams
-<img src="public/screenshots/teams.png" width="800" />
-
-## 📌 Referees List
-<img src="public/screenshots/referees.png" width="800" />
-
-## 📌 Matches
-<img src="public/screenshots/matches.png" width="800" />
-
-## 📌 Create Match
-<img src="public/screenshots/create_match.png" width="800" />
-
-## 📌 Assignments View
-<img src="public/screenshots/assignments.png" width="800" />
-
----
-
-# 🚀 Getting Started
-
-### **1. Clone the repository**
-```bash
-git clone https://github.com/rickyma18/assigner-tdp.git
-2. Install dependencies
-npm install
-
-3. Configure Firebase Admin
-
-Set your environment variables:
-
-GOOGLE_CLOUD_CREDENTIALS_JSON="{}"
-NEXT_PUBLIC_FIREBASE_CONFIG="{}"
-
-4. Start dev server
-npm run dev
-
-
-Your app will run at: http://localhost:3000
-
-🔐 Security
-
-All assignment logic runs on secure server actions
-
-No assignment operations are exposed on the client
-
-Firestore rules enforce role-based access
-
-Only coordinators and superusers can generate ternas
-
-All writes are audited
-
-🛣 Roadmap
-Coming soon:
-
-Assignment history & reports
-
-Difficulty heatmaps (MDS visualization)
-
-Referee performance scoring
-
-Multi-league / multi-tenant support
-
-CSV import/export
-
-Official mobile companion app
-
-Full RBAC control panel
-
-⚽ About
-
-Assigner TDP is developed by SAURIC S.A. de C.V., creators of referee and league-administration systems for Mexican football.
-The platform is designed to increase fairness, transparency, and efficiency in referee assignments across Liga TDP.
-
-<p align="center"> Built with ❤️ by <strong>Ricardo Murillo</strong> </p> ```
