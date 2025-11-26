@@ -73,7 +73,6 @@ This system is actively developed and maintained by **SAURIC S.A. de C.V.**
 
 Below is the simplified flowchart of the assignment engine:
 
-mermaid
 flowchart TD
     A[Load Match] --> B[Load Candidate Pool]
     B --> C[Filter by Availability]
@@ -84,11 +83,12 @@ flowchart TD
     
     G --> H[Pick Central]
     H --> I[Pick Assistant 1]
-    I --> J[Pick Assistant 2 (avoid pair conflicts)]
+    I --> J[Pick Assistant 2 - avoid pair conflicts]
     
     J --> K{Valid Crew?}
     K -- Yes --> L[Return Suggested Terna]
-    K -- No --> M[Fallback Logic / Manual Review]
+    K -- No --> M[Fallback Logic or Manual Review]
+
 
 # 🧰 Tech Stack
 
