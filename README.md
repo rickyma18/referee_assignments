@@ -74,20 +74,22 @@ This system is actively developed and maintained by **SAURIC S.A. de C.V.**
 Below is the simplified flowchart of the assignment engine:
 
 flowchart TD
+
     A[Load Match] --> B[Load Candidate Pool]
     B --> C[Filter by Availability]
-    C --> D[Split by Role: Central / A1 / A2]
+    C --> D[Split by Role \(Central, A1, A2\)]
     D --> E[Apply Internal Rules RA-XX]
     E --> F[Compute MDS Score]
     F --> G[Sort Candidates by Priority]
-    
+
     G --> H[Pick Central]
     H --> I[Pick Assistant 1]
-    I --> J[Pick Assistant 2 - avoid pair conflicts]
-    
+    I --> J[Pick Assistant 2 \(avoid pair conflicts\)]
+
     J --> K{Valid Crew?}
     K -- Yes --> L[Return Suggested Terna]
-    K -- No --> M[Fallback Logic or Manual Review]
+    K -- No --> M[Fallback Logic / Manual Review]
+
 
 
 # 🧰 Tech Stack
