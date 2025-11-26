@@ -16,6 +16,14 @@ import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { DataTableViewOptions } from "@/components/data-table/data-table-view-options";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { suggestAssignmentsForMatchesAction } from "@/server/actions/assignments-suggestions.actions";
@@ -45,6 +53,8 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
   const [filterFrom, setFilterFrom] = useState<string>("");
   const [filterTo, setFilterTo] = useState<string>("");
+
+  const [isRecalcDialogOpen, setIsRecalcDialogOpen] = useState(false);
 
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
   const [isConfirmingAll, setIsConfirmingAll] = useState(false);
@@ -247,13 +257,17 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
   const columns = useMemo(() => createAssignmentsColumns(), []);
 
   /* ---------- Instancia TanStack table ---------- */
-
   const table = useReactTable<AssignmentRowState>({
     data: filteredMatches,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    initialState: {
+      pagination: {
+        pageSize: 50,
+      },
+    },
     meta: {
       referees,
       isPendingGlobal: isPending,
@@ -272,30 +286,25 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     } satisfies AssignmentTableMeta,
   });
 
-  /* ---------- Generar ternas sugeridas ---------- */
+  /* ---------- Motor de sugerencias (normal + recalcular) ---------- */
 
-  const handleGenerateSuggestions = useCallback(async () => {
+  const runSuggestions = useCallback(async (targetRows: AssignmentRowState[], mode: "fill-missing" | "recalc-all") => {
     try {
       setIsGeneratingSuggestions(true);
 
-      // Filas actuales SIN paginación (pero ya filtradas por liga/grupo/fechas)
-      const coreRows = table.getPrePaginationRowModel().rows;
-      const rows = coreRows.map((r) => r.original);
-
-      // 🎯 SOLO partidos sin terna (nada en central / AA1 / AA2)
-      const rowsWithoutTerna = rows.filter((m) => !m.central && !m.aa1 && !m.aa2);
-
-      if (rowsWithoutTerna.length === 0) {
-        toast.info("Todos los partidos de la vista actual ya tienen terna.");
-        return;
-      }
+      const seedBase = Date.now().toString();
 
       const payload = {
-        matches: rowsWithoutTerna.map((m) => ({
+        matches: targetRows.map((m, idx) => ({
           leagueId: m.leagueId,
           groupId: m.groupId,
           matchdayId: m.matchdayId,
           matchId: m.id,
+
+          ignoreExistingAssignment: mode === "recalc-all" ? true : undefined,
+
+          // 🔥 ahora SIEMPRE mandamos variantSeed, solo cambiamos el "prefijo" para que sepas de dónde viene
+          variantSeed: `${mode}-${seedBase}-${idx}`,
         })),
       };
 
@@ -309,7 +318,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       const suggestions = res.data ?? [];
 
       if (suggestions.length === 0) {
-        toast.info("No se generaron sugerencias para los partidos sin terna.");
+        toast.info("No se generaron sugerencias para los partidos seleccionados.");
         return;
       }
 
@@ -321,8 +330,11 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       setRowData((prev) =>
         prev.map((row) => {
           const sug = byMatchId.get(row.id);
-          // 🔒 extra: si por cualquier cosa este partido ya tiene terna, no lo tocamos
-          if (!sug || !sug.hasSuggestion || row.central || row.aa1 || row.aa2) {
+          if (!sug || !sug.hasSuggestion) return row;
+
+          // Modo normal: solo rellenar vacíos
+          // Modo recalcular: sobreescribir lo que haya en pantalla
+          if (mode !== "recalc-all" && (row.central || row.aa1 || row.aa2)) {
             return row;
           }
 
@@ -336,14 +348,58 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
         }),
       );
 
-      toast.success("Ternas sugeridas generadas para los partidos sin terna. Revisa y guarda las que necesites.");
+      if (mode === "recalc-all") {
+        toast.success(
+          "Se recalcularon ternas sugeridas para los partidos de la vista actual. Revisa y guarda las que necesites.",
+        );
+      } else {
+        toast.success("Ternas sugeridas generadas para los partidos sin terna. Revisa y guarda las que necesites.");
+      }
     } catch (err: any) {
       console.error(err);
       toast.error(err?.message ?? "Error al generar ternas sugeridas.");
     } finally {
       setIsGeneratingSuggestions(false);
     }
-  }, [table]);
+  }, []);
+
+  /* ---------- Generar ternas sugeridas ---------- */
+
+  const [hasGeneratedOnce, setHasGeneratedOnce] = useState(false);
+
+  const handleGenerateSuggestions = useCallback(async () => {
+    const coreRows = table.getPrePaginationRowModel().rows;
+    const rows = coreRows.map((r) => r.original);
+
+    const rowsWithoutTerna = rows.filter((m) => !m.central && !m.aa1 && !m.aa2);
+
+    // Primera vez: llenar huecos
+    if (!hasGeneratedOnce && rowsWithoutTerna.length > 0) {
+      await runSuggestions(rowsWithoutTerna, "fill-missing");
+      setHasGeneratedOnce(true);
+      return;
+    }
+
+    // Si no hay partidos en la vista
+    if (rows.length === 0) {
+      toast.info("No hay partidos en la vista actual.");
+      return;
+    }
+
+    // A partir de aquí siempre mostramos el diálogo de recalcular
+    setIsRecalcDialogOpen(true);
+  }, [table, runSuggestions, hasGeneratedOnce]);
+
+  /* ---------- Confirmar recalcular (diálogo) ---------- */
+
+  const handleConfirmRecalc = useCallback(async () => {
+    setIsRecalcDialogOpen(false);
+
+    const coreRows = table.getPrePaginationRowModel().rows;
+    const rows = coreRows.map((r) => r.original);
+
+    await runSuggestions(rows, "recalc-all");
+  }, [table, runSuggestions]);
 
   /* ---------- Confirmar todas las ternas (sugeridas / editadas) ---------- */
 
@@ -575,6 +631,33 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
           <DataTablePagination table={table} />
         </div>
       </div>
+      <Dialog open={isRecalcDialogOpen} onOpenChange={setIsRecalcDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Recalcular ternas sugeridas</DialogTitle>
+            <DialogDescription>
+              Todos los partidos de la vista actual ya tienen una terna asignada. Si continúas, generaré nuevas ternas
+              sugeridas y reemplazaré las que ves en pantalla.
+              <br />
+              <br />
+              <span className="font-medium">Nada se guardará en la base de datos hasta que confirmes las ternas.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsRecalcDialogOpen(false)}
+              disabled={isGeneratingSuggestions}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleConfirmRecalc} disabled={isGeneratingSuggestions}>
+              {isGeneratingSuggestions ? "Recalculando…" : "Recalcular ternas"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

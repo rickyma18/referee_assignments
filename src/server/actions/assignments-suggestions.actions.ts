@@ -1,4 +1,3 @@
-// src/server/actions/assignments-suggest.actions.ts
 "use server";
 import "server-only";
 
@@ -13,6 +12,14 @@ type ActionResult<T = any> = { ok: true; data?: T } | { ok: false; message?: str
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : "Error inesperado");
 
+/**
+ * Schema de input desde la UI para solicitar sugerencias.
+ *
+ * Por compatibilidad:
+ * - leagueId, groupId, matchdayId, matchId siguen siendo obligatorios.
+ * - ignoreExistingAssignment y variantSeed son opcionales y se “pasan tal cual”
+ *   al motor SuggestTernaForMatchParams.
+ */
 const SuggestMatchesInputZ = z.object({
   matches: z
     .array(
@@ -21,6 +28,12 @@ const SuggestMatchesInputZ = z.object({
         groupId: z.string().min(1),
         matchdayId: z.string().min(1),
         matchId: z.string().min(1),
+
+        // Nuevo: permitir recalcular aunque ya exista terna
+        ignoreExistingAssignment: z.boolean().optional(),
+
+        // Nuevo: semilla opcional para variar el orden de candidatos
+        variantSeed: z.string().optional(),
       }),
     )
     .min(1, "Debe haber al menos un partido para sugerir."),
@@ -46,7 +59,10 @@ export type SuggestMatchesInput = z.infer<typeof SuggestMatchesInputZ>;
  * Además:
  * - Intenta repartir a los árbitros dentro del lote de partidos
  *   evitando repetirlos hasta que sea necesario.
- * - No propone ternas para partidos que ya tienen terna en Firestore.
+ * - Por defecto, el motor no propone ternas para partidos que ya tienen terna
+ *   en Firestore, salvo que se envíe `ignoreExistingAssignment: true`.
+ * - Si se envía `variantSeed`, esta se usará para rotar el pool de candidatos
+ *   de forma distinta, permitiendo obtener “otra opción” de terna.
  */
 export async function suggestAssignmentsForMatchesAction(rawInput: unknown): Promise<ActionResult<SuggestedTerna[]>> {
   try {
@@ -54,6 +70,7 @@ export async function suggestAssignmentsForMatchesAction(rawInput: unknown): Pro
 
     const { matches } = SuggestMatchesInputZ.parse(rawInput);
 
+    // matches ya cumple con SuggestTernaForMatchParams, incluyendo campos opcionales
     const params: SuggestTernaForMatchParams[] = matches;
 
     const results = await suggestTernasForMatchesBalanced(params);

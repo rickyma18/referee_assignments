@@ -1,5 +1,3 @@
-// src/server/services/assignments/terna-types.ts
-
 import type { Conflict, ScheduleConflict } from "./validation";
 
 /**
@@ -49,12 +47,33 @@ export type SuggestedTerna = {
 
 /**
  * Parámetros mínimos para sugerir terna de UN partido.
+ *
+ * Por defecto:
+ * - El motor NO sugiere nada si el partido ya tiene terna en Firestore.
+ * - La rotación del pool de árbitros es determinista según leagueId/groupId/matchdayId/matchId.
+ *
+ * Opcionales:
+ * - ignoreExistingAssignment: si es true, el motor ignora la terna ya guardada
+ *   y genera una nueva sugerencia igualmente (útil para “recalcular”).
+ * - variantSeed: string opcional para variar la rotación de candidatos y así
+ *   obtener una “opción alternativa” de terna sin romper el resto de la lógica.
  */
 export type SuggestTernaForMatchParams = {
   leagueId: string;
   groupId: string;
   matchdayId: string;
   matchId: string;
+
+  /** Si true, se genera sugerencia aunque ya exista terna en Firestore. */
+  ignoreExistingAssignment?: boolean;
+
+  /**
+   * Semilla opcional para variar la rotación de candidatos.
+   * Si se manda un valor distinto en cada llamada de “otra opción”,
+   * la terna propuesta debería cambiar (en la medida de lo posible)
+   * respetando RA-XX, MDS, etc.
+   */
+  variantSeed?: string;
 };
 
 export type SuggestTernasForMatchdayParams = {

@@ -10,6 +10,9 @@ export const InternalRuleTypeZ = z.enum([
   "RA_dias_preferidos",
   "RA_equipos_prohibidos",
   "RA_equipos_preferidos",
+  "RA_ligas_prohibidas",
+  "RA_companeros_preferidos",
+  "RA_companeros_obligatorios",
 ]);
 
 export type InternalRuleType = z.infer<typeof InternalRuleTypeZ>;
@@ -20,6 +23,15 @@ export type InternalRuleType = z.infer<typeof InternalRuleTypeZ>;
 
 export const DiaSemanaZ = z.enum(["L", "M", "X", "J", "V", "S", "D"]);
 
+const LigasParamsZ = z.object({
+  leagueIds: z.array(z.string().min(1)).min(1, "Selecciona al menos una liga."),
+  comentario: z.string().max(500).optional(),
+});
+const CompanerosParamsZ = z.object({
+  refereeIds: z.array(z.string().min(1)).min(1, "Selecciona al menos un árbitro."),
+  comentario: z.string().max(500).optional(),
+  pesoExtra: z.number().min(0.1).max(10).default(1),
+});
 // 👇 Ajuste: comentario ahora es optional + nullable
 const ComentarioZ = z.string().max(500).optional().nullable();
 
@@ -70,6 +82,18 @@ const InternalRuleParamsZ = z.discriminatedUnion("type", [
     params: EquiposParamsZ.extend({
       pesoExtra: z.number().min(0.1).max(10).default(1),
     }),
+  }),
+  z.object({
+    type: z.literal("RA_ligas_prohibidas"),
+    params: LigasParamsZ,
+  }),
+  z.object({
+    type: z.literal("RA_companeros_preferidos"),
+    params: CompanerosParamsZ,
+  }),
+  z.object({
+    type: z.literal("RA_companeros_obligatorios"),
+    params: CompanerosParamsZ.omit({ pesoExtra: true }),
   }),
 ]);
 

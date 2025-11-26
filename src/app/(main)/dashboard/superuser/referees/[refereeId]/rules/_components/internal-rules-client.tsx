@@ -214,7 +214,8 @@ export function InternalRulesClient({ referee, initialRules }: Props) {
         <div>
           <h2 className="text-lg font-semibold">Reglas internas RA-XX</h2>
           <p className="text-muted-foreground text-sm">
-            Configura municipios, días, equipos preferidos/prohibidos para el motor de auto-sugerencia.
+            Configura municipios, días, equipos, ligas y compañeros preferidos/prohibidos para el motor de
+            auto-sugerencia.
           </p>
         </div>
         <Button size="sm" onClick={openNewRuleDialog} disabled={pending}>
@@ -269,12 +270,10 @@ export function InternalRulesClient({ referee, initialRules }: Props) {
 
                         if (!raw) return "";
 
-                        // Caso viejo: Timestamp con .toDate()
                         if (typeof raw.toDate === "function") {
                           return raw.toDate().toLocaleString();
                         }
 
-                        // Caso nuevo: string ISO o Date serializable
                         try {
                           return new Date(raw).toLocaleString();
                         } catch {
@@ -358,6 +357,29 @@ function renderRuleParamsSummary(rule: InternalRule) {
           {p.comentario && <div className="text-muted-foreground text-xs">{p.comentario}</div>}
         </div>
       );
+    case "RA_ligas_prohibidas":
+      return (
+        <div className="space-y-1">
+          <div>Ligas: {(p.leagueIds ?? []).join(", ")}</div>
+          {p.comentario && <div className="text-muted-foreground text-xs">{p.comentario}</div>}
+        </div>
+      );
+    case "RA_companeros_preferidos":
+      return (
+        <div className="space-y-1">
+          <div>Compañeros: {(p.refereeIds ?? []).join(", ")}</div>
+          {typeof p.pesoExtra === "number" && <div>Peso extra: +{p.pesoExtra}</div>}
+          {p.comentario && <div className="text-muted-foreground text-xs">{p.comentario}</div>}
+        </div>
+      );
+    case "RA_companeros_obligatorios":
+      return (
+        <div className="space-y-1">
+          <div>Compañeros obligatorios: {(p.refereeIds ?? []).join(", ")}</div>
+          {p.comentario && <div className="text-muted-foreground text-xs">{p.comentario}</div>}
+        </div>
+      );
+
     default:
       return <span className="text-muted-foreground text-xs">Tipo no soportado aún en el resumen.</span>;
   }
@@ -366,7 +388,6 @@ function renderRuleParamsSummary(rule: InternalRule) {
 /* ------------------------------------------------------------------ */
 /* RuleDialog                                                         */
 /* ------------------------------------------------------------------ */
-
 type RuleDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -396,6 +417,14 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
   const [enabled, setEnabled] = React.useState<boolean>(initialRule?.enabled ?? true);
   const [reason, setReason] = React.useState<string>("");
 
+  // AHORA como arrays, porque usamos MultiSelect
+  const [leagueIds, setLeagueIds] = React.useState<string[]>(
+    Array.isArray((initialRule as any)?.params?.leagueIds) ? (initialRule as any).params.leagueIds : [],
+  );
+  const [refereeIds, setRefereeIds] = React.useState<string[]>(
+    Array.isArray((initialRule as any)?.params?.refereeIds) ? (initialRule as any).params.refereeIds : [],
+  );
+
   // Opciones de municipios (usando /api/catalogs/zones)
   const [zoneOptions, setZoneOptions] = React.useState<{ id: string; name: string }[]>([]);
   const [zonesLoading, setZonesLoading] = React.useState(false);
@@ -403,6 +432,14 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
   // Opciones de equipos (usando /api/catalogs/teams-simple)
   const [teamOptions, setTeamOptions] = React.useState<{ id: string; name: string }[]>([]);
   const [teamsLoading, setTeamsLoading] = React.useState(false);
+
+  // NUEVO: opciones de ligas (usando src/app/api/leagues/route.ts -> /api/leagues)
+  const [leagueOptions, setLeagueOptions] = React.useState<{ id: string; name: string }[]>([]);
+  const [leaguesLoading, setLeaguesLoading] = React.useState(false);
+
+  // NUEVO: opciones de árbitros (ej. /api/catalogs/referees-simple)
+  const [refereeOptions, setRefereeOptions] = React.useState<{ id: string; name: string }[]>([]);
+  const [refereesLoading, setRefereesLoading] = React.useState(false);
 
   // Reset de estado cuando se abre/cambia la regla
   React.useEffect(() => {
@@ -417,6 +454,8 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
       setComentario("");
       setEnabled(true);
       setReason("");
+      setLeagueIds([]);
+      setRefereeIds([]);
       return;
     }
 
@@ -428,18 +467,18 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
     setPesoExtra(typeof p.pesoExtra === "number" ? String(p.pesoExtra) : "1");
     setComentario(p.comentario ?? "");
     setEnabled(initialRule.enabled);
+    setLeagueIds(Array.isArray(p.leagueIds) ? p.leagueIds : []);
+    setRefereeIds(Array.isArray(p.refereeIds) ? p.refereeIds : []);
     setReason("");
   }, [open, initialRule]);
 
   // Cargar zonas cuando se abre el diálogo
-  // Dentro de RuleDialog, useEffect de zonas:
   React.useEffect(() => {
     if (!open) return;
 
     const fetchZones = async () => {
       try {
         setZonesLoading(true);
-        // 👇 más simple, sin filtros que requieran índice
         const res = await fetch("/api/catalogs/zones");
         if (!res.ok) {
           console.error("Error al cargar zonas", await res.text());
@@ -480,6 +519,60 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
     fetchTeams();
   }, [open]);
 
+  // 🔥 Cargar ligas desde src/app/api/leagues/route.ts
+  React.useEffect(() => {
+    if (!open) return;
+
+    const fetchLeagues = async () => {
+      try {
+        setLeaguesLoading(true);
+        const res = await fetch("/api/leagues");
+        if (!res.ok) {
+          console.error("Error al cargar ligas", await res.text());
+          return;
+        }
+
+        // Ajusta según lo que devuelva tu route.ts
+        const json = await res.json();
+        const leagues: { id: string; name: string }[] = Array.isArray(json) ? json : (json.leagues ?? []);
+
+        setLeagueOptions(leagues);
+      } catch (e) {
+        console.error("Error de red al cargar ligas", e);
+      } finally {
+        setLeaguesLoading(false);
+      }
+    };
+
+    fetchLeagues();
+  }, [open]);
+
+  // 🔥 Cargar árbitros simples para "compañeros preferidos"
+  React.useEffect(() => {
+    if (!open) return;
+
+    const fetchRefs = async () => {
+      try {
+        setRefereesLoading(true);
+        const res = await fetch("/api/catalogs/referees-simple");
+        if (!res.ok) {
+          console.error("Error al cargar árbitros", await res.text());
+          return;
+        }
+        const json = await res.json();
+        const refs: { id: string; name: string }[] = Array.isArray(json) ? json : (json.referees ?? []);
+
+        setRefereeOptions(refs);
+      } catch (e) {
+        console.error("Error de red al cargar árbitros", e);
+      } finally {
+        setRefereesLoading(false);
+      }
+    };
+
+    fetchRefs();
+  }, [open]);
+
   const splitTrimmed = (input: string): string[] =>
     input
       .split(",")
@@ -487,13 +580,23 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
       .filter((part: string): boolean => part.length > 0);
 
   const handleSubmit = () => {
-    const trimmedMunicipios: string[] = municipios.map((m: string): string => m.trim()).filter((m) => m.length > 0);
-    const trimmedDias: string[] = splitTrimmed(dias).map((d: string): string => d.toUpperCase());
-    const trimmedTeams: string[] = teams.map((t: string): string => t.trim()).filter((t) => t.length > 0);
+    const trimmedMunicipios = municipios.map((m) => m.trim()).filter((m) => m.length > 0);
+    const trimmedDias = splitTrimmed(dias).map((d) => d.toUpperCase());
+    const trimmedTeams = teams.map((t) => t.trim()).filter((t) => t.length > 0);
+    const trimmedLeagueIds = leagueIds.map((id) => id.trim()).filter((id) => id.length > 0);
+    const trimmedRefereeIds = refereeIds.map((id) => id.trim()).filter((id) => id.length > 0);
 
     let payload: any;
 
-    if (type === "RA_municipios_prohibidos") {
+    if (type === "RA_ligas_prohibidas") {
+      payload = {
+        type,
+        params: {
+          leagueIds: trimmedLeagueIds,
+          comentario: comentario || undefined,
+        },
+      };
+    } else if (type === "RA_municipios_prohibidos") {
       payload = {
         type,
         params: {
@@ -535,6 +638,23 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
           pesoExtra: Number(pesoExtra || "1"),
         },
       };
+    } else if (type === "RA_companeros_preferidos") {
+      payload = {
+        type,
+        params: {
+          refereeIds: trimmedRefereeIds,
+          comentario: comentario || undefined,
+          pesoExtra: Number(pesoExtra || "1"),
+        },
+      };
+    } else if (type === "RA_companeros_obligatorios") {
+      payload = {
+        type,
+        params: {
+          refereeIds: trimmedRefereeIds,
+          comentario: comentario || undefined,
+        },
+      };
     }
 
     const result = InternalRuleInputZ.safeParse({
@@ -572,6 +692,9 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
                 <SelectItem value="RA_dias_preferidos">Días preferidos</SelectItem>
                 <SelectItem value="RA_equipos_prohibidos">Equipos prohibidos</SelectItem>
                 <SelectItem value="RA_equipos_preferidos">Equipos preferidos</SelectItem>
+                <SelectItem value="RA_ligas_prohibidas">Ligas prohibidas</SelectItem>
+                <SelectItem value="RA_companeros_preferidos">Compañeros preferidos</SelectItem>
+                <SelectItem value="RA_companeros_obligatorios">Compañeros obligatorios</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -608,7 +731,34 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
             />
           )}
 
-          {(type === "RA_municipios_preferidos" || type === "RA_equipos_preferidos") && (
+          {/* Ligas prohibidas */}
+          {type === "RA_ligas_prohibidas" && (
+            <MultiSelect
+              label="Ligas"
+              placeholder="Selecciona ligas…"
+              options={leagueOptions.map((l) => ({ value: l.id, label: l.name }))}
+              value={leagueIds}
+              loading={leaguesLoading}
+              onChange={setLeagueIds}
+            />
+          )}
+
+          {/* Compañeros (preferidos u obligatorios) */}
+          {(type === "RA_companeros_preferidos" || type === "RA_companeros_obligatorios") && (
+            <MultiSelect
+              label={type === "RA_companeros_preferidos" ? "Árbitros preferidos" : "Árbitros obligatorios"}
+              placeholder="Selecciona árbitros…"
+              options={refereeOptions.map((r) => ({ value: r.id, label: r.name }))}
+              value={refereeIds}
+              loading={refereesLoading}
+              onChange={setRefereeIds}
+            />
+          )}
+
+          {/* Peso extra para preferidos */}
+          {(type === "RA_municipios_preferidos" ||
+            type === "RA_equipos_preferidos" ||
+            type === "RA_companeros_preferidos") && (
             <div className="space-y-2">
               <Label>Peso extra (1 = neutro, &gt; 1 = más prioridad)</Label>
               <Input
