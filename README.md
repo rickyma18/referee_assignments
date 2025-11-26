@@ -73,7 +73,7 @@ This system is actively developed and maintained by **SAURIC S.A. de C.V.**
 
 Below is the simplified flowchart of the assignment engine:
 
-```mermaid
+mermaid
 flowchart TD
     A[Load Match] --> B[Load Candidate Pool]
     B --> C[Filter by Availability]
