@@ -1,95 +1,86 @@
-🧩 Assigner TDP — Automated Referee Assignment System
-<p align="center"> <img src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=nextdotjs" /> <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" /> <img src="https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" /> <img src="https://img.shields.io/badge/Shadcn_UI-white?style=for-the-badge&logo=react&logoColor=black" /> <img src="https://img.shields.io/badge/Tailwind_CSS-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white" /> </p> <p align="center"> <strong>Automated, rule-driven referee assignment engine for Liga TDP</strong><br/> Built with Next.js 16, Firebase Admin, Shadcn UI, and a modular colocation architecture. </p>
-📚 Table of Contents
+# 🧩 Assigner TDP — Automated Referee Assignment System
 
-Overview
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=nextdotjs" />
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
+  <img src="https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" />
+  <img src="https://img.shields.io/badge/Shadcn_UI-white?style=for-the-badge&logo=react&logoColor=black" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white" />
+</p>
 
-Core Features
+<p align="center">
+  <strong>Automated, rule-driven referee assignment engine for Liga TDP</strong><br/>
+  Built with Next.js 16, Firebase Admin, Shadcn UI, and a modular colocation architecture.
+</p>
 
-Assignment Engine
+---
 
-Tech Stack
+# 📚 Table of Contents
+- [Overview](#overview)
+- [Core Features](#core-features)
+- [Assignment Engine](#assignment-engine)
+- [Tech Stack](#tech-stack)
+- [Architecture](#architecture)
+- [Screenshots](#screenshots)
+- [Getting Started](#getting-started)
+- [Security](#security)
+- [Roadmap](#roadmap)
+- [About](#about)
 
-Architecture
+---
 
-Getting Started
+# 📝 Overview
 
-Security
-
-Roadmap
-
-About
-
-📝 Overview
-
-Assigner TDP is a centralized system used to automate the assignment of referee crews (terna arbitral) for Liga TDP.
+**Assigner TDP** is a centralized system used to automate the assignment of referee crews (terna arbitral) for **Liga TDP**.
 
 It replaces spreadsheets and manual workflows with:
+- Conflict detection  
+- Rule enforcement  
+- Difficulty balancing (MDS)  
+- Real-time Firestore synchronization  
+- A powerful admin dashboard for coordinators and superusers  
 
-Conflict detection
+This system is actively developed and maintained by **SAURIC S.A. de C.V.**
 
-Rule enforcement
+---
 
-Difficulty balancing (MDS)
+# ⭐ Core Features
 
-Real-time Firestore synchronization
+## 🟦 Automated Referee Assignment
+- Suggests full crews: **Central, Assistant 1, Assistant 2**
+- Applies league rules, seniority constraints, and RA-XX overrides
+- Calculates MDS (Match Difficulty Score)
+- Splits candidates by role and filters based on availability, history, and rules
 
-A powerful admin dashboard for coordinators and superusers
+## 🟥 Conflict Detection
+- Team repetition  
+- Pair conflicts between assistants  
+- Excessive frequency with same club  
+- Forbidden combinations  
+- Missing availability  
+- Seniority and tier mismatches  
 
-This system is actively developed and maintained by SAURIC S.A. de C.V..
+## 🟨 Admin Dashboard
+- League → Group → Matchday → Match navigation  
+- CRUD for Referees, Teams, Matchdays, Matches  
+- Manual override tools for coordinators  
+- Table filtering, sorting, and pagination  
+- Dark/light mode themes  
+- Collapsible sidebar  
 
-⭐ Core Features
-🟦 Automated Referee Assignment
+---
 
-Suggests full crews: Central, Assistant 1, Assistant 2
+# 🔧 Assignment Engine
 
-Applies league rules, seniority constraints, and RA-XX overrides
+Below is the simplified flowchart of the assignment engine:
 
-Calculates MDS (Match Difficulty Score)
-
-Splits candidates by roles and filters based on availability & history
-
-🟥 Conflict Detection
-
-Team repetition
-
-Pair conflicts (assistant/assistant)
-
-Excessive team frequency
-
-Forbidden combinations
-
-Missing availability
-
-Seniority mismatches
-
-🟨 Admin Dashboard
-
-League → Group → Matchday → Match navigation
-
-CRUD for Referees, Teams, Matchdays, Matches
-
-Manual adjustment tools
-
-Superuser control panel
-
-Table filtering, sorting, pagination (TanStack Table)
-
-Light/Dark themes
-
-Collapsible sidebar layout
-
-🔧 Assignment Engine
-
-The engine runs entirely server-side through Firebase Admin SDK.
-Below is a simplified flowchart of the real logic:
-
+```mermaid
 flowchart TD
-    A[Load Match] --> B[Load Candidate Referees]
+    A[Load Match] --> B[Load Candidate Pool]
     B --> C[Filter by Availability]
     C --> D[Split by Role (Central, A1, A2)]
-    D --> E[Apply Internal Rules (RA-XX)]
-    E --> F[Calculate MDS Score]
+    D --> E[Apply Internal Rules RA-XX]
+    E --> F[Compute MDS Score]
     F --> G[Sort Candidates by Priority]
     
     G --> H[Pick Central]
@@ -98,92 +89,60 @@ flowchart TD
     
     J --> K{Valid Crew?}
     K -- Yes --> L[Return Suggested Terna]
-    K -- No --> M[Fallback Logic / Manual Review Required]
+    K -- No --> M[Fallback Logic / Manual Review]
+# 🧰 Tech Stack
 
-🧰 Tech Stack
-Frontend
+## **Frontend**
+- Next.js 16 · TypeScript  
+- Shadcn UI  
+- Tailwind CSS v4  
 
-Next.js 16 (App Router)
+## **Backend**
+- Firebase Admin SDK  
+- Firestore  
+- Next.js Server Actions  
+- Zod validation  
 
-TypeScript
+## **State & Forms**
+- Zustand  
+- React Hook Form  
 
-Shadcn UI
+## **Tables**
+- TanStack Table v8  
 
-Tailwind CSS v4
+## **Tooling**
+- ESLint · Prettier · Husky  
+- GitHub Actions  
 
-Backend
+---
 
-Firebase Admin SDK
+# 🖼 Screenshots
 
-Firestore
+## 📌 Leagues
+<img src="public/screenshots/leagues.png" width="800" />
 
-Server Actions (Next.js)
+## 📌 Teams
+<img src="public/screenshots/teams.png" width="800" />
 
-Zod validation
+## 📌 Referees List
+<img src="public/screenshots/referees.png" width="800" />
 
-State & Forms
+## 📌 Matches
+<img src="public/screenshots/matches.png" width="800" />
 
-Zustand
+## 📌 Create Match
+<img src="public/screenshots/create_match.png" width="800" />
 
-React Hook Form
+## 📌 Assignments View
+<img src="public/screenshots/assignments.png" width="800" />
 
-Tables
+---
 
-TanStack Table v8
+# 🚀 Getting Started
 
-Tooling
-
-ESLint
-
-Prettier
-
-Husky
-
-GitHub Actions
-
-pnpm / npm
-
-🏗 Architecture
-
-This project uses a colocation-based file structure, where each route contains its own:
-
-Components
-
-Schemas
-
-Server actions
-
-Hooks
-
-UI logic
-
-Helpers
-
-Example:
-
-/dashboard/leagues/[leagueId]/groups/[groupId]/matchdays/[matchdayId]/matches
-  ├── components/
-  ├── actions/
-  ├── schema/
-  ├── helpers/
-  ├── page.tsx
-  └── types.ts
-
-
-Shared logic lives under:
-
-/components
-/lib
-/server
-/domain
-
-
-This approach scales extremely well for deeply nested data like leagues → groups → matchdays → matches.
-
-🚀 Getting Started
-1. Clone the repository
+### **1. Clone the repository**
+```bash
 git clone https://github.com/rickyma18/assigner-tdp.git
-
 2. Install dependencies
 npm install
 
@@ -194,43 +153,44 @@ Set your environment variables:
 GOOGLE_CLOUD_CREDENTIALS_JSON="{}"
 NEXT_PUBLIC_FIREBASE_CONFIG="{}"
 
-4. Start the dev server
+4. Start dev server
 npm run dev
 
 
-App will run at: http://localhost:3000
+Your app will run at: http://localhost:3000
 
 🔐 Security
 
-All assignment logic runs on secure server actions (no client access)
+All assignment logic runs on secure server actions
 
-Firestore rules enforce strict role-based access
+No assignment operations are exposed on the client
 
-Sensitive admin routes require coordinator or superuser roles
+Firestore rules enforce role-based access
+
+Only coordinators and superusers can generate ternas
 
 All writes are audited
-
-Internal rules RA-XX act as controlled overrides
 
 🛣 Roadmap
 Coming soon:
 
-Assignment history & reporting
+Assignment history & reports
 
-Visual MDS difficulty heatmaps
+Difficulty heatmaps (MDS visualization)
 
 Referee performance scoring
 
-Multi-league support
+Multi-league / multi-tenant support
 
-CSV import/export for matchdays
+CSV import/export
 
-API for mobile companion app
+Official mobile companion app
 
-Full RBAC panel
+Full RBAC control panel
 
 ⚽ About
 
-Assigner TDP is developed by SAURIC S.A. de C.V., creators of referee and league-administration tools for Mexican football.
+Assigner TDP is developed by SAURIC S.A. de C.V., creators of referee and league-administration systems for Mexican football.
+The platform is designed to increase fairness, transparency, and efficiency in referee assignments across Liga TDP.
 
-This system is used to improve fairness, transparency, and efficiency in referee assignments across Liga TDP.
+<p align="center"> Built with ❤️ by <strong>Ricardo Murillo</strong> </p> ```
