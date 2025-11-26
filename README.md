@@ -142,11 +142,13 @@ flowchart TD
 
 ### **1. Clone the repository**
 git clone https://github.com/rickyma18/assigner-tdp.git
-2. Install dependencies
+
+### **2. Install dependencies
 bash
 Copiar código
 npm install
-3. Configure Firebase Admin
+
+### **3. Configure Firebase Admin
 Set your environment variables:
 
 bash
