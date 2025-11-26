@@ -20,6 +20,10 @@ declare global {
   var firestoreSettingsApplied: boolean | undefined;
 }
 
+/* ------------------------------------------------------------------ */
+/* Credenciales                                                       */
+/* ------------------------------------------------------------------ */
+
 function getCredential() {
   const jsonInline = process.env.GOOGLE_CLOUD_CREDENTIALS_JSON;
   if (jsonInline) {
@@ -37,6 +41,10 @@ function getCredential() {
   return applicationDefault();
 }
 
+/* ------------------------------------------------------------------ */
+/* Inicialización                                                     */
+/* ------------------------------------------------------------------ */
+
 const projectId = process.env.GCLOUD_PROJECT ?? process.env.FIREBASE_PROJECT_ID ?? "referee-assignments";
 const appOptions: AppOptions = { credential: getCredential(), projectId };
 
@@ -44,21 +52,44 @@ const appOptions: AppOptions = { credential: getCredential(), projectId };
 const adminApp = globalThis.ADMIN_APP ?? (getApps().length ? getApps()[0] : initializeApp(appOptions));
 globalThis.ADMIN_APP ??= adminApp;
 
-// --- Firestore (singleton + settings una sola vez) ---
+/* ------------------------------------------------------------------ */
+/* Firestore (singleton + settings + soporte emulador)               */
+/* ------------------------------------------------------------------ */
+
 const dbInstance: Firestore = globalThis.ADMIN_DB ?? getFirestore(adminApp);
 
 if (!globalThis.firestoreSettingsApplied) {
-  dbInstance.settings({ ignoreUndefinedProperties: true });
+  // Soporte Firestore Emulator
+  if (process.env.FIRESTORE_EMULATOR_HOST) {
+    console.log("🔥 Conectando firebase-admin al Firestore Emulator:", process.env.FIRESTORE_EMULATOR_HOST);
+
+    dbInstance.settings({
+      host: process.env.FIRESTORE_EMULATOR_HOST,
+      ssl: false,
+      ignoreUndefinedProperties: true,
+    });
+  } else {
+    dbInstance.settings({
+      ignoreUndefinedProperties: true,
+    });
+  }
+
   globalThis.firestoreSettingsApplied = true;
 }
 
 globalThis.ADMIN_DB ??= dbInstance;
 export const adminDb: Firestore = dbInstance;
 
-// --- Auth (singleton) ---
+/* ------------------------------------------------------------------ */
+/* Auth (singleton)                                                   */
+/* ------------------------------------------------------------------ */
+
 const authInstance: Auth = globalThis.ADMIN_AUTH ?? getAuth(adminApp);
 globalThis.ADMIN_AUTH ??= authInstance;
 export const adminAuth: Auth = authInstance;
 
-// Utils
+/* ------------------------------------------------------------------ */
+/* Utils                                                              */
+/* ------------------------------------------------------------------ */
+
 export const AdminFieldValue = FieldValue;
