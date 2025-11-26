@@ -1,125 +1,181 @@
-# Next.js Admin Template with TypeScript & Shadcn UI
+🧩 Assigner TDP — Automated Referee Assignment System
 
-**Studio Admin** - Includes multiple dashboards, authentication layouts, customizable theme presets, and more.
+Assigner TDP is an automated engine for assigning referee crews (terna arbitral) for Liga TDP.
+It manages league → group → matchday → match structures, applies federative rules, validates conflicts, calculates suitability scores (MDS), and suggests optimal referee assignments with full transparency.
 
-<img src="https://github.com/arhamkhnz/next-shadcn-admin-dashboard/blob/main/media/dashboard.png?version=5" alt="Dashboard Screenshot">
+Built with Next.js 16, Shadcn UI, TypeScript, Firebase Admin SDK, and Firestore — a modern, scalable admin platform designed for operational use by real sports leagues in Mexico.
 
-Most admin templates I found, free or paid, felt cluttered, outdated, or too rigid. I built this as a cleaner alternative with features often missing in others, such as theme toggling and layout controls, while keeping the design modern, minimal, and flexible.
+🎯 What Assigner TDP Does
 
-I’ve taken design inspiration from various sources. If you’d like credit for something specific, feel free to open an issue or reach out.
+Automatically suggests complete referee crews (central + assistant 1 + assistant 2).
 
-> **View demo:** [studio admin](https://next-shadcn-admin-dashboard.vercel.app)
+Validates conflicts such as team repetition, historical clashes, and role frequency.
 
-> [!TIP]
-> I’m also working on Nuxt.js, Svelte, and React (Vite + TanStack Router) versions of this dashboard. They’ll be live soon.
+Applies internal league rules, seniority restrictions, and custom constraints.
 
-## Features
+Generates MDS (Match Difficulty Score) to balance referee difficulty loads.
 
-- Built with Next.js 16, TypeScript, Tailwind CSS v4, and Shadcn UI  
-- Responsive and mobile-friendly  
-- Customizable theme presets (light/dark modes with color schemes like Tangerine, Brutalist, and more)  
-- Flexible layouts (collapsible sidebar, variable content widths)  
-- Authentication flows and screens  
-- Prebuilt dashboards (Default, CRM, Finance) with more coming soon  
-- Role-Based Access Control (RBAC) with config-driven UI and multi-tenant support *(planned)*  
+Provides a powerful admin dashboard to manage leagues, groups, matchdays, matches, and referees.
 
-> [!NOTE]
-> The default dashboard uses the **shadcn neutral** theme.  
-> It also includes additional color presets inspired by [Tweakcn](https://tweakcn.com):  
->
-> - Tangerine  
-> - Neo Brutalism  
-> - Soft Pop  
->
-> You can create more presets by following the same structure as the existing ones.
+Syncs with Firestore using strict RBAC-style Firestore rules and audited writes.
 
-> Looking for the **Next.js 15** version?  
-> Check out the [`archive/next15`](https://github.com/arhamkhnz/next-shadcn-admin-dashboard/tree/archive/next15) branch.  
-> This branch contains the setup prior to upgrading to Next 16 and the React Compiler.
+Includes manual override tools for coordinators and superusers.
 
-> Looking for the **Next.js 14 + Tailwind CSS v3** version?  
-> Check out the [`archive/next14-tailwindv3`](https://github.com/arhamkhnz/next-shadcn-admin-dashboard/tree/archive/next14-tailwindv3) branch.  
-> It has a different color theme and is not actively maintained, but I try to keep it updated with major changes.  
+This project replaces manual spreadsheets and error-prone assignment workflows with a centralized, automated, scalable system.
 
-## Tech Stack
+🚀 Tech Stack
 
-- **Framework**: Next.js 16 (App Router), TypeScript, Tailwind CSS v4  
-- **UI Components**: Shadcn UI  
-- **Validation**: Zod  
-- **Forms & State Management**: React Hook Form, Zustand  
-- **Tables & Data Handling**: TanStack Table  
-- **Tooling & DX**: ESLint, Prettier, Husky  
+Framework: Next.js 16 (App Router), TypeScript, React Server Components
 
-## Screens
+UI: Shadcn UI (customized components), Tailwind CSS v4
 
-### Available
-- Default Dashboard  
-- CRM Dashboard  
-- Finance Dashboard  
-- Authentication (4 screens)
+Database: Firebase Firestore (deep nested league/matchday modeling)
 
-### Coming Soon
-- Analytics Dashboard  
-- eCommerce Dashboard  
-- Academy Dashboard  
-- Logistics Dashboard  
-- Email Page  
-- Chat Page  
-- Calendar Page  
-- Kanban Board  
-- Invoice Page  
-- Users Management  
-- Roles Management  
+Backend: Firebase Admin SDK (secure server-side operations)
 
-## Colocation File System Architecture
+Validation: Zod (schema validation for all payloads)
 
-This project follows a **colocation-based architecture** each feature keeps its own pages, components, and logic inside its route folder.  
-Shared UI, hooks, and configuration live at the top level, making the codebase modular, scalable, and easier to maintain as the app grows.
+State Management: Zustand + React Hook Form
 
-For a full breakdown of the structure with examples, see the [Next Colocation Template](https://github.com/arhamkhnz/next-colocation-template).
+Tables: TanStack Table with column filters and sorting
 
-## Getting Started
+Auth: Firebase Auth + secure Admin API routes
 
-You can run this project locally, or deploy it instantly with Vercel.
+Tooling: ESLint, Prettier, Husky, GitHub Actions
 
-### Deploy with Vercel
+📊 Core Features
+🟦 Referee Assignment Engine
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Farhamkhnz%2Fnext-shadcn-admin-dashboard)
+Loads candidate pool by availability, category, league permissions
 
-_Deploy your own copy with one click._
+Splits roles (central, assistant 1, assistant 2)
 
-### Run locally
+Applies internal rules (RA-XX series), referee restrictions, and federation rules
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/arhamkhnz/next-shadcn-admin-dashboard.git
-   ```
-   
-2. **Navigate into the project**
-   ```bash
-    cd next-shadcn-admin-dashboard
-   ```
-   
-3. **Install dependencies**
-   ```bash
-    npm install
-   ```
+Calculates MDS for difficulty balancing
 
-4. **Start the development server**
-   ```bash
-   npm run dev
-   ```
+Filters, sorts, and picks best candidates per match
 
-Your app will be running at [http://localhost:3000](http://localhost:3000)
+Supports batch generation for entire matchdays
 
----
+🟨 Conflict Detection
 
-> [!IMPORTANT]  
-> This project is updated frequently. If you’re working from a fork or an older clone, pull the latest changes before syncing. Some updates may include breaking changes.
+Automatically flags:
 
----
+Repeated teams
 
-Contributions are welcome. Feel free to open issues, feature requests, or start a discussion.
+Excess games officiated for the same club
+
+Role overuse
+
+Forbidden combinations
+
+Pair conflicts between assistants
+
+Missing availability
+
+🟥 Internal Rules System
+
+Superuser-only engine defining exceptions such as:
+
+Referee cannot officiate X team
+
+Must avoid assistant pairing
+
+Forced assignments
+
+Score penalties/boosts
+
+Overrides for special cases
+
+All rules are versioned and stored in Firestore.
+
+🖥 Admin Dashboard Features
+
+League → Group → Matchday → Match navigation
+
+CRUD for referees, teams, leagues, matchdays, matches
+
+Real-time Firestore updates
+
+Assignment view with manual adjustment tools
+
+Performance-optimized data tables
+
+Dark/light mode themes
+
+Collapsible sidebar & adaptive layout
+
+📁 Folder Architecture (Colocation-Based)
+
+The project uses a colocation architecture, where each route owns its:
+
+Components
+
+Actions
+
+Schemas
+
+Hooks
+
+UI logic
+
+Shared code lives under /components, /lib, and /server.
+
+Example:
+
+/dashboard/leagues/[leagueId]/groups/[groupId]/matchdays/[matchdayId]/matches
+  ├── components/
+  ├── actions/
+  ├── schema/
+  ├── page.tsx
+  └── helpers.ts
 
 
-**Happy Vibe Coding!**
+This makes the system fully modular and scalable as the league grows.
+
+🏗 Getting Started
+1. Clone the repository
+git clone https://github.com/rickyma18/assigner-tdp.git
+
+2. Install dependencies
+npm install
+
+3. Add Firebase Admin credentials
+
+Set up your environment variables:
+
+GOOGLE_CLOUD_CREDENTIALS_JSON="{}"
+NEXT_PUBLIC_FIREBASE_CONFIG="{}"
+
+4. Start development server
+npm run dev
+
+
+Runs at: http://localhost:3000
+
+🔒 Security Notes
+
+All write operations use Firebase Admin on the server only
+
+Firestore rules enforce strict role-based access
+
+Sensitive operations require coordinator or superuser roles
+
+Internal rules (RA-XX) bypass normal scoring when explicitly allowed
+
+No client-side access to assignment logic
+
+🤝 Contributing
+
+This is an active project.
+Issues, feature proposals, and improvements are welcome.
+
+If you're reviewing or contributing:
+please pull the latest major changes, as the assignment logic evolves rapidly.
+
+⚽ About the Project
+
+Assigner TDP is developed by SAURIC S.A. de C.V., creators of tools and systems for professional refereeing and sports administration in Mexico.
+
+This system is actively used to improve fairness, efficiency, and transparency in referee assignments.
