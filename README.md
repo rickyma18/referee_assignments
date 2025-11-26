@@ -143,21 +143,18 @@ flowchart TD
 ### **1. Clone the repository**
 git clone https://github.com/rickyma18/assigner-tdp.git
 
-### **2. Install dependencies
-bash
-Copiar código
+### 2. Install dependencies
+
 npm install
 
-### **3. Configure Firebase Admin
+### 3. Configure Firebase Admin
 Set your environment variables:
 
-bash
-Copiar código
 GOOGLE_CLOUD_CREDENTIALS_JSON="{}"
 NEXT_PUBLIC_FIREBASE_CONFIG="{}"
-4. Start dev server
-bash
-Copiar código
+
+### 4. Start dev server
+
 npm run dev
 Your app will run at: http://localhost:3000
 
