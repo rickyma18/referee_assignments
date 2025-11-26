@@ -5,8 +5,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 
+import { TeamTierValues } from "@/domain/teams/team-tier";
 import {
   TeamCreateSchema,
   TeamUpdateSchema,
@@ -28,6 +29,8 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : "Error inesperado"
 function revalidateTeamsList(leagueId: string, groupId: string) {
   revalidatePath(`/dashboard/leagues/${leagueId}/groups/${groupId}/teams`);
 }
+
+const TeamTierZ = z.enum(TeamTierValues);
 
 // ------- Queries (sin ActionResult para mantener consistencia con tu patrón) -------
 
@@ -97,7 +100,7 @@ export async function updateTeamAction(input: TeamUpdateInput & { leagueId?: str
 
     const updated = await repo.update(_id, rest);
 
-    const nextGroupId = (rest as any)?.groupId ?? updated.groupId;
+    const nextGroupId = (rest as any)?.groupId ?? (updated as any).groupId;
     if (leagueId && nextGroupId) revalidateTeamsList(leagueId, nextGroupId);
     else revalidatePath("/dashboard");
 
@@ -133,6 +136,42 @@ export async function deleteTeamAction(leagueId: string, groupId: string, teamId
     else revalidatePath("/dashboard");
 
     return { ok: true, data: res };
+  } catch (e: any) {
+    if (e instanceof ForbiddenError) {
+      return { ok: false, message: e.message };
+    }
+    return { ok: false, message: msg(e) };
+  }
+}
+
+/**
+ * Cambia solo el tier del equipo.
+ * Pensado para el board drag-and-drop de "Tranquilos / Complicados", etc.
+ */
+export async function setTeamTierAction(params: {
+  teamId: string;
+  tier: unknown;
+  leagueId: string;
+  groupId: string;
+}): Promise<ActionResult> {
+  const { teamId, tier, leagueId, groupId } = params;
+
+  try {
+    await requireEditRole(); // 🔒 SUPERUSUARIO / DELEGADO
+
+    const t = TeamTierZ.parse(tier);
+    const res = await repo.setTier(teamId, t);
+
+    if (!res?.ok) {
+      return { ok: false, message: (res as any)?.message ?? "No se pudo cambiar el tier del equipo" };
+    }
+
+    const after = await repo.getById(teamId);
+
+    // 🔥 Revalida SOLO la pantalla de tiers de ese grupo
+    revalidatePath(`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/tiers`);
+
+    return { ok: true, data: after ?? undefined };
   } catch (e: any) {
     if (e instanceof ForbiddenError) {
       return { ok: false, message: e.message };

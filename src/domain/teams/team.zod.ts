@@ -3,6 +3,8 @@
 // =============================
 import { z } from "zod";
 
+import { TeamTierValues } from "./team-tier";
+
 // Base común para create/update (sin id/fechas)
 export const TeamBaseSchema = z.object({
   name: z.string().trim().min(2, "Nombre demasiado corto").max(60),
@@ -13,6 +15,18 @@ export const TeamBaseSchema = z.object({
   venue: z.string().trim().optional().default(""),
 
   logoUrl: z.string().url("URL inválida").optional(),
+
+  /**
+   * Tier de comportamiento / complejidad del equipo.
+   *
+   * - TRANQUILO
+   * - REGULARES
+   * - COMPLICADO
+   * - MUY_COMPLICADO
+   *
+   * Lo usamos en el motor de sugerencias (historia 5.3).
+   */
+  tier: z.enum(TeamTierValues).default("REGULARES"),
 });
 
 // Create: solo necesita los campos base

@@ -304,6 +304,8 @@ export default function UploadMatchesPage() {
                 matchdayId={String(matchdayId)}
                 matchdayNumber={matchdayNumber ?? undefined}
                 userId={userId}
+                matchdayStart={mdStart ?? undefined}
+                matchdayEnd={mdEnd ?? undefined}
               />
             </CardContent>
           </Card>

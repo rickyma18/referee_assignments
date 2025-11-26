@@ -1,7 +1,7 @@
 // =====================================
 // src/navigation/sidebar/sidebar-items.ts
 // =====================================
-import { CalendarCheck, Layers, CalendarDays, UserRound } from "lucide-react"; // 👈 añade UserRound
+import { CalendarCheck, Layers, CalendarDays, UserRound } from "lucide-react";
 import { FaFutbol } from "react-icons/fa";
 
 import type { UserRole } from "@/types/roles";
@@ -14,7 +14,7 @@ export type SidebarItem = {
   requiredRoles?: UserRole[];
   newTab?: boolean;
   comingSoon?: boolean;
-  dynamic?: "groupsByLeague" | "matchdaysByGroup" | "teamsByGroup"; // ⬅️ añade esto
+  dynamic?: "groupsByLeague" | "matchdaysByGroup" | "teamsByGroup";
 };
 
 export type NavMainItem = {
@@ -59,7 +59,25 @@ export const sidebarItems: SidebarItem[] = [
         href: "/dashboard/referees/import",
         requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
       },
+
+      {
+        title: "Ajustar RCS (oculto)",
+        href: "/dashboard/referees/rcs",
+        requiredRoles: ["SUPERUSUARIO"],
+      },
+      {
+        title: "Panel reglas internas (RA-XX)",
+        href: "/dashboard/superuser/referees",
+        requiredRoles: ["SUPERUSUARIO"],
+      },
     ],
+  },
+
+  {
+    title: "Tier List Árbitros",
+    href: "/dashboard/referees/tiers",
+    icon: UserRound,
+    requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
   },
 
   {
@@ -77,20 +95,26 @@ export const sidebarItems: SidebarItem[] = [
     href: "/dashboard/leagues",
     icon: Layers,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
-    dynamic: "groupsByLeague", // ⬅️ ya lo tienes
+    dynamic: "groupsByLeague",
   },
   {
     title: "Equipos",
-    href: "/dashboard/leagues", // ⬅️ mejor que apunte a leagues (como pivot)
+    href: "/dashboard/leagues",
     icon: FaFutbol,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE"],
-    dynamic: "teamsByGroup", // ⬅️ marca como dinámico
+    dynamic: "teamsByGroup",
+  },
+  {
+    title: "Tier List Equipos",
+    href: "/dashboard/teams/tiers",
+    icon: FaFutbol,
+    requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
   },
   {
     title: "Jornadas",
     href: "/dashboard/leagues",
     icon: CalendarDays,
     requiredRoles: ["SUPERUSUARIO", "DELEGADO"],
-    dynamic: "matchdaysByGroup", // ⬅️ ya lo tienes
+    dynamic: "matchdaysByGroup",
   },
 ];

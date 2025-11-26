@@ -1,4 +1,5 @@
 // src/types/match.ts
+
 export type MatchStatus = "scheduled" | "played" | "postponed" | "canceled";
 
 export interface MatchDoc {
@@ -18,8 +19,17 @@ export interface MatchDoc {
   kickoff: FirebaseFirestore.Timestamp;
   status: MatchStatus;
 
-  // 🔹 Nuevo (sin UI de selección por ahora)
+  // 🔹 Asesores (ya lo tenías)
   assessors?: string[]; // IDs de referees con canAssess=true
+
+  // 🔹 NUEVO: asignación manual de terna (Historia 5.1)
+  centralRefereeId?: string | null;
+  aa1RefereeId?: string | null;
+  aa2RefereeId?: string | null;
+  // Opcional: nombres cacheados (para mostrar en UI sin más lecturas)
+  centralRefereeName?: string | null;
+  aa1RefereeName?: string | null;
+  aa2RefereeName?: string | null;
 
   source?: string;
   importBatchId?: string;

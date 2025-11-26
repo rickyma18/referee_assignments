@@ -253,10 +253,17 @@ export default function TeamsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* 🔙 Volver a grupos */}
+          <Link href={`/dashboard/leagues/${leagueId}`}>
+            <Button variant="outline">Volver a grupos</Button>
+          </Link>
+
+          {/* Importar CSV/Excel */}
           <Link href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/import`}>
             <Button variant="secondary">Importar CSV/Excel</Button>
           </Link>
 
+          {/* Nuevo equipo */}
           {canEdit && (
             <Link href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/new`}>
               <Button>Nuevo equipo</Button>

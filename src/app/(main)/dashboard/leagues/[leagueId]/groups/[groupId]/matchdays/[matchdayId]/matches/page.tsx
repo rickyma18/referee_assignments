@@ -101,6 +101,45 @@ const assertParam = (name: string, value: unknown): string => {
   return value;
 };
 
+// 🔁 helper para filtrar por estado (según query param `estado`)
+function filterMatchesByEstado(matches: MatchVM[], estado: string): MatchVM[] {
+  const normalized = (estado ?? "").toLowerCase();
+
+  if (!normalized || normalized === "todos") return matches;
+
+  return matches.filter((m) => {
+    const s = (m.status ?? "SCHEDULED").toUpperCase();
+
+    switch (normalized) {
+      case "programados":
+        // Programados = SCHEDULED + POSTPONED (ya no mostramos "Pospuestos", pero los tratamos como programados)
+        return s === "SCHEDULED" || s === "POSTPONED";
+      case "en-juego":
+        return s === "LIVE";
+      case "finalizados":
+        return s === "FINISHED";
+      default:
+        return true;
+    }
+  });
+}
+
+// 🔁 helper para mostrar el estado en español en la tarjeta
+function mapStatusToDisplay(status?: string): string {
+  const s = (status ?? "SCHEDULED").toUpperCase();
+  switch (s) {
+    case "LIVE":
+      return "EN JUEGO";
+    case "FINISHED":
+      return "FINALIZADO";
+    // case "POSTPONED": // ya no queremos mostrar "Pospuesto" como estado
+    //   return "PROGRAMADO";
+    case "SCHEDULED":
+    default:
+      return "PROGRAMADO";
+  }
+}
+
 async function getMatchdayHeader(db: FirebaseFirestore.Firestore, rawParams: Params) {
   const leagueId = assertParam("leagueId", rawParams.leagueId);
   const groupId = assertParam("groupId", rawParams.groupId);
@@ -247,12 +286,22 @@ async function getMatchesWithTeams(rawParams: Params): Promise<MatchVM[]> {
   });
 }
 
-export default async function Page({ params }: { params: Promise<Params> }) {
+// 👇 ahora aceptamos searchParams para leer el filtro `estado`
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<Params>;
+  searchParams: Promise<{ estado?: string }>;
+}) {
   const p = await params;
+  const sp = await searchParams;
 
   if (!p.leagueId || !p.groupId || !p.matchdayId) {
     notFound();
   }
+
+  const estadoFilter = sp?.estado ?? "todos";
 
   const db = getFirestore();
   const header = await getMatchdayHeader(db, p);
@@ -260,6 +309,8 @@ export default async function Page({ params }: { params: Promise<Params> }) {
 
   const { league, group } = await getLeagueAndGroupHeader(db, p);
   const matches = await getMatchesWithTeams(p);
+
+  const filteredMatches = filterMatchesByEstado(matches, estadoFilter);
 
   const backHref = `/dashboard/leagues/${p.leagueId}/groups/${p.groupId}/matchdays`;
   const createHref = `/dashboard/leagues/${p.leagueId}/groups/${p.groupId}/matchdays/${p.matchdayId}/matches/upload`;
@@ -278,7 +329,7 @@ export default async function Page({ params }: { params: Promise<Params> }) {
         }
         colorHex={league?.color ?? null}
         backHref={backHref}
-        backText="Volver a jornada"
+        backText="Volver a jornadas"
         canDelete={false}
         rightExtra={
           <Button asChild>
@@ -292,6 +343,7 @@ export default async function Page({ params }: { params: Promise<Params> }) {
         startDate={header.startDate}
         endDate={header.endDate}
         total={matches.length}
+        estadoActual={estadoFilter}
       />
 
       <Suspense
@@ -303,15 +355,15 @@ export default async function Page({ params }: { params: Promise<Params> }) {
           </div>
         }
       >
-        {matches.length === 0 ? (
+        {filteredMatches.length === 0 ? (
           <div className="text-muted-foreground flex flex-col items-center justify-center gap-4 rounded-xl border p-10">
-            <p>No hay partidos programados en esta jornada.</p>
+            <p>No hay partidos con ese filtro en esta jornada.</p>
             <Button asChild>
               <Link href={createHref}>Añadir partido</Link>
             </Button>
           </div>
         ) : (
-          <MatchesGrid matches={matches} />
+          <MatchesGrid matches={filteredMatches} />
         )}
       </Suspense>
     </div>
@@ -326,7 +378,8 @@ function MatchesGrid({ matches }: { matches: MatchVM[] }) {
           key={m.id}
           id={m.id}
           date={m.dateObj ?? null}
-          status={(m.status ?? "scheduled").toUpperCase()}
+          // 👇 ahora el estado se muestra en español
+          status={mapStatusToDisplay(m.status)}
           stadium={m.stadium ?? m.venueName ?? m.venue ?? m.homeTeam?.stadium ?? null}
           matchNumber={m.matchNumber ?? undefined}
           home={{

@@ -52,6 +52,20 @@ export async function createMatchAction(p: CreateMatchParams) {
     .doc(p.matchdayId)
     .collection("matches");
 
+  // 🔹 Leer municipio desde /teams/{homeTeamId}
+  let municipality: string | null = null;
+  try {
+    const teamSnap = await db.collection("teams").doc(p.homeTeamId).get();
+    if (teamSnap.exists) {
+      const t = teamSnap.data() as any;
+      if (typeof t?.municipality === "string" && t.municipality.trim()) {
+        municipality = t.municipality.trim();
+      }
+    }
+  } catch (err) {
+    console.error("[createMatchAction] Error leyendo municipio de /teams:", err);
+  }
+
   const dup = await coll
     .where("homeTeamId", "==", p.homeTeamId)
     .where("awayTeamId", "==", p.awayTeamId)
@@ -80,6 +94,9 @@ export async function createMatchAction(p: CreateMatchParams) {
     createdBy: p.userId,
     createdAt: now,
     updatedAt: now,
+
+    // 👇 campo que usan las RA_municipios_*
+    municipality,
 
     // 🔹 Nuevo
     assessors,

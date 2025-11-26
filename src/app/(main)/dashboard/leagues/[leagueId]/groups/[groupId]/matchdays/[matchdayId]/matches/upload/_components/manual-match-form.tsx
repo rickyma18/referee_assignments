@@ -96,7 +96,7 @@ export function ManualMatchForm({
       homeTeamId: "",
       awayTeamId: "",
       venueId: "",
-      fecha: startISO ?? "",
+      fecha: startISO || "", // primer día de jornada
       hora: typeof window !== "undefined" ? (localStorage.getItem("lastHour") ?? "") : "",
     };
     if (typeof window === "undefined") return base;
@@ -104,8 +104,8 @@ export function ManualMatchForm({
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return base;
       const saved = JSON.parse(raw) as Partial<FormValues>;
-      // merge, respetando base por si cambió la jornada
-      return { ...base, ...saved };
+      // base pisa a saved, así respetas la jornada nueva
+      return { ...saved, ...base };
     } catch {
       return base;
     }
@@ -119,6 +119,18 @@ export function ManualMatchForm({
   });
 
   const { isSubmitting } = form.formState;
+  // Si hay ventana de jornada y la fecha está vacía, prellenar con el primer día
+  React.useEffect(() => {
+    if (!startISO) return; // si no hay jornada, no hacemos nada
+
+    const currentFecha = form.getValues("fecha");
+    if (!currentFecha) {
+      form.setValue("fecha", startISO, {
+        shouldDirty: false,
+        shouldValidate: true,
+      });
+    }
+  }, [startISO, form]);
 
   // 3) Activa el autosave *después* del primer render (evita que guarde vacíos antes de restaurar)
   const autosaveReadyRef = React.useRef(false);

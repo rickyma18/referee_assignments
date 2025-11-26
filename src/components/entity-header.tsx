@@ -45,7 +45,7 @@ type EntityHeaderProps = {
 
 export function EntityHeader({
   loading = false,
-  logoUrl,
+  logoUrl = "/media/FMF_Logo.png", // 👈 default opcional
   title,
   subtitle,
   colorHex,
@@ -80,10 +80,10 @@ export function EntityHeader({
       <div className="flex items-start justify-between gap-4">
         {/* Izquierda: logo + textos */}
         <div className="flex items-center gap-4">
-          <div className="bg-muted size-14 shrink-0 overflow-hidden rounded-md border">
+          <div className="bg-muted flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border">
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+              <img src={logoUrl} alt="" className="max-h-14 max-w-14 object-contain" referrerPolicy="no-referrer" />
             ) : (
               <div className="text-muted-foreground flex h-full w-full items-center justify-center text-[10px]">
                 Sin logo

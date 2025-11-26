@@ -1,11 +1,15 @@
+// src/server/repositories/referees.repo.ts
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
 import "@/server/admin/firebase-admin";
+import { RefereeTierValues } from "@/domain/referees/referee-tier";
 import { RefereeCreateZ, RefereeUpdateZ, RefereeZ, RefStatus, RefRole } from "@/domain/referees/referee.zod";
 import { toPlain } from "@/lib/serialize"; // 👈 tu helper
 
 const COL = "referees";
 const db = getFirestore();
+
+type RefTier = (typeof RefereeTierValues)[number];
 
 function normalizeNameLc(name: string) {
   return name
@@ -37,7 +41,7 @@ export async function create(input: unknown) {
   }
 
   const payload = {
-    ...data, // incluye canAssess
+    ...data, // incluye canAssess y tier
     name_lc,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -62,7 +66,7 @@ export async function update(input: unknown) {
   }
 
   const patch = {
-    ...rest, // incluye canAssess
+    ...rest, // incluye canAssess y tier
     ...(name_lc ? { name_lc } : {}),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -103,6 +107,15 @@ export async function setStatus(id: string, status: RefStatus) {
   return { ok: true as const };
 }
 
+/**
+ * Cambia solo el tier del árbitro.
+ * Usado por el board de drag & drop.
+ */
+export async function setTier(id: string, tier: RefTier) {
+  await db.collection(COL).doc(id).set({ tier, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { ok: true as const };
+}
+
 export async function list(params: ListParams) {
   const { q, zones = [], roles = [], status, category, limit = 50, startAfterNameLc, canAssessOnly } = params;
 
@@ -137,4 +150,29 @@ export async function list(params: ListParams) {
 export async function listAssessorsSimple(search?: string) {
   const res = await list({ q: search, canAssessOnly: true, limit: 50 });
   return res.items.map((r: any) => ({ id: r.id, name: r.name ?? "—" }));
+}
+
+export async function setRcsOverride(
+  id: string,
+  rcsOverrideCentral: number | null,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const patch: any = {
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    if (rcsOverrideCentral == null) {
+      // Borramos el campo para volver al comportamiento por defecto
+      patch.rcsOverrideCentral = FieldValue.delete();
+    } else {
+      patch.rcsOverrideCentral = rcsOverrideCentral;
+    }
+
+    await db.collection(COL).doc(id).set(patch, { merge: true });
+
+    return { ok: true as const };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error al guardar override de RCS";
+    return { ok: false as const, message: msg };
+  }
 }

@@ -2,6 +2,7 @@
 // src/server/repositories/teams.repo.ts
 // =====================================
 
+import { TeamTierValues } from "@/domain/teams/team-tier";
 import { normTeamName } from "@/domain/teams/team.normalizers";
 import type { Team } from "@/domain/teams/team.types";
 import type { TeamCreateInput, TeamUpdateInput } from "@/domain/teams/team.zod";
@@ -9,6 +10,8 @@ import { toPlain } from "@/lib/serialize";
 import { adminDb, AdminFieldValue } from "@/server/admin/firebase-admin";
 
 const COL = "teams";
+
+type TeamTier = (typeof TeamTierValues)[number];
 
 export type GetByGroupParams = {
   groupId: string;
@@ -110,6 +113,8 @@ export async function create(input: TeamCreateInput) {
     stadium: (input.stadium ?? "").trim(),
     venue: (input.venue ?? "").trim(),
     logoUrl: input.logoUrl ?? null,
+    // 👇 nuevo campo tier (deja que Zod ponga default "REGULARES"
+    tier: (input as any).tier ?? "REGULARES",
     createdAt: nowServer,
     updatedAt: nowServer,
   };
@@ -155,6 +160,8 @@ export async function update(id: string, input: Omit<TeamUpdateInput, "id">) {
     stadium: input.stadium ?? prev.stadium ?? "",
     venue: input.venue ?? prev.venue ?? "",
     logoUrl: input.logoUrl ?? prev.logoUrl ?? null,
+    // 👇 mantener/actualizar tier
+    tier: (input as any).tier ?? prev.tier ?? "REGULARES",
     updatedAt: AdminFieldValue.serverTimestamp(),
   };
 
@@ -170,4 +177,12 @@ export async function update(id: string, input: Omit<TeamUpdateInput, "id">) {
 export async function remove(id: string) {
   await adminDb.collection(COL).doc(id).delete();
   return { id };
+}
+
+/**
+ * Cambia solo el tier del equipo (para el board drag-and-drop).
+ */
+export async function setTier(id: string, tier: TeamTier) {
+  await adminDb.collection(COL).doc(id).set({ tier, updatedAt: AdminFieldValue.serverTimestamp() }, { merge: true });
+  return { ok: true as const };
 }
