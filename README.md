@@ -142,25 +142,24 @@ flowchart TD
 
 ### **1. Clone the repository**
 git clone https://github.com/rickyma18/assigner-tdp.git
-
 2. Install dependencies
+bash
+Copiar código
 npm install
-
 3. Configure Firebase Admin
-
 Set your environment variables:
 
+bash
+Copiar código
 GOOGLE_CLOUD_CREDENTIALS_JSON="{}"
 NEXT_PUBLIC_FIREBASE_CONFIG="{}"
-
 4. Start dev server
+bash
+Copiar código
 npm run dev
-
-
 Your app will run at: http://localhost:3000
 
 🔐 Security
-
 All assignment logic runs on secure server actions
 
 No assignment operations are exposed on the client
@@ -173,7 +172,6 @@ All writes are audited
 
 🛣 Roadmap
 Coming soon:
-
 Assignment history & reports
 
 Difficulty heatmaps (MDS visualization)
@@ -189,7 +187,6 @@ Official mobile companion app
 Full RBAC control panel
 
 ⚽ About
-
 Assigner TDP is developed by SAURIC S.A. de C.V., creators of referee and league-administration systems for Mexican football.
 The platform is designed to increase fairness, transparency, and efficiency in referee assignments across Liga TDP.
 
