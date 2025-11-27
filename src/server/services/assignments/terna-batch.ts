@@ -197,7 +197,15 @@ export async function suggestTernasForMatchesBalanced(
   const results: SuggestedTerna[] = [];
 
   for (const matchParams of matches) {
-    const { leagueId, groupId, matchdayId, matchId, ignoreExistingAssignment, variantSeed } = matchParams;
+    const {
+      leagueId,
+      groupId,
+      matchdayId,
+      matchId,
+      ignoreExistingAssignment,
+      variantSeed,
+      matchData: preloadedMatchData,
+    } = matchParams;
 
     let leagueCfg = leagueCfgCache.get(leagueId);
 
@@ -245,39 +253,46 @@ export async function suggestTernasForMatchesBalanced(
     const centralBaseForLeague = filterLpForTdp(centralCandidates, leagueData);
     const assistantsBaseForLeague = filterLpForTdp(assistantCandidates, leagueData);
 
-    const matchRef = db
-      .collection("leagues")
-      .doc(leagueId)
-      .collection("groups")
-      .doc(groupId)
-      .collection("matchdays")
-      .doc(matchdayId)
-      .collection("matches")
-      .doc(matchId);
+    // 👇 Aquí usamos matchData precargado si viene, o leemos solo si hace falta
+    let matchData: any;
 
-    const matchSnap = await matchRef.get();
-    if (!matchSnap.exists) {
-      results.push({
-        leagueId,
-        groupId,
-        matchdayId,
-        matchId,
-        centralRefereeId: null,
-        aa1RefereeId: null,
-        aa2RefereeId: null,
-        assessorRefereeId: null,
+    if (preloadedMatchData) {
+      matchData = preloadedMatchData;
+    } else {
+      const matchRef = db
+        .collection("leagues")
+        .doc(leagueId)
+        .collection("groups")
+        .doc(groupId)
+        .collection("matchdays")
+        .doc(matchdayId)
+        .collection("matches")
+        .doc(matchId);
 
-        hasSuggestion: false,
-        reason: "MATCH_NOT_FOUND",
-        mds: null,
-        rcsCentral: null,
-        centralTolerance,
-        assistantsTolerance,
-      });
-      continue;
+      const matchSnap = await matchRef.get();
+      if (!matchSnap.exists) {
+        results.push({
+          leagueId,
+          groupId,
+          matchdayId,
+          matchId,
+          centralRefereeId: null,
+          aa1RefereeId: null,
+          aa2RefereeId: null,
+          assessorRefereeId: null,
+
+          hasSuggestion: false,
+          reason: "MATCH_NOT_FOUND",
+          mds: null,
+          rcsCentral: null,
+          centralTolerance,
+          assistantsTolerance,
+        });
+        continue;
+      }
+
+      matchData = matchSnap.data() as any;
     }
-
-    const matchData = matchSnap.data() as any;
 
     // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const alreadyHasAssignment = !!matchData.centralRefereeId || !!matchData.aa1RefereeId || !!matchData.aa2RefereeId;
@@ -330,8 +345,8 @@ export async function suggestTernasForMatchesBalanced(
     const shouldRotate = !isTdp || !!variantSeed;
 
     if (shouldRotate) {
-      eligibleCentrals = rotateArrayByKey(eligibleCentrals, variantKey + "#CENTRAL");
-      eligibleAssistants = rotateArrayByKey(eligibleAssistants, variantKey + "#ASSISTANT");
+      eligibleCentrals = rotateArrayByKey(eligibleCentrals, `${variantKey}#CENTRAL`);
+      eligibleAssistants = rotateArrayByKey(eligibleAssistants, `${variantKey}#ASSISTANT`);
     }
 
     if (eligibleCentrals.length === 0 || eligibleAssistants.length === 0) {
@@ -479,7 +494,7 @@ export async function suggestTernasForMatchesBalanced(
       );
 
       let assessorPoolSorted = sortWithLeaguePriority(assessorPoolFiltered, leagueData);
-      assessorPoolSorted = rotateArrayByKey(assessorPoolSorted, variantKey + "#ASSESSOR");
+      assessorPoolSorted = rotateArrayByKey(assessorPoolSorted, `${variantKey}#ASSESSOR`);
 
       if (assessorPoolSorted.length > 0) {
         const pick = pickWithInternalRulesForSingleRole(
@@ -917,6 +932,7 @@ export async function suggestTernasForMatchday(params: SuggestTernasForMatchdayP
     groupId,
     matchdayId,
     matchId: m.id,
+    matchData: m.data(),
   }));
 
   return suggestTernasForMatchesBalanced(matchParams);

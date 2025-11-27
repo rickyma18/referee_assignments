@@ -58,11 +58,16 @@ export type SuggestedTerna = {
  * - variantSeed: string opcional para variar la rotación de candidatos y así
  *   obtener una “opción alternativa” de terna sin romper el resto de la lógica.
  */
+// src/server/services/assignments/terna-types.ts
+
 export type SuggestTernaForMatchParams = {
   leagueId: string;
   groupId: string;
   matchdayId: string;
   matchId: string;
+
+  /** Opcional: si lo pasas, el motor NO volverá a leer el partido de Firestore */
+  matchData?: any;
 
   /** Si true, se genera sugerencia aunque ya exista terna en Firestore. */
   ignoreExistingAssignment?: boolean;
