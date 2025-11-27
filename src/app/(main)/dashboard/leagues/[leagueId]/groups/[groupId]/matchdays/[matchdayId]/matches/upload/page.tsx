@@ -104,10 +104,7 @@ export default function UploadMatchesPage() {
     matchdayId: string;
   }>();
 
-  const { userDoc, firebaseUser } = useCurrentUser();
-  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
-  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
-  const userId = firebaseUser?.uid ?? "";
+  const { userDoc, firebaseUser, loading: loadingUser } = useCurrentUser();
 
   const [matchdayNumber, setMatchdayNumber] = React.useState<number | null>(null);
   const [mdStart, setMdStart] = React.useState<Date | null>(null);
@@ -117,10 +114,12 @@ export default function UploadMatchesPage() {
   const [group, setGroup] = React.useState<any | null>(null);
   const [metaLoading, setMetaLoading] = React.useState(true);
 
+  const userId = firebaseUser?.uid ?? "";
+
   // cargar metadata (liga, grupo, jornada)
   React.useEffect(() => {
     let mounted = true;
-    console.debug("[UploadMatchesPage] effect mounted"); // ← 1
+    console.debug("[UploadMatchesPage] effect mounted");
 
     (async () => {
       try {
@@ -140,7 +139,7 @@ export default function UploadMatchesPage() {
         console.timeEnd("[UploadMatchesPage] load meta");
         if (!mounted) return;
 
-        console.debug("[UploadMatchesPage] md raw:", md); // ← 2
+        console.debug("[UploadMatchesPage] md raw:", md);
 
         setLeague(lg ?? null);
         setGroup(grp ?? null);
@@ -167,7 +166,7 @@ export default function UploadMatchesPage() {
           setMdEnd(null);
         }
       } catch (err) {
-        console.error("[UploadMatchesPage] meta load error:", err); // ← 3
+        console.error("[UploadMatchesPage] meta load error:", err);
         if (mounted) {
           setLeague(null);
           setGroup(null);
@@ -184,6 +183,22 @@ export default function UploadMatchesPage() {
       mounted = false;
     };
   }, [leagueId, groupId, matchdayId]);
+
+  // 🔄 Loader mientras todavía no tenemos user/rol
+  if (loadingUser) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center gap-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/media/FMF_Logo.png" alt="FMF Logo" className="h-20 w-20 animate-pulse object-contain opacity-90" />
+        <div className="border-muted-foreground size-10 animate-spin rounded-full border-2 border-t-transparent" />
+        <p className="text-muted-foreground text-sm">Verificando permisos…</p>
+      </div>
+    );
+  }
+
+  // Ya con user cargado, ahora sí rol/permisos
+  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
+  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
 
   if (!canEdit) {
     return (
@@ -253,7 +268,7 @@ export default function UploadMatchesPage() {
               )}
             </p>
 
-            {/* Ventana de jornada (en un div separado para evitar <div> dentro de <p>) */}
+            {/* Ventana de jornada */}
             <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs" title={exactTooltip}>
               <CalendarDays className="size-4" aria-hidden="true" />
               <span className="font-medium">Ventana:</span>

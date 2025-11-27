@@ -30,9 +30,9 @@ type LeagueUI = {
 
 export default function EditGroupPage() {
   const { leagueId, groupId } = useParams<{ leagueId: string; groupId: string }>();
-  const { userDoc } = useCurrentUser();
-  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
-  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
+
+  // 👤 Usuario + loading de auth
+  const { userDoc, loading: loadingUser } = useCurrentUser();
 
   const [league, setLeague] = useState<LeagueUI | null>(null);
   const [loadingLeague, setLoadingLeague] = useState(true);
@@ -81,8 +81,25 @@ export default function EditGroupPage() {
     })();
   }, [leagueId, groupId]);
 
-  if (loadingLeague || loadingGroup) return <div className="p-6">Cargando…</div>;
+  // 🔄 Loader mientras:
+  // - no tenemos usuario/rol
+  // - o seguimos cargando liga/grupo
+  if (loadingUser || loadingLeague || loadingGroup) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center gap-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/media/FMF_Logo.png" alt="FMF Logo" className="h-20 w-20 animate-pulse object-contain opacity-90" />
+        <div className="border-muted-foreground size-10 animate-spin rounded-full border-2 border-t-transparent" />
+        <p className="text-muted-foreground text-sm">Verificando permisos…</p>
+      </div>
+    );
+  }
+
   if (!initial) return <div className="p-6">No encontrado</div>;
+
+  // Ya con usuario cargado, ahora sí calculamos rol y permisos
+  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
+  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
 
   // 🔒 Gate de UI
   if (!canEdit) {
@@ -110,7 +127,7 @@ export default function EditGroupPage() {
               />
             ) : (
               <div className="text-muted-foreground flex h-full w-full items-center justify-center text-[10px]">
-                {loadingLeague ? "Cargando…" : "Sin logo"}
+                {"Sin logo"}
               </div>
             )}
           </div>

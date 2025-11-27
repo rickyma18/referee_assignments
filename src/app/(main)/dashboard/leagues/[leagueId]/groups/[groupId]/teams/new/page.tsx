@@ -1,3 +1,4 @@
+// src/app/(main)/dashboard/leagues/[leagueId]/groups/[groupId]/teams/new/page.tsx
 "use client";
 
 import * as React from "react";
@@ -31,10 +32,7 @@ type GroupUI = {
 };
 
 export default function NewTeamPage() {
-  const { userDoc } = useCurrentUser();
-  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
-  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
-
+  const { userDoc, loading } = useCurrentUser();
   const { leagueId, groupId } = useParams<{ leagueId: string; groupId: string }>();
 
   const [league, setLeague] = React.useState<LeagueUI | null>(null);
@@ -43,7 +41,10 @@ export default function NewTeamPage() {
   const [group, setGroup] = React.useState<GroupUI | null>(null);
   const [loadingGroup, setLoadingGroup] = React.useState(true);
 
-  // Cargar liga
+  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
+  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
+
+  // 🔁 Cargar liga
   React.useEffect(() => {
     (async () => {
       if (!leagueId) return;
@@ -73,7 +74,7 @@ export default function NewTeamPage() {
     })();
   }, [leagueId]);
 
-  // Cargar grupo (usa firma leagueId + id)
+  // 🔁 Cargar grupo
   React.useEffect(() => {
     (async () => {
       if (!leagueId || !groupId) return;
@@ -97,6 +98,19 @@ export default function NewTeamPage() {
       }
     })();
   }, [leagueId, groupId]);
+
+  // ⬇️ A partir de aquí ya NO hay hooks, sólo lógica condicional
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center gap-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/media/FMF_Logo.png" alt="FMF Logo" className="h-20 w-20 animate-pulse object-contain opacity-90" />
+        <div className="border-muted-foreground size-10 animate-spin rounded-full border-2 border-t-transparent" />
+        <p className="text-muted-foreground text-sm">Verificando permisos…</p>
+      </div>
+    );
+  }
 
   if (!canEdit) {
     return (

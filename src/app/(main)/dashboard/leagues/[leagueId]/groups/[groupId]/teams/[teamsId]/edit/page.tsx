@@ -31,12 +31,7 @@ type LeagueUI = {
 type GroupUI = { id: string; name: string; season?: string | null };
 
 export default function EditTeamPage() {
-  const { userDoc } = useCurrentUser();
-
-  // loading state del user: undefined => cargando
-  const userLoading = userDoc === undefined;
-  const role = (userDoc?.role ?? (userLoading ? undefined : "DESCONOCIDO")) as string | undefined;
-  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
+  const { userDoc, loading: loadingUser } = useCurrentUser();
 
   const params = useParams();
   const pathname = usePathname();
@@ -97,7 +92,11 @@ export default function EditTeamPage() {
   // liga
   useEffect(() => {
     (async () => {
-      if (!leagueId) return;
+      if (!leagueId) {
+        setLeague(null);
+        setLoadingLeague(false);
+        return;
+      }
       try {
         setLoadingLeague(true);
         const lg = await getLeagueAction(String(leagueId));
@@ -126,7 +125,11 @@ export default function EditTeamPage() {
   // grupo
   useEffect(() => {
     (async () => {
-      if (!leagueId || !groupId) return;
+      if (!leagueId || !groupId) {
+        setGroup(null);
+        setLoadingGroup(false);
+        return;
+      }
       try {
         setLoadingGroup(true);
         const g = await getGroupAction(String(leagueId), String(groupId));
@@ -201,25 +204,25 @@ export default function EditTeamPage() {
     })();
   }, [leagueId, groupId, teamId]);
 
-  // permisos: no bloquees mientras carga el user
-  if (userLoading) {
+  // 🔄 Loader global mientras:
+  // - no tenemos usuario/rol
+  // - o seguimos cargando liga / grupo / equipo
+  if (loadingUser || loadingLeague || loadingGroup || loadingTeam) {
     return (
-      <div className="space-y-6 p-6">
-        <div className="flex items-center gap-4">
-          <div className="bg-muted size-16 animate-pulse rounded-md border" />
-          <div className="space-y-2">
-            <div className="bg-muted h-6 w-56 animate-pulse rounded" />
-            <div className="bg-muted h-4 w-72 animate-pulse rounded" />
-          </div>
-        </div>
-        <Separator />
-        <div className="bg-muted h-4 w-64 animate-pulse rounded" />
-        <div className="bg-muted h-4 w-64 animate-pulse rounded" />
-        <div className="bg-muted h-4 w-64 animate-pulse rounded" />
+      <div className="flex h-screen w-full flex-col items-center justify-center gap-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/media/FMF_Logo.png" alt="FMF Logo" className="h-20 w-20 animate-pulse object-contain opacity-90" />
+        <div className="border-muted-foreground size-10 animate-spin rounded-full border-2 border-t-transparent" />
+        <p className="text-muted-foreground text-sm">Verificando permisos…</p>
       </div>
     );
   }
 
+  // Ya con user cargado, ahora sí calculamos rol/permisos
+  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
+  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
+
+  // 🔒 Gate de permisos
   if (!canEdit) {
     return (
       <div className="space-y-2 p-6">
@@ -244,23 +247,16 @@ export default function EditTeamPage() {
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-xs opacity-50">
-                {loadingTeam ? "Cargando…" : "Sin logo"}
-              </div>
+              <div className="flex h-full w-full items-center justify-center text-xs opacity-50">{"Sin logo"}</div>
             )}
           </div>
 
           <div>
             <h1 className="text-xl leading-tight font-semibold">Editar equipo</h1>
             <p className="text-muted-foreground text-sm">
-              {" "}
-              <span className="font-medium">
-                {league?.name ?? (loadingLeague ? "Cargando…" : String(leagueId ?? "(?)"))}
-              </span>{" "}
-              ({league?.season ?? ""}) ·{" "}
-              <span className="font-medium">
-                {loadingGroup ? "Cargando…" : (group?.name ?? String(groupId ?? "(?)"))}
-              </span>
+              <span className="font-medium">{league?.name ?? String(leagueId ?? "(?)")}</span>{" "}
+              {league?.season ? `(${league.season})` : ""} ·{" "}
+              <span className="font-medium">{group?.name ?? String(groupId ?? "(?)")}</span>
             </p>
           </div>
         </div>
@@ -288,9 +284,7 @@ export default function EditTeamPage() {
       <Separator />
 
       {/* Form */}
-      {loadingTeam ? (
-        <p className="text-muted-foreground text-sm">Cargando…</p>
-      ) : initial ? (
+      {initial ? (
         <TeamForm initial={initial} />
       ) : (
         <p className="text-muted-foreground text-sm">No se encontró el equipo.</p>

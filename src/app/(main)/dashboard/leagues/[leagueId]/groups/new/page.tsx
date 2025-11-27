@@ -4,7 +4,6 @@
 "use client";
 
 import * as React from "react";
-import { useEffect, useState } from "react";
 
 import { useParams } from "next/navigation";
 
@@ -29,20 +28,24 @@ type LeagueUI = {
 
 export default function NewGroupPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
-  const { userDoc } = useCurrentUser();
+  const { userDoc, loading } = useCurrentUser();
+
+  const [league, setLeague] = React.useState<LeagueUI | null>(null);
+  const [loadingLeague, setLoadingLeague] = React.useState(true);
+
   const role = (userDoc?.role ?? "DESCONOCIDO") as string;
   const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
 
-  const [league, setLeague] = useState<LeagueUI | null>(null);
-  const [loadingLeague, setLoadingLeague] = useState(true);
-
   // Carga liga
-  useEffect(() => {
+  React.useEffect(() => {
     (async () => {
       try {
         setLoadingLeague(true);
         const lg = await getLeagueAction(String(leagueId));
-        if (!lg) return setLeague(null);
+        if (!lg) {
+          setLeague(null);
+          return;
+        }
         setLeague({
           id: String(lg.id),
           name: String(lg.name ?? ""),
@@ -60,6 +63,19 @@ export default function NewGroupPage() {
       }
     })();
   }, [leagueId]);
+
+  // ⬇️ A partir de aquí, ya NO hay hooks, sólo returns condicionales
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center gap-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/media/FMF_Logo.png" alt="FMF Logo" className="h-20 w-20 animate-pulse object-contain opacity-90" />
+        <div className="border-muted-foreground size-10 animate-spin rounded-full border-2 border-t-transparent" />
+        <p className="text-muted-foreground text-sm">Verificando permisos…</p>
+      </div>
+    );
+  }
 
   if (!canEdit) {
     return (
