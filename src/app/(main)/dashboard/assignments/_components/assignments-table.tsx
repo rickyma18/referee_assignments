@@ -175,17 +175,14 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       rows = rows.filter((m) => [m.central, m.aa1, m.aa2, m.fourth, m.assessor].some((rid) => rid === filterRefereeId));
     }
 
-    // 🧭 comportamiento especial:
-    // - Si NO hay rango de fechas → solo partidos desde hoy (próximos)
-    // - Si SÍ hay rango → usamos únicamente ese rango (puede incluir pasados)
+    // 🧭 rango de fechas / próximos
     const today = new Date();
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
     if (isRangeActive) {
-      // 📅 filtro por rango de fechas explícito
       rows = rows.filter((m) => {
         const d = getMatchDate(m);
-        if (!d) return true; // si no hay fecha, no lo sacamos del listado
+        if (!d) return true;
 
         const time = d.getTime();
 
@@ -200,7 +197,6 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
         return true;
       });
     } else {
-      // 👀 Vista general: solo próximos
       rows = rows.filter((m) => {
         const d = getMatchDate(m);
         if (!d) return true;
@@ -208,7 +204,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       });
     }
 
-    // 🔍 búsqueda global (equipo, liga, árbitros)
+    // 🔍 búsqueda global
     if (globalSearch.trim().length > 0) {
       const q = globalSearch.trim().toLowerCase();
       rows = rows.filter((m) => {
@@ -230,7 +226,19 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       });
     }
 
-    return rows;
+    // 🧊 ORDEN POR FECHA (ASC o DESC, como quieras)
+    const sorted = [...rows].sort((a, b) => {
+      const da = getMatchDate(a)?.getTime() ?? 0;
+      const db = getMatchDate(b)?.getTime() ?? 0;
+
+      // ✅ Ascendente (más viejo → más nuevo):
+      return da - db;
+
+      // Si quieres descendente (más nuevo → más cercano al final):
+      // return db - da;
+    });
+
+    return sorted;
   }, [
     rowData,
     filterLeagueId,
