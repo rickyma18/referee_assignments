@@ -208,20 +208,12 @@ export function SearchDialog() {
     // Mi trabajo (para árbitros)
     // -----------------------------
     if (isReferee) {
-      entries.push(
-        {
-          group: "Mi trabajo",
-          icon: GiWhistle,
-          label: "Mis designaciones",
-          href: "/dashboard/assignments",
-        },
-        {
-          group: "Mi trabajo",
-          icon: CalendarDays,
-          label: "Mi calendario",
-          href: "/dashboard/my-calendar",
-        },
-      );
+      entries.push({
+        group: "Mi trabajo",
+        icon: GiWhistle,
+        label: "Mis designaciones",
+        href: "/dashboard/assignments",
+      });
     }
 
     // -----------------------------
@@ -232,7 +224,7 @@ export function SearchDialog() {
         group: "Utilidades",
         icon: UserCircle2,
         label: "Mi perfil",
-        href: "/dahboard/account",
+        href: "/dashboard/account",
       },
       {
         group: "Utilidades",
