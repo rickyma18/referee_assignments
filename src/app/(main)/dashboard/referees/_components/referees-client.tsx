@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 import { RefStatusCell } from "./referee-status-cell";
 
@@ -47,6 +48,11 @@ export function RefereesClient({
 
   const router = useRouter();
   const params = useSearchParams();
+
+  // 👤 Rol del usuario
+  const { userDoc } = useCurrentUser();
+  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
+  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO" || role === "ASISTENTE";
 
   // 📌 Lee valores desde la URL
   const qParam = params.get("q") ?? "";
@@ -139,6 +145,20 @@ export function RefereesClient({
                 : st === "LESIONADO"
                   ? "bg-rose-500"
                   : "bg-muted";
+
+          const label = st || "Sin estado";
+
+          // ARBITRO (sin permisos): solo ve el texto, sin dropdown editable
+          if (!canEdit) {
+            return (
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex h-2 w-2 rounded-full ${dot}`} />
+                <span className="text-sm">{label}</span>
+              </div>
+            );
+          }
+
+          // Roles con permisos: usan RefStatusCell editable
           return (
             <div className="flex items-center gap-2">
               <span className={`inline-flex h-2 w-2 rounded-full ${dot}`} />
@@ -150,10 +170,10 @@ export function RefereesClient({
       {
         header: () => <div className="pr-2 text-right">Acciones</div>,
         id: "actions",
-        cell: ({ row }) => <ActionsCell row={row} deleteAction={deleteAction} />,
+        cell: ({ row }) => <ActionsCell row={row} deleteAction={deleteAction} canEdit={canEdit} />,
       },
     ],
-    [deleteAction, setStatusAction],
+    [deleteAction, setStatusAction, canEdit],
   );
 
   // ➗ Partición: árbitros vs asesores
@@ -177,14 +197,16 @@ export function RefereesClient({
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Árbitros y asesores</h1>
-        <div className="flex gap-2">
-          <Button asChild variant="outline" className="h-9">
-            <Link href="/dashboard/referees/import">Importar Excel</Link>
-          </Button>
-          <Button asChild className="h-9">
-            <Link href="/dashboard/referees/new">Nuevo árbitro</Link>
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-2">
+            <Button asChild variant="outline" className="h-9">
+              <Link href="/dashboard/referees/import">Importar Excel</Link>
+            </Button>
+            <Button asChild className="h-9">
+              <Link href="/dashboard/referees/new">Nuevo árbitro</Link>
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Filtros (sticky) */}
@@ -231,9 +253,11 @@ export function RefereesClient({
         title={`Asesores (${refs.asesores.length})`}
         subtitle="Evaluación y mentoría"
         right={
-          <Button asChild variant="secondary" className="h-9">
-            <Link href="/dashboard/referees/new?canAssess=1">Nuevo asesor</Link>
-          </Button>
+          canEdit ? (
+            <Button asChild variant="secondary" className="h-9">
+              <Link href="/dashboard/referees/new?canAssess=1">Nuevo asesor</Link>
+            </Button>
+          ) : undefined
         }
       />
       <div className="overflow-hidden rounded-md border">
@@ -324,8 +348,21 @@ function DebouncedSearch({
   );
 }
 
-function ActionsCell({ row, deleteAction }: { row: any; deleteAction: (formData: FormData) => Promise<void> }) {
+function ActionsCell({
+  row,
+  deleteAction,
+  canEdit,
+}: {
+  row: any;
+  deleteAction: (formData: FormData) => Promise<void>;
+  canEdit: boolean;
+}) {
   const id = row.original.id as string;
+
+  // ARBITRO / sin permisos: no hay botones
+  if (!canEdit) {
+    return <div className="text-muted-foreground pr-2 text-right text-xs">—</div>;
+  }
 
   return (
     <div className="flex w-full justify-end gap-1 pr-2">

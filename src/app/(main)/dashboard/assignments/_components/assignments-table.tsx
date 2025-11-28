@@ -1,7 +1,5 @@
 "use client";
 
-// src/app/(main)/dashboard/assignments/_components/assignments-table.tsx
-
 import * as React from "react";
 import { useTransition, useMemo, useState, useEffect, useCallback } from "react";
 
@@ -26,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { suggestAssignmentsForMatchesAction } from "@/server/actions/assignments-suggestions.actions";
 import { confirmSuggestedAssignmentsAction } from "@/server/actions/assignments.actions";
 
@@ -43,6 +42,18 @@ import {
 export function AssignmentsTable({ leagues, groups, matches, referees }: AssignmentsTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  // Info del usuario
+  const { userDoc } = useCurrentUser();
+
+  // Mientras no tengamos rol, consideramos que sigue "cargando"
+  const resolvedRole = (userDoc?.role as string | undefined) ?? null;
+  const isRoleLoading = !resolvedRole;
+
+  const role = resolvedRole ?? "DESCONOCIDO";
+
+  const isRefereeView = role === "ARBITRO";
+  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO" || role === "ASISTENTE";
 
   const [filterLeagueId, setFilterLeagueId] = useState<string>("all");
   const [filterGroupId, setFilterGroupId] = useState<string>("all");
@@ -170,8 +181,8 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       rows = rows.filter((m) => m.groupId === filterGroupId);
     }
 
-    // 🎯 filtro por árbitro (en cualquier posición de la terna)
-    if (filterRefereeId !== "all") {
+    // 🎯 filtro por árbitro (en cualquier posición de la terna) — solo para vista normal
+    if (!isRefereeView && filterRefereeId !== "all") {
       rows = rows.filter((m) => [m.central, m.aa1, m.aa2, m.fourth, m.assessor].some((rid) => rid === filterRefereeId));
     }
 
@@ -226,19 +237,20 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       });
     }
 
-    // 🧊 ORDEN POR FECHA (ASC o DESC, como quieras)
+    // 🧊 ORDEN POR FECHA (ascendente)
     const sorted = [...rows].sort((a, b) => {
       const da = getMatchDate(a)?.getTime() ?? 0;
       const db = getMatchDate(b)?.getTime() ?? 0;
-
-      // ✅ Ascendente (más viejo → más nuevo):
       return da - db;
-
-      // Si quieres descendente (más nuevo → más cercano al final):
-      // return db - da;
     });
 
-    return sorted;
+    // Vista ARBITRO: solo partidos con terna CONFIRMADA en Firestore
+    // (centralRefereeId, aa1RefereeId y aa2RefereeId con valor)
+    const finalRows = isRefereeView
+      ? sorted.filter((m) => Boolean(m.centralRefereeId && m.aa1RefereeId && m.aa2RefereeId))
+      : sorted;
+
+    return finalRows;
   }, [
     rowData,
     filterLeagueId,
@@ -251,6 +263,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     getMatchDate,
     getRefDisplay,
     isRangeActive,
+    isRefereeView,
   ]);
 
   const leagueOptions = useMemo(() => [{ id: "all", name: "Todas las ligas" }, ...leagues], [leagues]);
@@ -262,7 +275,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
   /* ---------- Columnas TanStack ---------- */
 
-  const columns = useMemo(() => createAssignmentsColumns(), []);
+  const columns = useMemo(() => createAssignmentsColumns(canEdit), [canEdit]);
 
   /* ---------- Instancia TanStack table ---------- */
   const table = useReactTable<AssignmentRowState>({
@@ -279,6 +292,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     meta: {
       referees,
       isPendingGlobal: isPending,
+      canEdit,
       updateRow: (id, updater) =>
         setRowData((prev) =>
           prev.map((row) => {
@@ -296,86 +310,93 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
   /* ---------- Motor de sugerencias (normal + recalcular) ---------- */
 
-  const runSuggestions = useCallback(async (targetRows: AssignmentRowState[], mode: "fill-missing" | "recalc-all") => {
-    try {
-      setIsGeneratingSuggestions(true);
+  const runSuggestions = useCallback(
+    async (targetRows: AssignmentRowState[], mode: "fill-missing" | "recalc-all") => {
+      if (!canEdit) return; // seguridad extra
 
-      const seedBase = Date.now().toString();
+      try {
+        setIsGeneratingSuggestions(true);
 
-      const payload = {
-        matches: targetRows.map((m, idx) => ({
-          leagueId: m.leagueId,
-          groupId: m.groupId,
-          matchdayId: m.matchdayId,
-          matchId: m.id,
+        const seedBase = Date.now().toString();
 
-          ignoreExistingAssignment: mode === "recalc-all" ? true : undefined,
+        const payload = {
+          matches: targetRows.map((m, idx) => ({
+            leagueId: m.leagueId,
+            groupId: m.groupId,
+            matchdayId: m.matchdayId,
+            matchId: m.id,
 
-          // 🔥 ahora SIEMPRE mandamos variantSeed, solo cambiamos el "prefijo" para que sepas de dónde viene
-          variantSeed: `${mode}-${seedBase}-${idx}`,
-        })),
-      };
+            ignoreExistingAssignment: mode === "recalc-all" ? true : undefined,
 
-      const res = await suggestAssignmentsForMatchesAction(payload);
+            // ahora SIEMPRE mandamos variantSeed
+            variantSeed: `${mode}-${seedBase}-${idx}`,
+          })),
+        };
 
-      if (!res.ok) {
-        toast.error(res.message ?? "No se pudieron generar las ternas sugeridas.");
-        return;
-      }
+        const res = await suggestAssignmentsForMatchesAction(payload);
 
-      const suggestions = res.data ?? [];
+        if (!res.ok) {
+          toast.error(res.message ?? "No se pudieron generar las ternas sugeridas.");
+          return;
+        }
 
-      if (suggestions.length === 0) {
-        toast.info("No se generaron sugerencias para los partidos seleccionados.");
-        return;
-      }
+        const suggestions = res.data ?? [];
 
-      const byMatchId = new Map<string, (typeof suggestions)[number]>();
-      for (const s of suggestions) {
-        byMatchId.set(s.matchId, s);
-      }
+        if (suggestions.length === 0) {
+          toast.info("No se generaron sugerencias para los partidos seleccionados.");
+          return;
+        }
 
-      setRowData((prev) =>
-        prev.map((row) => {
-          const sug = byMatchId.get(row.id);
-          if (!sug || !sug.hasSuggestion) return row;
+        const byMatchId = new Map<string, (typeof suggestions)[number]>();
+        for (const s of suggestions) {
+          byMatchId.set(s.matchId, s);
+        }
 
-          // Modo normal: solo rellenar vacíos
-          // Modo recalcular: sobreescribir lo que haya en pantalla
-          if (mode !== "recalc-all" && (row.central || row.aa1 || row.aa2)) {
-            return row;
-          }
+        setRowData((prev) =>
+          prev.map((row) => {
+            const sug = byMatchId.get(row.id);
+            if (!sug || !sug.hasSuggestion) return row;
 
-          return {
-            ...row,
-            central: sug.centralRefereeId ?? row.central,
-            aa1: sug.aa1RefereeId ?? row.aa1,
-            aa2: sug.aa2RefereeId ?? row.aa2,
-            assessor: sug.assessorRefereeId ?? row.assessor,
-          };
-        }),
-      );
+            // Modo normal: solo rellenar vacíos
+            // Modo recalcular: sobreescribir lo que haya en pantalla
+            if (mode !== "recalc-all" && (row.central || row.aa1 || row.aa2)) {
+              return row;
+            }
 
-      if (mode === "recalc-all") {
-        toast.success(
-          "Se recalcularon ternas sugeridas para los partidos de la vista actual. Revisa y guarda las que necesites.",
+            return {
+              ...row,
+              central: sug.centralRefereeId ?? row.central,
+              aa1: sug.aa1RefereeId ?? row.aa1,
+              aa2: sug.aa2RefereeId ?? row.aa2,
+              assessor: sug.assessorRefereeId ?? row.assessor,
+            };
+          }),
         );
-      } else {
-        toast.success("Ternas sugeridas generadas para los partidos sin terna. Revisa y guarda las que necesites.");
+
+        if (mode === "recalc-all") {
+          toast.success(
+            "Se recalcularon ternas sugeridas para los partidos de la vista actual. Revisa y guarda las que necesites.",
+          );
+        } else {
+          toast.success("Ternas sugeridas generadas para los partidos sin terna. Revisa y guarda las que necesites.");
+        }
+      } catch (err: any) {
+        console.error(err);
+        toast.error(err?.message ?? "Error al generar ternas sugeridas.");
+      } finally {
+        setIsGeneratingSuggestions(false);
       }
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err?.message ?? "Error al generar ternas sugeridas.");
-    } finally {
-      setIsGeneratingSuggestions(false);
-    }
-  }, []);
+    },
+    [canEdit],
+  );
 
   /* ---------- Generar ternas sugeridas ---------- */
 
   const [hasGeneratedOnce, setHasGeneratedOnce] = useState(false);
 
   const handleGenerateSuggestions = useCallback(async () => {
+    if (!canEdit) return;
+
     const coreRows = table.getPrePaginationRowModel().rows;
     const rows = coreRows.map((r) => r.original);
 
@@ -396,22 +417,26 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
     // A partir de aquí siempre mostramos el diálogo de recalcular
     setIsRecalcDialogOpen(true);
-  }, [table, runSuggestions, hasGeneratedOnce]);
+  }, [table, runSuggestions, hasGeneratedOnce, canEdit]);
 
   /* ---------- Confirmar recalcular (diálogo) ---------- */
 
   const handleConfirmRecalc = useCallback(async () => {
+    if (!canEdit) return;
+
     setIsRecalcDialogOpen(false);
 
     const coreRows = table.getPrePaginationRowModel().rows;
     const rows = coreRows.map((r) => r.original);
 
     await runSuggestions(rows, "recalc-all");
-  }, [table, runSuggestions]);
+  }, [table, runSuggestions, canEdit]);
 
   /* ---------- Confirmar todas las ternas (sugeridas / editadas) ---------- */
 
   const handleConfirmAll = useCallback(async () => {
+    if (!canEdit) return;
+
     try {
       setIsConfirmingAll(true);
 
@@ -478,7 +503,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     } finally {
       setIsConfirmingAll(false);
     }
-  }, [table, getRefDisplay, startTransition, router]);
+  }, [table, getRefDisplay, startTransition, router, canEdit]);
 
   /* ---------- Exportar a Excel ---------- */
 
@@ -523,6 +548,26 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     setFilterTo("");
     setGlobalSearch("");
   }, []);
+
+  /* ---------- LOADING DE ROL: evitamos el parpadeo ---------- */
+
+  if (isRoleLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-card flex flex-wrap items-center gap-3 rounded-lg border px-3 py-3 md:px-4">
+          <div className="text-muted-foreground text-sm">Cargando designaciones…</div>
+        </div>
+        <div className="bg-card rounded-lg border">
+          <div className="space-y-3 p-4">
+            <div className="bg-muted h-8 w-40 animate-pulse rounded-md" />
+            <div className="bg-muted h-[320px] w-full animate-pulse rounded-md" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------- RENDER NORMAL ---------- */
 
   return (
     <div className="space-y-4">
@@ -611,23 +656,32 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
             {isRangeActive ? "Partidos (vista por rango de fechas)" : "Partidos próximos por asignar"}
           </div>
           <div className="flex-1" />
-          <Button
-            size="sm"
-            variant="default"
-            onClick={handleGenerateSuggestions}
-            disabled={isGeneratingSuggestions || isPending}
-          >
-            <Sparkles className="mr-2 h-4 w-4" />
-            {isGeneratingSuggestions ? "Generando…" : "Generar ternas sugeridas"}
-          </Button>
-          <Button size="sm" variant="secondary" onClick={handleConfirmAll} disabled={isConfirmingAll || isPending}>
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            {isConfirmingAll ? "Confirmando…" : "Confirmar todas las ternas"}
-          </Button>
+
+          {/* Acciones de edición solo para roles con permiso */}
+          {canEdit && (
+            <>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={handleGenerateSuggestions}
+                disabled={isGeneratingSuggestions || isPending}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                {isGeneratingSuggestions ? "Generando…" : "Generar ternas sugeridas"}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={handleConfirmAll} disabled={isConfirmingAll || isPending}>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                {isConfirmingAll ? "Confirmando…" : "Confirmar todas las ternas"}
+              </Button>
+            </>
+          )}
+
+          {/* Exportar lo puedes dejar visible o también limitar, como prefieras */}
           <Button size="sm" variant="outline" onClick={handleExport}>
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Exportar Excel
           </Button>
+
           <DataTableViewOptions table={table} />
         </div>
 
@@ -639,6 +693,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
           <DataTablePagination table={table} />
         </div>
       </div>
+
       <Dialog open={isRecalcDialogOpen} onOpenChange={setIsRecalcDialogOpen}>
         <DialogContent>
           <DialogHeader>

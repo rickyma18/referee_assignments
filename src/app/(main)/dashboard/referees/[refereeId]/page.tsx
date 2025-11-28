@@ -1,9 +1,7 @@
-// src/app/(main)/dashboard/referees/[refereeId]/page.tsx
-
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { CalendarDays, ArrowLeft, Pencil, Mail, Phone, MapPin, ShieldCheck, Flag } from "lucide-react";
+import { CalendarDays, ArrowLeft, Mail, Phone, MapPin, ShieldCheck, Flag } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { getRefereeAction } from "@/server/actions/referees.actions";
 import { getRefereeAssignmentsSummary } from "@/server/services/referees/referee-assignments-summary";
 
+import { RefereeHeaderActions } from "../_components/referee-header-actions";
 import { RefStatusBadge } from "../_components/referee-status";
 
 export const dynamic = "force-dynamic";
@@ -118,17 +117,8 @@ export default async function RefereeProfilePage({ params }: { params: Promise<P
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/dashboard/referees">Ver listado</Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link href={`/dashboard/referees/${refereeId}/edit`}>
-              <Pencil className="mr-2 h-4 w-4" />
-              Editar árbitro
-            </Link>
-          </Button>
-        </div>
+        {/* 👉 Acciones dependiendo del rol (editar solo para roles con permiso) */}
+        <RefereeHeaderActions refereeId={refereeId} />
       </div>
 
       {/* Layout principal */}

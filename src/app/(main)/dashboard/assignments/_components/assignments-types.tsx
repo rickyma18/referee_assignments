@@ -53,6 +53,7 @@ export type AssignmentRowState = AssignmentMatchRow & {
 export type AssignmentTableMeta = {
   referees: RefereeOption[];
   isPendingGlobal: boolean;
+  canEdit: boolean; // 👈 clave para bloquear edición a ARBITRO
   updateRow: (id: string, updater: (prev: AssignmentRowState) => AssignmentRowState) => void;
   onSaved: () => void;
 };

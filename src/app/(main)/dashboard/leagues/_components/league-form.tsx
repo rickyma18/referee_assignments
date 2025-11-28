@@ -54,7 +54,7 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
     defaultValues: {
       name: initial?.name ?? "",
       season: initial?.season ?? "",
-      color: initial?.color ?? "#232730ff",
+      color: initial?.color ?? "#232730FF",
       status: initial?.status ?? "ACTIVE",
       region: initial?.region ?? "",
       startDate: initial?.startDate ? new Date(initial.startDate) : undefined,
