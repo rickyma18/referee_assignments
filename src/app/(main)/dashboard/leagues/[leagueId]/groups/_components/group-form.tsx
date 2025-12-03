@@ -40,7 +40,7 @@ export function GroupForm({ leagueId, initial }: { leagueId: string; initial?: I
         await updateGroupAction(parsed);
         toast.success("Grupo actualizado");
       }
-      router.push(`/dashboard/leagues/${leagueId}/groups`);
+      router.push(`/dashboard/leagues/${leagueId}`);
     } catch (err: any) {
       toast.error(err?.message ?? "Error al guardar");
     } finally {

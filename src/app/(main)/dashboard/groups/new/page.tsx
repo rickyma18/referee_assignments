@@ -41,7 +41,7 @@ export default function NewGroupPage() {
       ) : (
         <div className="space-y-2 p-6">
           <p className="text-sm">No tienes permisos para crear grupos.</p>
-          <Link className="text-sm underline" href={`/dashboard/leagues/${leagueId}/groups`}>
+          <Link className="text-sm underline" href={`/dashboard/leagues/${leagueId}`}>
             Volver
           </Link>
         </div>
