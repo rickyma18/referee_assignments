@@ -18,15 +18,47 @@ import { MdAssignment, MdSportsSoccer } from "react-icons/md";
 
 import type { UserRole } from "@/types/roles";
 
+/**
+ * Config base del sidebar.
+ * Esto es lo que usas como "fuente de la verdad" para el menú.
+ */
 export type SidebarItem = {
   title: string;
-  href?: string;
+  href?: string; // ruta base en config
+  url?: string; // compat (por si en algún lado usan .url)
   icon?: any;
-  children?: SidebarItem[];
+  children?: SidebarItem[]; // subitems en config
+  subItems?: SidebarItem[]; // compat (por si algo usa .subItems)
   requiredRoles?: UserRole[];
   newTab?: boolean;
   comingSoon?: boolean;
   dynamic?: "groupsByLeague" | "matchdaysByGroup" | "teamsByGroup";
+};
+
+/**
+ * View-model que usa NavMain ya "normalizado"
+ * - url: string (obligatorio)
+ * - subItems: NavMainItem[] (opcional)
+ */
+export type NavMainItem = {
+  title: string;
+  url: string;
+  icon?: any;
+  subItems?: NavMainItem[];
+  newTab?: boolean;
+  comingSoon?: boolean;
+};
+
+/**
+ * Grupos que recibe NavMain:
+ *  - id: string (para key)
+ *  - label: texto del grupo (opcional)
+ *  - items: NavMainItem[]
+ */
+export type NavGroup = {
+  id: string;
+  label?: string;
+  items?: NavMainItem[];
 };
 
 // ----------------------------------------------------

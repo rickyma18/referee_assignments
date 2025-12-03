@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 
 import { ChevronRight } from "lucide-react";
 
-// ⬇️ Ajusta estas rutas según donde hayas guardado los componentes dinámicos
 import { DynamicGroupsChildren } from "@/app/(main)/dashboard/_components/sidebar/dynamic-groups-children";
 import { DynamicMatchdaysChildren } from "@/app/(main)/dashboard/_components/sidebar/dynamic-matchday-children";
 import { DynamicTeamsChildren } from "@/app/(main)/dashboard/_components/sidebar/dynamic-teams-children";
@@ -29,14 +28,14 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { type NavGroup, type NavMainItem } from "@/navigation/sidebar/sidebar-items";
+import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
 interface NavMainProps {
   readonly items?: readonly NavGroup[];
 }
 
 const IsComingSoon = () => (
-  <span className="bg-gray-2 00 ml-auto rounded-md px-2 py-1 text-xs dark:text-gray-800">Soon</span>
+  <span className="ml-auto rounded-md bg-gray-200 px-2 py-1 text-xs dark:text-gray-800">Soon</span>
 );
 
 function SimpleLinkItem({
@@ -158,13 +157,16 @@ function CollapsedDropdown({
     </SidebarMenuItem>
   );
 }
-export function NavMain({ items = [] }: { readonly items?: readonly NavGroup[] }) {
+
+export function NavMain({ items = [] }: NavMainProps) {
   const path = usePathname();
   const { state, isMobile } = useSidebar();
 
   const isItemActive = (url: string, subItems?: NavMainItem["subItems"]) => {
+    if (!url) return false;
+
     if (subItems?.length) {
-      return path === url || subItems.some((sub) => path === sub.url);
+      return path === url || subItems.some((sub) => sub.url === path);
     }
     return path === url;
   };
@@ -181,8 +183,7 @@ export function NavMain({ items = [] }: { readonly items?: readonly NavGroup[] }
             <SidebarMenu>
               {(group.items ?? []).map((item) => {
                 // 🔹 Dinámico: Administrar grupos
-                const isDynamicGroups =
-                  (item as any)?.title === "Grupos" && (item as any)?.url === "/dashboard/leagues";
+                const isDynamicGroups = item.title === "Grupos" && item.url === "/dashboard/leagues";
                 if (isDynamicGroups) {
                   const openByRoute = path.startsWith("/dashboard/leagues");
                   if (state === "collapsed" && !isMobile) {
@@ -204,8 +205,7 @@ export function NavMain({ items = [] }: { readonly items?: readonly NavGroup[] }
                 }
 
                 // 🔹 Dinámico: jornadas
-                const isDynamicMatchdays =
-                  (item as any)?.title === "Jornadas" && (item as any)?.url === "/dashboard/leagues";
+                const isDynamicMatchdays = item.title === "Jornadas" && item.url === "/dashboard/leagues";
                 if (isDynamicMatchdays) {
                   const openByRoute =
                     path.startsWith("/dashboard/leagues/") && path.includes("/groups/") && path.endsWith("/matchdays");
@@ -227,9 +227,8 @@ export function NavMain({ items = [] }: { readonly items?: readonly NavGroup[] }
                   );
                 }
 
-                // 🔹 Dinámico: Equipos (NUEVO)
-                const isDynamicTeams =
-                  (item as any)?.title === "Equipos" && (item as any)?.url === "/dashboard/leagues";
+                // 🔹 Dinámico: Equipos
+                const isDynamicTeams = item.title === "Equipos" && item.url === "/dashboard/leagues";
                 if (isDynamicTeams) {
                   const openByRoute =
                     path.startsWith("/dashboard/leagues/") && path.includes("/groups/") && path.endsWith("/teams");
@@ -245,7 +244,6 @@ export function NavMain({ items = [] }: { readonly items?: readonly NavGroup[] }
                       defaultOpen={openByRoute ? true : false}
                     >
                       <SidebarMenuSub>
-                        {/* Liga → Grupos; click en grupo te manda a /teams */}
                         <DynamicTeamsChildren />
                       </SidebarMenuSub>
                     </CollapsibleItem>
@@ -254,10 +252,15 @@ export function NavMain({ items = [] }: { readonly items?: readonly NavGroup[] }
 
                 // 🔹 Ítems normales
                 if (state === "collapsed" && !isMobile) {
-                  if (!item.subItems) return <SimpleLinkItem key={item.title} item={item} isActive={isItemActive} />;
+                  if (!item.subItems) {
+                    return <SimpleLinkItem key={item.title} item={item} isActive={isItemActive} />;
+                  }
                   return <CollapsedDropdown key={item.title} item={item} isActive={isItemActive} />;
                 }
-                if (!item.subItems) return <SimpleLinkItem key={item.title} item={item} isActive={isItemActive} />;
+
+                if (!item.subItems) {
+                  return <SimpleLinkItem key={item.title} item={item} isActive={isItemActive} />;
+                }
 
                 return (
                   <CollapsibleItem key={item.title} item={item} isActive={isItemActive} isSubmenuOpen={isSubmenuOpen} />

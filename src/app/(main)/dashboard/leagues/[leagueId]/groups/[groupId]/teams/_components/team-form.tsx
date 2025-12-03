@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { DEFAULT_ZONES } from "@/config/zones.constants";
 import { createTeamAction, updateTeamAction } from "@/server/actions/teams.actions";
 
+type Tier = "TRANQUILO" | "REGULARES" | "COMPLICADO" | "MUY_COMPLICADO";
+
 type TeamInitial = {
   id?: string;
   name?: string;
@@ -20,6 +22,7 @@ type TeamInitial = {
   stadium?: string;
   venue?: string;
   logoUrl?: string | null;
+  tier?: Tier | null;
 };
 
 type Props = {
@@ -46,6 +49,7 @@ export function TeamForm({ initial }: Props) {
     stadium: initial?.stadium ?? "",
     venue: initial?.venue ?? "",
     logoUrl: initial?.logoUrl ?? "",
+    tier: (initial?.tier as Tier | null) ?? "REGULARES",
   });
 
   const [loading, setLoading] = React.useState(false);
@@ -72,6 +76,11 @@ export function TeamForm({ initial }: Props) {
     setForm((s) => ({ ...s, municipality: value }));
   };
 
+  const onChangeTier = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value as Tier;
+    setForm((s) => ({ ...s, tier: value }));
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -96,6 +105,7 @@ export function TeamForm({ initial }: Props) {
           venue: form.venue,
           logoUrl: form.logoUrl || undefined,
           leagueId,
+          tier: form.tier ?? "REGULARES",
         });
 
         if (!res.ok) {
@@ -115,6 +125,7 @@ export function TeamForm({ initial }: Props) {
           venue: form.venue,
           logoUrl: form.logoUrl || undefined,
           leagueId,
+          tier: form.tier ?? "REGULARES",
         });
 
         if (!res.ok) {
@@ -213,6 +224,23 @@ export function TeamForm({ initial }: Props) {
           placeholder="Calle #, Colonia, CP, Ciudad, Estado"
         />
         <FieldError value={errors.venue} />
+      </div>
+
+      {/* Nivel / Tier del equipo */}
+      <div>
+        <Label htmlFor="tier">Nivel del equipo (Tier)</Label>
+        <select
+          id="tier"
+          value={form.tier}
+          onChange={onChangeTier}
+          className="border-input bg-background focus-visible:ring-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-2 focus-visible:outline-none"
+        >
+          <option value="TRANQUILO">TRANQUILO (partidos sencillos)</option>
+          <option value="REGULARES">REGULARES (equilibrados)</option>
+          <option value="COMPLICADO">COMPLICADO (alto grado de dificultad)</option>
+          <option value="MUY_COMPLICADO">MUY_COMPLICADO (máxima exigencia)</option>
+        </select>
+        <FieldError value={errors.tier} />
       </div>
 
       {/* Logo URL (editable) */}
