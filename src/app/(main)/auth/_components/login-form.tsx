@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,6 +11,7 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
 } from "firebase/auth";
+import { Eye, EyeOff } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -19,7 +22,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { getUserDoc } from "@/data/users";
 import { auth } from "@/lib/firebase";
-import { createSessionAction } from "@/server/auth/auth.actions"; // 👈 importante
+import { createSessionAction } from "@/server/auth/auth.actions";
 
 const FormSchema = z.object({
   email: z.string().email({ message: "Por favor ingrese un correo electrónico válido." }),
@@ -29,6 +32,7 @@ const FormSchema = z.object({
 
 export function LoginForm() {
   const router = useRouter();
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -38,18 +42,14 @@ export function LoginForm() {
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
     const { email, password, remember } = data;
     try {
-      // Persistencia del SDK cliente
       await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
 
-      // Login en Firebase (cliente)
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const uid = cred.user.uid;
 
-      // 👇 crea cookie __session en el SERVER (httpOnly) usando el ID token del usuario
       const idToken = await cred.user.getIdToken(true);
       await createSessionAction(idToken);
 
-      // Carga del documento de usuario (para roles/estado)
       const u = await getUserDoc(uid);
       if (!u) {
         toast.error("Tu cuenta no está configurada. Contacta al administrador.");
@@ -61,7 +61,6 @@ export function LoginForm() {
         return;
       }
 
-      // Routing por rol
       switch (u.role) {
         case "SUPERUSUARIO":
           router.replace("/dashboard/default");
@@ -111,13 +110,24 @@ export function LoginForm() {
             <FormItem>
               <FormLabel>Contraseña</FormLabel>
               <FormControl>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  {...field}
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    className="pr-10"
+                    {...field}
+                  />
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-0 flex items-center pr-3"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>

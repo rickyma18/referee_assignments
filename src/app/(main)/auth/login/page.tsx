@@ -14,7 +14,7 @@ export default function LoginV1() {
 
             <div className="space-y-2">
               <h1 className="text-primary-foreground text-5xl font-light">Hola de nuevo!</h1>
-              <p className="text-primary-foreground/80 text-xl">Inicia sesión para designar</p>
+              <p className="text-primary-foreground/80 text-xl">Inicia sesión para comenzar</p>
             </div>
           </div>
         </div>

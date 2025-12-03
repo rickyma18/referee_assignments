@@ -1,8 +1,12 @@
 "use client";
 
+import * as React from "react";
+
 import { useRouter } from "next/navigation";
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { Eye, EyeOff } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -10,11 +14,9 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { auth } from "@/lib/firebase";
-
-// 🔽 usa nuestro tipo y utilidades
-import type { UserDoc } from "@/types/user";
 import { upsertUserDoc } from "@/data/users";
+import { auth } from "@/lib/firebase";
+import type { UserDoc } from "@/types/user";
 
 const FormSchema = z
   .object({
@@ -30,6 +32,8 @@ const FormSchema = z
 
 export function RegisterForm() {
   const router = useRouter();
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -47,19 +51,16 @@ export function RegisterForm() {
     try {
       console.time("register-flow");
 
-      // 1) Crear usuario Auth
       console.time("auth:createUser");
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
       console.timeEnd("auth:createUser");
 
-      // 2) Perfil opcional
       if (fullName && fullName.trim().length >= 2) {
         console.time("auth:updateProfile");
         await updateProfile(cred.user, { displayName: fullName.trim() });
         console.timeEnd("auth:updateProfile");
       }
 
-      // 3) Firestore (⚠️ sin role explícito -> DEFAULT_ROLE = 'ARBITRO')
       console.time("firestore:upsertUserDoc");
       await upsertUserDoc({
         uid: cred.user.uid,
@@ -67,13 +68,12 @@ export function RegisterForm() {
         displayName: cred.user.displayName ?? null,
         photoURL: cred.user.photoURL ?? null,
         // role: no lo mandes — cae en DEFAULT_ROLE
-      });
+      } as UserDoc);
       console.timeEnd("firestore:upsertUserDoc");
 
       toast.success("Cuenta creada con éxito.");
       console.timeEnd("register-flow");
 
-      // 4) Redirect básico (afinaremos por rol cuando tengamos guards de rutas)
       router.replace("/dashboard/assignments");
     } catch (err: any) {
       console.error("Register error:", err);
@@ -132,7 +132,24 @@ export function RegisterForm() {
             <FormItem>
               <FormLabel>Contraseña</FormLabel>
               <FormControl>
-                <Input id="password" type="password" placeholder="••••••••" autoComplete="new-password" {...field} />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    className="pr-10"
+                    {...field}
+                  />
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-0 flex items-center pr-3"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -145,13 +162,24 @@ export function RegisterForm() {
             <FormItem>
               <FormLabel>Confirmar contraseña</FormLabel>
               <FormControl>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  autoComplete="new-password"
-                  {...field}
-                />
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    className="pr-10"
+                    {...field}
+                  />
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-0 flex items-center pr-3"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
