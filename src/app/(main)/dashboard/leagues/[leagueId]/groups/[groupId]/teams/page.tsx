@@ -258,16 +258,18 @@ export default function TeamsPage() {
             <Button variant="outline">Volver a grupos</Button>
           </Link>
 
-          {/* Importar CSV/Excel */}
-          <Link href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/import`}>
-            <Button variant="secondary">Importar CSV/Excel</Button>
-          </Link>
-
-          {/* Nuevo equipo */}
           {canEdit && (
-            <Link href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/new`}>
-              <Button>Nuevo equipo</Button>
-            </Link>
+            <>
+              {/* Importar CSV/Excel */}
+              <Link href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/import`}>
+                <Button variant="secondary">Importar CSV/Excel</Button>
+              </Link>
+
+              {/* Nuevo equipo */}
+              <Link href={`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/new`}>
+                <Button>Nuevo equipo</Button>
+              </Link>
+            </>
           )}
         </div>
       </div>

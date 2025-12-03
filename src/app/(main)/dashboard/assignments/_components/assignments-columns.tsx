@@ -13,7 +13,7 @@ import { ActionsCell } from "./assignments-actions-cell";
 import type { AssignmentRowState, AssignmentTableMeta } from "./assignments-types";
 import { RefereeSelect } from "./referee-select";
 
-export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
+export function createAssignmentsColumns(canEdit: boolean): ColumnDef<AssignmentRowState>[] {
   return [
     {
       accessorKey: "kickoff",
@@ -95,6 +95,8 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
         );
       },
     },
+
+    /* -------------------- Central -------------------- */
     {
       id: "central",
       header: "Central",
@@ -102,6 +104,19 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
       cell: ({ row, table }) => {
         const meta = table.options.meta as AssignmentTableMeta;
         const m = row.original;
+
+        const currentId = m.central;
+        const currentRef = meta.referees.find((r) => r.id === currentId);
+        const label = currentRef?.name ?? (currentId ? currentId : "Sin asignar");
+
+        if (!meta.canEdit) {
+          return (
+            <div className="px-3 py-2.5 text-sm">
+              <span>{label}</span>
+            </div>
+          );
+        }
+
         return (
           <div className="px-3 py-2.5">
             <RefereeSelect
@@ -120,6 +135,8 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
         );
       },
     },
+
+    /* -------------------- Asistente 1 -------------------- */
     {
       id: "aa1",
       header: "Asistente 1",
@@ -127,6 +144,19 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
       cell: ({ row, table }) => {
         const meta = table.options.meta as AssignmentTableMeta;
         const m = row.original;
+
+        const currentId = m.aa1;
+        const currentRef = meta.referees.find((r) => r.id === currentId);
+        const label = currentRef?.name ?? (currentId ? currentId : "Sin asignar");
+
+        if (!meta.canEdit) {
+          return (
+            <div className="px-3 py-2.5 text-sm">
+              <span>{label}</span>
+            </div>
+          );
+        }
+
         return (
           <div className="px-3 py-2.5">
             <RefereeSelect
@@ -145,6 +175,8 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
         );
       },
     },
+
+    /* -------------------- Asistente 2 -------------------- */
     {
       id: "aa2",
       header: "Asistente 2",
@@ -152,6 +184,19 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
       cell: ({ row, table }) => {
         const meta = table.options.meta as AssignmentTableMeta;
         const m = row.original;
+
+        const currentId = m.aa2;
+        const currentRef = meta.referees.find((r) => r.id === currentId);
+        const label = currentRef?.name ?? (currentId ? currentId : "Sin asignar");
+
+        if (!meta.canEdit) {
+          return (
+            <div className="px-3 py-2.5 text-sm">
+              <span>{label}</span>
+            </div>
+          );
+        }
+
         return (
           <div className="px-3 py-2.5">
             <RefereeSelect
@@ -170,6 +215,8 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
         );
       },
     },
+
+    /* -------------------- 4º Árbitro -------------------- */
     {
       id: "fourth",
       header: "4º Árbitro",
@@ -177,6 +224,19 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
       cell: ({ row, table }) => {
         const meta = table.options.meta as AssignmentTableMeta;
         const m = row.original;
+
+        const currentId = m.fourth;
+        const currentRef = meta.referees.find((r) => r.id === currentId);
+        const label = currentRef?.name ?? (currentId ? currentId : "Sin asignar");
+
+        if (!meta.canEdit) {
+          return (
+            <div className="px-3 py-2.5 text-sm">
+              <span>{label}</span>
+            </div>
+          );
+        }
+
         return (
           <div className="px-3 py-2.5">
             <RefereeSelect
@@ -195,6 +255,8 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
         );
       },
     },
+
+    /* -------------------- Asesor -------------------- */
     {
       id: "assessor",
       header: "Asesor",
@@ -202,6 +264,19 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
       cell: ({ row, table }) => {
         const meta = table.options.meta as AssignmentTableMeta;
         const m = row.original;
+
+        const currentId = m.assessor;
+        const currentRef = meta.referees.find((r) => r.id === currentId);
+        const label = currentRef?.name ?? (currentId ? currentId : "Sin asignar");
+
+        if (!meta.canEdit) {
+          return (
+            <div className="px-3 py-2.5 text-sm">
+              <span>{label}</span>
+            </div>
+          );
+        }
+
         return (
           <div className="px-3 py-2.5">
             <RefereeSelect
@@ -220,6 +295,8 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
         );
       },
     },
+
+    /* -------------------- Acciones -------------------- */
     {
       id: "actions",
       header: () => <div className="text-center">Acciones</div>,
@@ -227,6 +304,12 @@ export function createAssignmentsColumns(): ColumnDef<AssignmentRowState>[] {
       cell: ({ row, table }) => {
         const meta = table.options.meta as AssignmentTableMeta;
         const m = row.original;
+
+        if (!meta.canEdit) {
+          // Árbitro: sin acciones
+          return <div className="text-muted-foreground px-3 py-2.5 text-center text-xs">—</div>;
+        }
+
         return <ActionsCell row={m} meta={meta} />;
       },
     },

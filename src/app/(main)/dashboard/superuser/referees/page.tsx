@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { listRefereesAction } from "@/server/actions/referees.actions";
+import { ForbiddenError } from "@/server/auth/errors";
 import { requireSuperuser } from "@/server/auth/require-role";
 
 export const dynamic = "force-dynamic";
@@ -11,9 +12,27 @@ export const revalidate = 0;
 
 export default async function SuperuserRefereesRulesIndexPage() {
   noStore();
-  await requireSuperuser();
 
-  // puedes tunear filtros/limit si quieres
+  // 🔒 Protegemos la vista a nivel server
+  try {
+    await requireSuperuser();
+  } catch (e) {
+    if (e instanceof ForbiddenError) {
+      // 403 “bonito” en vez de tirar el error global
+      return (
+        <div className="space-y-4 p-6">
+          <h1 className="text-2xl font-semibold">Acceso restringido</h1>
+          <p className="text-muted-foreground text-sm">
+            Esta vista sólo está disponible para usuarios con rol <strong>SUPERUSUARIO</strong>.
+          </p>
+        </div>
+      );
+    }
+    // Si es otro tipo de error, sí lo dejamos subir para el error boundary
+    throw e;
+  }
+
+  // Si llegamos aquí, ya somos SUPERUSUARIO
   const data = await listRefereesAction({
     q: "",
     status: undefined,

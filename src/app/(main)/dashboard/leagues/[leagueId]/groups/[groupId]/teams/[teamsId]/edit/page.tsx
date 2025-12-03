@@ -4,10 +4,11 @@
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
 
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -31,12 +32,8 @@ type LeagueUI = {
 type GroupUI = { id: string; name: string; season?: string | null };
 
 export default function EditTeamPage() {
-  const { userDoc } = useCurrentUser();
-
-  // loading state del user: undefined => cargando
-  const userLoading = userDoc === undefined;
-  const role = (userDoc?.role ?? (userLoading ? undefined : "DESCONOCIDO")) as string | undefined;
-  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
+  const router = useRouter();
+  const { userDoc, loading: loadingUser } = useCurrentUser();
 
   const params = useParams();
   const pathname = usePathname();
@@ -97,7 +94,11 @@ export default function EditTeamPage() {
   // liga
   useEffect(() => {
     (async () => {
-      if (!leagueId) return;
+      if (!leagueId) {
+        setLeague(null);
+        setLoadingLeague(false);
+        return;
+      }
       try {
         setLoadingLeague(true);
         const lg = await getLeagueAction(String(leagueId));
@@ -126,7 +127,11 @@ export default function EditTeamPage() {
   // grupo
   useEffect(() => {
     (async () => {
-      if (!leagueId || !groupId) return;
+      if (!leagueId || !groupId) {
+        setGroup(null);
+        setLoadingGroup(false);
+        return;
+      }
       try {
         setLoadingGroup(true);
         const g = await getGroupAction(String(leagueId), String(groupId));
@@ -156,7 +161,8 @@ export default function EditTeamPage() {
 
         if (!teamId || typeof teamId !== "string" || !teamId.trim()) {
           toast.error("Identificador de equipo inválido.");
-          return setInitial(null);
+          setInitial(null);
+          return;
         }
 
         let data: any = null;
@@ -180,7 +186,8 @@ export default function EditTeamPage() {
 
         if (!data) {
           toast.error("Equipo no encontrado (verifica leagueId / groupId / teamId y la firma de getTeamAction).");
-          return setInitial(null);
+          setInitial(null);
+          return;
         }
 
         setInitial({
@@ -201,33 +208,43 @@ export default function EditTeamPage() {
     })();
   }, [leagueId, groupId, teamId]);
 
-  // permisos: no bloquees mientras carga el user
-  if (userLoading) {
+  // 🔄 Loader global mientras:
+  // - no tenemos usuario/rol
+  // - o seguimos cargando liga / grupo / equipo
+  if (loadingUser || loadingLeague || loadingGroup || loadingTeam) {
     return (
-      <div className="space-y-6 p-6">
-        <div className="flex items-center gap-4">
-          <div className="bg-muted size-16 animate-pulse rounded-md border" />
-          <div className="space-y-2">
-            <div className="bg-muted h-6 w-56 animate-pulse rounded" />
-            <div className="bg-muted h-4 w-72 animate-pulse rounded" />
-          </div>
-        </div>
-        <Separator />
-        <div className="bg-muted h-4 w-64 animate-pulse rounded" />
-        <div className="bg-muted h-4 w-64 animate-pulse rounded" />
-        <div className="bg-muted h-4 w-64 animate-pulse rounded" />
+      <div className="flex h-screen w-full flex-col items-center justify-center gap-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/media/FMF_Logo.png" alt="FMF Logo" className="h-20 w-20 animate-pulse object-contain opacity-90" />
+        <div className="border-muted-foreground size-10 animate-spin rounded-full border-2 border-t-transparent" />
+        <p className="text-muted-foreground text-sm">Cargando información del equipo…</p>
       </div>
     );
   }
 
+  // Ya con user cargado, ahora sí calculamos rol/permisos
+  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
+  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
+
+  // 🔒 Gate de permisos
   if (!canEdit) {
     return (
-      <div className="space-y-2 p-6">
+      <div className="flex h-screen w-full flex-col items-center justify-center gap-3 p-6 text-center">
         <h1 className="text-xl font-semibold">Permisos insuficientes</h1>
-        <p className="text-muted-foreground text-sm">No tienes permisos para editar equipos.</p>
+        <p className="text-muted-foreground max-w-md text-sm">
+          No tienes permisos para editar equipos en este grupo. Si crees que se trata de un error, contacta al
+          administrador.
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={() => router.back()}>
+          Volver
+        </Button>
       </div>
     );
   }
+
+  const leagueStatus = league?.status ?? "ACTIVE";
+  const teamName = initial?.name ?? "Equipo sin nombre";
+  const groupLabel = group?.name ?? String(groupId ?? "(?)");
 
   return (
     <div className="space-y-6 p-6">
@@ -239,34 +256,51 @@ export default function EditTeamPage() {
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={initial.logoUrl}
-                alt={`${initial?.name ?? "Equipo"} logo`}
+                alt={`${teamName} logo`}
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-xs opacity-50">
-                {loadingTeam ? "Cargando…" : "Sin logo"}
-              </div>
+              <div className="flex h-full w-full items-center justify-center text-xs opacity-50">Sin logo</div>
             )}
           </div>
 
-          <div>
-            <h1 className="text-xl leading-tight font-semibold">Editar equipo</h1>
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="text-[11px] tracking-wide uppercase">
+                Editar equipo
+              </Badge>
+
+              {leagueStatus && (
+                <Badge
+                  variant="outline"
+                  className={[
+                    "text-[11px] font-medium",
+                    leagueStatus === "ACTIVE" &&
+                      "border-emerald-500/60 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+                    leagueStatus === "ARCHIVED" &&
+                      "border-slate-500/60 bg-slate-50 text-slate-700 dark:bg-slate-950/40 dark:text-slate-200",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {leagueStatus === "ACTIVE" ? "Liga activa" : "Liga archivada"}
+                </Badge>
+              )}
+            </div>
+
+            <h1 className="text-xl leading-tight font-semibold">{teamName}</h1>
+
             <p className="text-muted-foreground text-sm">
-              {" "}
-              <span className="font-medium">
-                {league?.name ?? (loadingLeague ? "Cargando…" : String(leagueId ?? "(?)"))}
-              </span>{" "}
-              ({league?.season ?? ""}) ·{" "}
-              <span className="font-medium">
-                {loadingGroup ? "Cargando…" : (group?.name ?? String(groupId ?? "(?)"))}
-              </span>
+              <span className="font-medium">{league?.name ?? String(leagueId ?? "(?)")}</span>
+              {league?.season ? ` · Temporada ${league.season}` : ""} · Grupo{" "}
+              <span className="font-medium">{groupLabel}</span>
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={() => history.back()}>
+          <Button type="button" variant="outline" onClick={() => router.back()}>
             Volver
           </Button>
         </div>
@@ -274,24 +308,27 @@ export default function EditTeamPage() {
 
       {/* Color liga */}
       {league?.color ? (
-        <div className="flex items-center gap-3 text-sm">
+        <div className="text-muted-foreground flex items-center gap-3 text-xs">
           <span
-            className="inline-block size-5 rounded-md border"
+            className="inline-block h-1 w-24 rounded-full"
             style={{ backgroundColor: league.color ?? undefined }}
             title={league.color ?? ""}
           />
-          <span className="text-muted-foreground">Color:</span>
-          <span className="font-mono">{league.color}</span>
+          <span>Color de la liga:</span>
+          <span className="font-mono text-[11px]">{league.color}</span>
         </div>
       ) : null}
 
       <Separator />
 
       {/* Form */}
-      {loadingTeam ? (
-        <p className="text-muted-foreground text-sm">Cargando…</p>
-      ) : initial ? (
-        <TeamForm initial={initial} />
+      {initial ? (
+        <>
+          <p className="text-muted-foreground text-xs">
+            Actualiza el nombre, municipio, estadio, venue y logo del equipo. Usa Ctrl/Cmd + S para guardar rápidamente.
+          </p>
+          <TeamForm initial={initial} />
+        </>
       ) : (
         <p className="text-muted-foreground text-sm">No se encontró el equipo.</p>
       )}

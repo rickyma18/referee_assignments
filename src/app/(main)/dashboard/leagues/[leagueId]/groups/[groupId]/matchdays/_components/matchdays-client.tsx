@@ -209,9 +209,16 @@ export function MatchdaysClient({ initialData, leagueId, groupId }: Props) {
         </div>
 
         {canEdit && (
-          <Button asChild>
-            <Link href={`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays/new`}>Crear jornada</Link>
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button asChild size="sm">
+              <Link href={`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays/new`}>Crear jornada</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/dashboard/leagues/${leagueId}/groups/${groupId}/matchdays/generate`}>
+                Generar calendario
+              </Link>
+            </Button>
+          </div>
         )}
       </div>
 

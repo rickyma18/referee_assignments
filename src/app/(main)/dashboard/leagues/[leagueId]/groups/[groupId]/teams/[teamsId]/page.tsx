@@ -4,12 +4,14 @@
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
 
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { getGroupAction } from "@/server/actions/groups.actions";
 import { getLeagueAction } from "@/server/actions/leagues.actions";
@@ -27,7 +29,68 @@ type LeagueUI = {
 
 type GroupUI = { id: string; name: string; season?: string | null };
 
+type TierVariant = "COMPLICADO" | "FACIL" | "NEUTRO" | string;
+
+/** Convierte Firestore Timestamp/Date/string a Date usable en cliente */
+function toDateClientSafe(input: unknown): Date | null {
+  if (!input) return null;
+
+  // Firestore Timestamp (admin / client)
+  if (typeof input === "object" && input !== null && "toDate" in input && typeof (input as any).toDate === "function") {
+    const d = (input as any).toDate();
+    return d instanceof Date && !isNaN(d.getTime()) ? d : null;
+  }
+
+  if (input instanceof Date) {
+    return isNaN(input.getTime()) ? null : input;
+  }
+
+  try {
+    const d = new Date(input as any);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+}
+
+function formatDateTime(input: unknown): string {
+  const d = toDateClientSafe(input);
+  if (!d) return "—";
+  return d.toLocaleString("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function tierLabel(tier?: TierVariant | null): string {
+  if (!tier) return "Sin tier";
+  return String(tier).toUpperCase();
+}
+
+function tierClasses(tier?: TierVariant | null): string {
+  const value = String(tier ?? "").toUpperCase();
+
+  if (value === "COMPLICADO") {
+    return "border-amber-500/60 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
+  }
+  if (value === "FACIL" || value === "FÁCIL") {
+    return "border-emerald-500/60 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300";
+  }
+  if (value === "NEUTRO") {
+    return "border-slate-500/50 bg-slate-50 text-slate-800 dark:bg-slate-950/40 dark:text-slate-200";
+  }
+
+  if (!value) {
+    return "border-slate-500/40 bg-slate-50 text-slate-800 dark:bg-slate-950/40 dark:text-slate-200";
+  }
+
+  // fallback genérico
+  return "border-sky-500/50 bg-sky-50 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200";
+}
+
 export default function TeamDetailPage() {
+  const router = useRouter();
+
   const { userDoc } = useCurrentUser();
   const role = (userDoc?.role ?? "DESCONOCIDO") as string;
   const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
@@ -57,14 +120,19 @@ export default function TeamDetailPage() {
   const [league, setLeague] = useState<LeagueUI | null>(null);
   const [group, setGroup] = useState<GroupUI | null>(null);
   const [team, setTeam] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+
+  const [loadingTeam, setLoadingTeam] = useState(true);
   const [loadingLeague, setLoadingLeague] = useState(true);
   const [loadingGroup, setLoadingGroup] = useState(true);
 
   // liga
   useEffect(() => {
     (async () => {
-      if (!leagueId) return;
+      if (!leagueId) {
+        setLeague(null);
+        setLoadingLeague(false);
+        return;
+      }
       try {
         setLoadingLeague(true);
         const lg = await getLeagueAction(String(leagueId));
@@ -93,7 +161,11 @@ export default function TeamDetailPage() {
   // grupo
   useEffect(() => {
     (async () => {
-      if (!leagueId || !groupId) return;
+      if (!leagueId || !groupId) {
+        setGroup(null);
+        setLoadingGroup(false);
+        return;
+      }
       try {
         setLoadingGroup(true);
         const g = await getGroupAction(String(leagueId), String(groupId));
@@ -119,10 +191,11 @@ export default function TeamDetailPage() {
   useEffect(() => {
     (async () => {
       try {
-        setLoading(true);
+        setLoadingTeam(true);
         if (!teamId || typeof teamId !== "string" || !teamId.trim()) {
           toast.error("Identificador de equipo inválido.");
-          return setTeam(null);
+          setTeam(null);
+          return;
         }
 
         let data: any = null;
@@ -144,39 +217,64 @@ export default function TeamDetailPage() {
 
         if (!data) {
           toast.error("Equipo no encontrado (verifica leagueId / groupId / teamId y la firma de getTeamAction).");
-          return setTeam(null);
+          setTeam(null);
+          return;
         }
         setTeam(data);
       } catch (e: any) {
         toast.error(e?.message ?? "Error al cargar equipo");
         setTeam(null);
       } finally {
-        setLoading(false);
+        setLoadingTeam(false);
       }
     })();
   }, [leagueId, groupId, teamId]);
+
+  const loading = loadingTeam || loadingLeague || loadingGroup;
 
   if (loading) {
     return (
       <div className="space-y-6 p-6">
         <div className="flex items-center gap-4">
-          <div className="bg-muted size-16 animate-pulse rounded-md border" />
+          <Skeleton className="size-16 rounded-md border" />
           <div className="space-y-2">
-            <div className="bg-muted h-6 w-56 animate-pulse rounded" />
-            <div className="bg-muted h-4 w-72 animate-pulse rounded" />
+            <Skeleton className="h-6 w-56" />
+            <Skeleton className="h-4 w-72" />
           </div>
         </div>
         <Separator />
-        <div className="bg-muted h-4 w-64 animate-pulse rounded" />
-        <div className="bg-muted h-4 w-64 animate-pulse rounded" />
-        <div className="bg-muted h-4 w-64 animate-pulse rounded" />
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-4 w-52" />
+            <Skeleton className="h-4 w-44" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-4 w-52" />
+            <Skeleton className="h-4 w-44" />
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!team) {
-    return <div className="text-muted-foreground p-6 text-sm">No se encontró el equipo.</div>;
+    return (
+      <div className="text-muted-foreground space-y-4 p-6 text-sm">
+        <p>No se encontró el equipo.</p>
+        <Button type="button" variant="outline" size="sm" onClick={() => router.back()}>
+          Volver
+        </Button>
+      </div>
+    );
   }
+
+  const tier = team.tier as TierVariant | undefined;
+  const createdAt = team.createdAt;
+  const updatedAt = team.updatedAt;
+
+  const leagueStatus = league?.status ?? "ACTIVE";
 
   return (
     <div className="space-y-6 p-6">
@@ -197,23 +295,54 @@ export default function TeamDetailPage() {
             )}
           </div>
 
-          <div>
-            <h1 className="text-xl font-semibold">{team.name}</h1>
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="text-[11px] tracking-wide uppercase">
+                Equipo
+              </Badge>
+
+              {tier && (
+                <Badge variant="outline" className={`text-[11px] font-medium ${tierClasses(tier)}`}>
+                  Tier: {tierLabel(tier)}
+                </Badge>
+              )}
+
+              {leagueStatus && (
+                <Badge
+                  variant="outline"
+                  className={[
+                    "text-[11px] font-medium",
+                    leagueStatus === "ACTIVE" &&
+                      "border-emerald-500/60 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+                    leagueStatus === "ARCHIVED" &&
+                      "border-slate-500/60 bg-slate-50 text-slate-700 dark:bg-slate-950/40 dark:text-slate-200",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {leagueStatus === "ACTIVE" ? "Liga activa" : "Liga archivada"}
+                </Badge>
+              )}
+            </div>
+
+            <h1 className="text-xl font-semibold">{team.name ?? "Equipo sin nombre"}</h1>
+
             <p className="text-muted-foreground text-sm">
-              <span className="font-medium">{league?.name ?? leagueId}</span> ({league?.season ?? "—"}) ·{" "}
-              <span className="font-medium">{group?.name ?? groupId}</span>
+              <span className="font-medium">{league?.name ?? leagueId ?? "Liga"}</span>
+              {league?.season ? ` · ${league.season}` : ""} ·{" "}
+              <span className="font-medium">{group?.name ?? groupId ?? "Grupo"}</span>
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={() => history.back()}>
+          <Button type="button" variant="outline" onClick={() => router.back()}>
             Volver
           </Button>
           {canEdit && (
             <Button
               type="button"
-              onClick={() => location.assign(`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${teamId}/edit`)}
+              onClick={() => router.push(`/dashboard/leagues/${leagueId}/groups/${groupId}/teams/${teamId}/edit`)}
             >
               Editar
             </Button>
@@ -221,39 +350,81 @@ export default function TeamDetailPage() {
         </div>
       </div>
 
-      {/* Color liga */}
-      {league?.color ? (
-        <div className="flex items-center gap-3 text-sm">
-          <span
-            className="inline-block size-5 rounded-md border"
-            style={{ backgroundColor: league.color ?? undefined }}
-            title={league.color ?? ""}
-          />
-          <span className="text-muted-foreground">Color de la liga:</span>
-          <span className="font-mono">{league.color}</span>
+      {/* Franja de color de la liga (si existe) */}
+      {league?.color && (
+        <div className="text-muted-foreground flex items-center gap-3 text-xs">
+          <span className="inline-block h-1 w-24 rounded-full" style={{ backgroundColor: league.color ?? undefined }} />
+          <span>Color de la liga:</span>
+          <span className="font-mono text-[11px]">{league.color}</span>
         </div>
-      ) : null}
+      )}
 
       <Separator />
 
-      {/* Datos */}
-      <div className="grid gap-3 text-sm">
-        <div>
-          <span className="text-muted-foreground">Municipio:</span>{" "}
-          <span className="font-medium">{team.municipality ?? "No especificado"}</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Estadio:</span>{" "}
-          <span className="font-medium">{team.stadium ?? "—"}</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Sede:</span> <span className="font-medium">{team.venue ?? "—"}</span>
-        </div>
-        {team.slug ? (
-          <div>
-            <span className="text-muted-foreground">Slug:</span> <span className="font-mono">{team.slug}</span>
+      {/* Datos principales */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Información del equipo */}
+        <div className="bg-card rounded-lg border p-4 text-sm">
+          <h2 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wide uppercase">
+            Información del equipo
+          </h2>
+          <div className="space-y-2">
+            <div>
+              <span className="text-muted-foreground">Municipio:</span>{" "}
+              <span className="font-medium">{team.municipality ?? "No especificado"}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Estadio:</span>{" "}
+              <span className="font-medium">{team.stadium ?? "—"}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Dirección:</span>{" "}
+              <span className="font-medium">
+                {team.venue && String(team.venue).trim().length > 0 ? team.venue : "No especificada"}
+              </span>
+            </div>
+
+            {team.slug && (
+              <div>
+                <span className="text-muted-foreground">Slug:</span>{" "}
+                <span className="font-mono text-xs">{team.slug}</span>
+              </div>
+            )}
           </div>
-        ) : null}
+        </div>
+
+        {/* Metadatos y trazabilidad */}
+        <div className="bg-card rounded-lg border p-4 text-sm">
+          <h2 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wide uppercase">Metadatos</h2>
+          <div className="space-y-2">
+            <div>
+              <span className="text-muted-foreground">Creado:</span>{" "}
+              <span className="font-medium">{formatDateTime(createdAt)}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Última actualización:</span>{" "}
+              <span className="font-medium">{formatDateTime(updatedAt)}</span>
+            </div>
+            {teamId && (
+              <div>
+                <span className="text-muted-foreground">ID equipo:</span>{" "}
+                <span className="font-mono text-xs">{teamId}</span>
+              </div>
+            )}
+            {group?.id && (
+              <div>
+                <span className="text-muted-foreground">ID grupo:</span>{" "}
+                <span className="font-mono text-xs">{group.id}</span>
+              </div>
+            )}
+            {league?.id && (
+              <div>
+                <span className="text-muted-foreground">ID liga:</span>{" "}
+                <span className="font-mono text-xs">{league.id}</span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

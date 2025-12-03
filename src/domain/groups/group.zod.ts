@@ -4,7 +4,7 @@
 import { z } from "zod";
 
 export const GroupBaseSchema = z.object({
-  name: z.string().trim().min(2, "Nombre demasiado corto").max(60),
+  name: z.string().trim().min(1, "Nombre demasiado corto").max(60),
   season: z.string().trim().min(4, "Temporada requerida").max(20),
   // 👇 Para ordenar en UI (opcional, por defecto 0)
   order: z.number().int().nonnegative().optional().default(0),

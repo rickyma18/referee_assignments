@@ -16,8 +16,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
-import { auth } from "@/lib/firebase"; // 👈 tu instancia del SDK cliente de Firebase
+import { auth } from "@/lib/firebase";
 import { getInitials } from "@/lib/utils";
+import { clearSessionAction } from "@/server/auth/auth.actions"; // 👈 limpiar cookie del server
 
 export function NavUser({
   user,
@@ -32,15 +33,23 @@ export function NavUser({
   const { isMobile } = useSidebar();
 
   const handleAccount = () => {
-    router.push("/dashboard/account"); // 👈 ajusta la ruta si tu vista de cuenta está en otra parte
+    router.push("/dashboard/account"); // ajustable según tu ruta de cuenta
   };
 
   const handleLogout = async () => {
     try {
+      // 1) Cerrar sesión en el cliente (Firebase JS SDK)
       await signOut(auth);
-      router.replace("/auth/login"); // 👈 o la ruta que uses para login
+
+      // 2) Limpiar cookie httpOnly (__session) en el SERVER
+      await clearSessionAction();
+
+      // 3) Redirigir al login
+      router.replace("/auth/login");
     } catch (error) {
       console.error("Error al cerrar sesión:", error);
+      // si quieres, aquí puedes meter un toast
+      // toast.error("No se pudo cerrar sesión.");
     }
   };
 

@@ -1,24 +1,41 @@
 "use client";
 
 import * as React from "react";
+
 import { useRouter } from "next/navigation";
+
 import {
   GoogleAuthProvider,
   signInWithPopup,
   setPersistence,
   browserLocalPersistence,
   fetchSignInMethodsForEmail,
+  signOut,
+  Auth,
 } from "firebase/auth";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { getUserDoc, upsertUserDoc } from "@/data/users";
 import { auth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
-
+import { createSessionAction, clearSessionAction } from "@/server/auth/auth.actions";
 import type { UserDoc } from "@/types/user";
-import { getUserDoc, upsertUserDoc } from "@/data/users";
 
 type Props = React.ComponentProps<typeof Button>;
+
+async function handleExistingEmail(auth: Auth, email: string) {
+  const methods = await fetchSignInMethodsForEmail(auth, email);
+
+  if (methods.includes("password")) {
+    toast.error(
+      "Ya hay una cuenta con correo y contraseña. Inicia sesión con email y contraseña y luego vincula Google desde tu cuenta.",
+    );
+    return;
+  }
+
+  toast.error("Tu correo ya está registrado con otro método de acceso.");
+}
 
 export function GoogleButton({ className, ...props }: Props) {
   const router = useRouter();
@@ -34,10 +51,15 @@ export function GoogleButton({ className, ...props }: Props) {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
 
+      // 1) Login en Firebase (cliente)
       const result = await signInWithPopup(auth, provider);
       const { user } = result;
 
-      // 1) Obtener (o crear) el documento de usuario con nuestra capa de datos
+      // 2) Sincronizar sesión del SERVER (cookie __session)
+      const idToken = await user.getIdToken(true);
+      await createSessionAction(idToken);
+
+      // 3) Obtener (o crear) el documento de usuario
       let doc: UserDoc | null = await getUserDoc(user.uid);
 
       if (!doc) {
@@ -47,26 +69,31 @@ export function GoogleButton({ className, ...props }: Props) {
           email: user.email ?? "",
           displayName: user.displayName ?? null,
           photoURL: user.photoURL ?? null,
-          // role: no lo mandamos -> caerá en el default
         });
 
         doc = await getUserDoc(user.uid);
       }
 
       if (!doc) {
+        // si algo falló al crear/leer el doc, limpiamos sesión para no dejar basura
+        await signOut(auth);
+        await clearSessionAction();
         toast.error("No se pudo inicializar tu perfil. Contacta al administrador.");
         return;
       }
 
       const role = doc.role; // 'SUPERUSUARIO' | 'DELEGADO' | 'ASISTENTE' | 'ARBITRO'
-      const isActive = (doc as any).active ?? true; // opcional: si no existe, asumimos true
+      const isActive = (doc as any).active ?? true; // si no existe, asumimos true
 
       if (!isActive) {
+        // Usuario marcado como inactivo → limpiar todo
+        await signOut(auth);
+        await clearSessionAction();
         toast.error("Usuario inactivo. Contacta al administrador.");
         return;
       }
 
-      // 2) Routing por rol (MAYÚSCULAS)
+      // 4) Routing por rol (MAYÚSCULAS)
       switch (role) {
         case "SUPERUSUARIO":
           router.replace("/dashboard/default"); // Admin area
@@ -79,27 +106,18 @@ export function GoogleButton({ className, ...props }: Props) {
           router.replace("/dashboard/assignments"); // vista read-only
           break;
         default:
+          await signOut(auth);
+          await clearSessionAction();
           toast.error("No tienes permisos para acceder.");
       }
     } catch (err: any) {
       const code = err?.code ?? "unknown";
 
-      // Caso común: ya existe con otro proveedor (email/password)
       if (code === "auth/account-exists-with-different-credential") {
         const email = err?.customData?.email as string | undefined;
+
         if (email) {
-          try {
-            const methods = await fetchSignInMethodsForEmail(auth, email);
-            if (methods.includes("password")) {
-              toast.error(
-                "Ya hay una cuenta con correo y contraseña. Inicia sesión con email y contraseña y luego vincula Google desde tu cuenta.",
-              );
-            } else {
-              toast.error("Tu correo ya está registrado con otro método de acceso.");
-            }
-          } catch {
-            toast.error("Tu correo ya está registrado con otro método de acceso.");
-          }
+          await handleExistingEmail(auth, email);
         } else {
           toast.error("Tu correo ya está registrado con otro método de acceso.");
         }

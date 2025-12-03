@@ -8,12 +8,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { AlertTriangle, Copy } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LeagueCreateSchema, LeagueUpdateSchema } from "@/domain/leagues/league.zod";
 import { cn } from "@/lib/utils";
 import { createLeagueAction, updateLeagueAction } from "@/server/actions/leagues.actions";
@@ -50,7 +54,7 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
     defaultValues: {
       name: initial?.name ?? "",
       season: initial?.season ?? "",
-      color: initial?.color ?? "#232730ff",
+      color: initial?.color ?? "#232730FF",
       status: initial?.status ?? "ACTIVE",
       region: initial?.region ?? "",
       startDate: initial?.startDate ? new Date(initial.startDate) : undefined,
@@ -65,6 +69,7 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
 
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [slugCopied, setSlugCopied] = React.useState(false);
 
   // ===== UX: atajos y protección de cambios sin guardar =====
   const isDirty = form.formState.isDirty;
@@ -94,17 +99,19 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
   }, [isDirty]);
 
   // ===== Derivados para preview =====
-  // ===== Derivados para preview =====
   const watchName = form.watch("name");
   const watchSeason = form.watch("season");
   const watchColor = form.watch("color");
   const watchLogo = form.watch("logoUrl");
+  const watchRegion = form.watch("region");
+  const watchStatus = form.watch("status");
+  const watchStartDate = form.watch("startDate");
+  const watchEndDate = form.watch("endDate");
+
   const liveSlug = React.useMemo(() => slugify(watchName ?? "", watchSeason ?? ""), [watchName, watchSeason]);
 
-  // ✅ agrega estas dos líneas
   const displayName = (watchName ?? "").trim();
   const displaySeason = (watchSeason ?? "").trim();
-  // ✅ normaliza a string vacío para evaluar "vacío" vs. null/undefined
   const nameForSubtitle = (displayName ?? "").trim();
   const seasonForSubtitle = (displaySeason ?? "").trim();
 
@@ -112,6 +119,29 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
   const subtitleName = nameForSubtitle ? nameForSubtitle : "Nombre de la liga";
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const subtitleSeason = seasonForSubtitle ? seasonForSubtitle : "Temporada";
+
+  const effectiveSlug = initial?.slug ?? (liveSlug && liveSlug.length ? liveSlug : "");
+
+  // ===== Helpers =====
+  const validUrl = (u?: string) => {
+    if (!u) return true;
+    try {
+      const parsed = new URL(u);
+      return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+      return false;
+    }
+  };
+
+  const handleCopySlug = async (slug: string) => {
+    try {
+      await navigator.clipboard.writeText(slug);
+      setSlugCopied(true);
+      setTimeout(() => setSlugCopied(false), 1500);
+    } catch {
+      // noop; si falla no rompemos nada
+    }
+  };
 
   // ===== Submit =====
   const onSubmit = async (values: z.infer<typeof schema>) => {
@@ -133,12 +163,15 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
           });
         }
         if (res.message) setServerError(res.message);
+        // Aseguramos que el usuario vea el error
+        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
 
       router.push(afterSaveHref ?? "/dashboard/leagues");
     } catch (err: any) {
       setServerError(err?.message ?? "Ocurrió un error al guardar.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setLoading(false);
     }
@@ -147,16 +180,8 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
   // Deshabilitar por permisos o mientras guarda
   const disabled = !canEdit || loading;
 
-  // ===== Helpers =====
-  const validUrl = (u?: string) => {
-    if (!u) return true;
-    try {
-      const parsed = new URL(u);
-      return parsed.protocol === "http:" || parsed.protocol === "https:";
-    } catch {
-      return false;
-    }
-  };
+  const dirtyText = isDirty ? "Cambios sin guardar" : "Todo sincronizado";
+  const hotkeyHint = isDirty ? " • Ctrl/Cmd + S para guardar" : "";
 
   return (
     <div className="space-y-6 p-6">
@@ -173,25 +198,88 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
               </div>
             )}
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{isEdit ? "Editar liga" : "Crear liga"}</h1>
+
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="text-[11px] tracking-wide uppercase">
+                {isEdit ? "Edición" : "Nueva liga"}
+              </Badge>
+
+              {watchStatus && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[11px] font-medium",
+                    watchStatus === "ACTIVE" &&
+                      "border-emerald-500/60 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+                    watchStatus === "ARCHIVED" &&
+                      "border-amber-500/40 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+                  )}
+                >
+                  {watchStatus === "ACTIVE" ? "Activa" : "Archivada"}
+                </Badge>
+              )}
+            </div>
+
+            <h1 className="text-2xl font-bold tracking-tight">
+              {displayName ?? (isEdit ? "Liga sin nombre" : "Nueva liga")}
+            </h1>
 
             <p className="text-muted-foreground text-sm">
-              {subtitleName} • {subtitleSeason}
+              {subtitleSeason}
+              {watchRegion && watchRegion.trim() ? ` • ${watchRegion.trim()}` : ""}
             </p>
           </div>
         </div>
 
-        {/* Slug visible (solo lectura) */}
-        <div className="text-muted-foreground text-xs select-all">
-          <span className="bg-muted mr-2 rounded-full px-2 py-1">slug</span>
-          <code>{initial?.slug ?? (liveSlug && liveSlug.length ? liveSlug : "(se generará)")}</code>
+        {/* Slug visible (solo lectura) con copiar */}
+        <div className="text-muted-foreground flex max-w-xs items-center gap-2 text-xs">
+          <span className="bg-muted mr-1 rounded-full px-2 py-1">slug</span>
+          <code className="flex-1 truncate">{effectiveSlug ?? "(se generará al guardar)"}</code>
+
+          {effectiveSlug && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleCopySlug(effectiveSlug)}
+                    disabled={!effectiveSlug}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    <span className="sr-only">Copiar slug</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Copiar slug</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {slugCopied && (
+            <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-300">Copiado</span>
+          )}
         </div>
       </div>
 
+      {/* Banner de solo lectura por permisos */}
+      {!canEdit && (
+        <div className="border-border bg-muted/50 text-muted-foreground rounded-md border px-3 py-2 text-xs">
+          No tienes permisos para editar esta liga. Solo puedes ver la información.
+        </div>
+      )}
+
       {/* Banner de error del servidor */}
       {serverError && (
-        <div className={cn("rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700")}>{serverError}</div>
+        <div className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40">
+          <AlertTriangle className="mt-[2px] h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">No se pudo guardar la liga</p>
+            <p className="text-xs opacity-90">{serverError}</p>
+          </div>
+        </div>
       )}
 
       <Form {...form}>
@@ -203,7 +291,9 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nombre</FormLabel>
+                  <FormLabel>
+                    Nombre <span className="text-destructive">*</span>
+                  </FormLabel>
                   <FormControl>
                     <Input placeholder="Liga TDP" {...field} disabled={disabled} />
                   </FormControl>
@@ -217,16 +307,18 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
               name="season"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Temporada</FormLabel>
+                  <FormLabel>
+                    Temporada <span className="text-destructive">*</span>
+                  </FormLabel>
                   <FormControl>
-                    <Input placeholder="2025-26" {...field} disabled={disabled} />
+                    <Input placeholder="2025-2026" {...field} disabled={disabled} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Color picker con preview del valor */}
+            {/* Color picker con preview del valor y edición manual */}
             <FormField
               control={form.control}
               name="color"
@@ -244,30 +336,39 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
                         aria-label="Seleccionar color de la liga"
                       />
                     </FormControl>
-                    <span className="text-sm tabular-nums">{field.value}</span>
+                    <Input
+                      className="h-10 w-28 font-mono text-xs"
+                      value={field.value ?? "#232730ff"}
+                      onChange={(e) => field.onChange(e.target.value)}
+                      disabled={disabled}
+                    />
                   </div>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Este color se usa en la cabecera y acentos visuales de la liga.
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Estado */}
+            {/* Estado con Select de shadcn */}
             <FormField
               control={form.control}
               name="status"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Estatus</FormLabel>
-                  <FormControl>
-                    <select
-                      className="border-input bg-background ring-offset-background focus-visible:ring-ring h-10 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                      {...field}
-                      disabled={disabled}
-                    >
-                      <option value="ACTIVE">Activa</option>
-                      <option value="ARCHIVED">Archivada</option>
-                    </select>
-                  </FormControl>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={disabled}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona un estatus" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="ACTIVE">Activa</SelectItem>
+                      <SelectItem value="ARCHIVED">Archivada</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -281,7 +382,7 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
                 <FormItem>
                   <FormLabel>Región (opcional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Jalisco / Occidente" {...field} disabled={disabled} />
+                    <Input placeholder="Ej. Jalisco / Occidente" {...field} disabled={disabled} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -349,6 +450,9 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
                     />
                   </FormControl>
                   <FormMessage />
+                  {watchStartDate && watchEndDate && watchEndDate < watchStartDate && (
+                    <p className="mt-1 text-xs text-red-500">La fecha de fin debe ser posterior al inicio.</p>
+                  )}
                 </FormItem>
               )}
             />
@@ -364,7 +468,7 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
                     <textarea
                       rows={3}
                       className="border-input bg-background ring-offset-background focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                      placeholder="Información adicional de la liga, reglamentos, contactos, etc."
+                      placeholder="Información adicional de la liga: reglamentos, contacto del delegado, observaciones, etc."
                       {...field}
                       disabled={disabled}
                     />
@@ -379,15 +483,19 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
           <div className="bg-background/70 supports-[backdrop-filter]:bg-background/50 sticky bottom-0 z-10 -mx-6 border-t p-4 backdrop-blur">
             <div className="flex items-center justify-between gap-3">
               <div className="text-muted-foreground text-xs">
-                {isDirty ? "Cambios sin guardar" : "Todo sincronizado"} • Ctrl/Cmd + S para guardar
+                {dirtyText}
+                {hotkeyHint}
               </div>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" asChild disabled={loading}>
                   <Link href={afterSaveHref ?? "/dashboard/leagues"}>Cancelar</Link>
                 </Button>
-                <Button type="submit" disabled={disabled || (!form.formState.isValid && form.formState.isSubmitted)}>
-                  {loading ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear liga"}
-                </Button>
+
+                {canEdit && (
+                  <Button type="submit" disabled={disabled || (!form.formState.isValid && form.formState.isSubmitted)}>
+                    {loading ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear liga"}
+                  </Button>
+                )}
               </div>
             </div>
           </div>

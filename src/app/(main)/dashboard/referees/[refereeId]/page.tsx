@@ -1,9 +1,7 @@
-// src/app/(main)/dashboard/referees/[refereeId]/page.tsx
-
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { CalendarDays, ArrowLeft, Pencil, Mail, Phone, MapPin, ShieldCheck, Flag } from "lucide-react";
+import { CalendarDays, ArrowLeft, Mail, Phone, MapPin, ShieldCheck, Flag } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { getRefereeAction } from "@/server/actions/referees.actions";
+import { getRefereeAssignmentsSummary } from "@/server/services/referees/referee-assignments-summary";
 
+import { RefereeHeaderActions } from "../_components/referee-header-actions";
 import { RefStatusBadge } from "../_components/referee-status";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +81,7 @@ export default async function RefereeProfilePage({ params }: { params: Promise<P
   }
 
   const item = result.data;
+  const assignmentsSummary = await getRefereeAssignmentsSummary(refereeId);
 
   const status = (item.status ?? "DISPONIBLE") as "DISPONIBLE" | "DUDOSO" | "LESIONADO";
 
@@ -116,17 +117,8 @@ export default async function RefereeProfilePage({ params }: { params: Promise<P
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/dashboard/referees">Ver listado</Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link href={`/dashboard/referees/${refereeId}/edit`}>
-              <Pencil className="mr-2 h-4 w-4" />
-              Editar árbitro
-            </Link>
-          </Button>
-        </div>
+        {/* 👉 Acciones dependiendo del rol (editar solo para roles con permiso) */}
+        <RefereeHeaderActions refereeId={refereeId} />
       </div>
 
       {/* Layout principal */}
@@ -205,23 +197,6 @@ export default async function RefereeProfilePage({ params }: { params: Promise<P
               </div>
             </CardContent>
           </Card>
-
-          {/* Notas internas */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium">Notas internas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {item.notes ? (
-                <p className="text-muted-foreground text-sm leading-relaxed whitespace-pre-wrap">{item.notes}</p>
-              ) : (
-                <p className="text-muted-foreground text-sm italic">
-                  No hay notas registradas para este árbitro. Puedes añadir detalles en la pantalla de edición
-                  (disponibilidad especial, lesiones recientes, recomendaciones, etc.).
-                </p>
-              )}
-            </CardContent>
-          </Card>
         </div>
 
         {/* Columna derecha */}
@@ -275,20 +250,85 @@ export default async function RefereeProfilePage({ params }: { params: Promise<P
             </CardContent>
           </Card>
 
-          {/* Placeholder resumen designaciones */}
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-medium">Resumen de designaciones</CardTitle>
             </CardHeader>
-            <CardContent className="text-muted-foreground space-y-2 text-sm">
-              <p className="leading-relaxed">
-                Aquí podrás ver un resumen de los partidos designados a este árbitro (partidos recientes, minutos
-                arbitrados, distribución por rol, etc.).
-              </p>
-              <p className="text-xs">
-                Por ahora, esta sección es sólo informativa. Cuando tengamos el módulo de designaciones conectado, la
-                llenamos con datos reales.
-              </p>
+            <CardContent className="space-y-4 text-sm">
+              {assignmentsSummary.totalMatches === 0 ? (
+                <p className="text-muted-foreground">
+                  Aún no hay partidos registrados para este árbitro en el sistema de designaciones.
+                </p>
+              ) : (
+                <>
+                  {/* Total de partidos */}
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-muted-foreground text-xs uppercase">Total de partidos</span>
+                    <span className="text-2xl font-semibold">{assignmentsSummary.totalMatches}</span>
+                  </div>
+
+                  <Separator />
+
+                  {/* Últimos 4 partidos */}
+                  <div className="space-y-2">
+                    <p className="text-muted-foreground text-xs font-medium uppercase">Últimos 4 partidos</p>
+                    <div className="overflow-hidden rounded-md border">
+                      <table className="w-full text-xs">
+                        <thead className="bg-muted/60">
+                          <tr className="text-left">
+                            <th className="px-3 py-2 font-medium">Fecha</th>
+                            <th className="px-3 py-2 font-medium">Partido</th>
+                            <th className="px-3 py-2 font-medium">Rol</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {assignmentsSummary.recentMatches.map((m) => (
+                            <tr key={m.matchId} className="border-t">
+                              <td className="px-3 py-2">{formatDate(m.date)}</td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {m.homeTeamName} vs {m.awayTeamName}
+                                  </span>
+                                  <span className="text-muted-foreground text-[11px]"></span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2">
+                                <Badge variant="outline" className="rounded-full px-2 py-0 text-[11px]">
+                                  {m.role}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Conteo por equipo */}
+                  <div className="space-y-2">
+                    <p className="text-muted-foreground text-xs font-medium uppercase">
+                      Equipos arbitrados (histórico)
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {assignmentsSummary.statsPerTeam.map((team) => (
+                        <Badge
+                          key={team.teamId ?? team.teamName}
+                          variant="secondary"
+                          className="rounded-full px-2 py-0 text-[11px]"
+                        >
+                          {team.teamName} · {team.totalMatches} p.
+                        </Badge>
+                      ))}
+                    </div>
+
+                    <p className="text-muted-foreground text-[11px]">
+                      Estos conteos te ayudan a controlar la regla de 4 jornadas: si ves que un equipo se repite
+                      demasiado con este árbitro, puedes ajustar las próximas designaciones.
+                    </p>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

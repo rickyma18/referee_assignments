@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { getGroupAction } from "@/server/actions/groups.actions";
 import { getLeagueAction } from "@/server/actions/leagues.actions";
@@ -26,7 +27,8 @@ type LeagueUI = {
 export default function NewMatchdayPage() {
   const { leagueId, groupId } = useParams<{ leagueId: string; groupId: string }>();
   const { userDoc } = useCurrentUser();
-  const role = (userDoc?.role ?? "DESCONOCIDO") as string;
+  const rawRole = (userDoc?.role as string | undefined) ?? "LOADING";
+  const role = rawRole === "LOADING" ? "DESCONOCIDO" : rawRole;
   const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO";
   const router = useRouter();
 
@@ -88,6 +90,48 @@ export default function NewMatchdayPage() {
     })();
   }, [leagueId, groupId]);
 
+  // 👉 Mientras no tengamos el rol (rawRole === "LOADING"), mostramos solo loading
+  if (rawRole === "LOADING") {
+    return (
+      <div className="max-w-xl space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Skeleton className="size-14 rounded-md" />
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-4 w-64" />
+              <Skeleton className="h-4 w-32" />
+            </div>
+          </div>
+          <Skeleton className="h-9 w-20 rounded-md" />
+        </div>
+
+        <Separator />
+
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+          <div className="grid gap-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+          <div className="grid gap-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-24" />
+        </div>
+      </div>
+    );
+  }
+
+  // 👉 Solo cuando YA sabemos el rol, decidimos si tiene permisos o no
   if (!canEdit) {
     return <p className="text-muted-foreground text-sm">No tienes permisos para crear jornadas.</p>;
   }

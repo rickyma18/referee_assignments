@@ -1,3 +1,6 @@
+// ======================================================
+// src/app/(main)/dashboard/layout.tsx
+// ======================================================
 import { ReactNode } from "react";
 
 import { cookies } from "next/headers";
@@ -26,8 +29,6 @@ import { LayoutControls } from "./_components/sidebar/layout-controls";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
 import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 
-// 👇 imports nuevos
-
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";
@@ -47,8 +48,8 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   };
 
   return (
+    // 🔐 Todos estos roles pueden entrar al dashboard
     <AuthGuard allowedRoles={["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"]}>
-      {/* 👇 Todo el dashboard envuelto en el provider de toasts */}
       <ToastProvider>
         <SidebarProvider defaultOpen={defaultOpen}>
           <AppSidebar variant={sidebarVariant} collapsible={sidebarCollapsible} />
@@ -56,23 +57,24 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           <SidebarInset
             data-content-layout={contentLayout}
             className={cn(
-              // 🔹 Que toda la zona derecha sea un contenedor de altura completa y sin overflow horizontal
               "flex h-screen flex-col overflow-hidden",
               "data-[content-layout=centered]:!mx-auto data-[content-layout=centered]:max-w-screen-2xl",
               "max-[113rem]:peer-data-[variant=inset]:!mr-2 min-[101rem]:peer-data-[variant=inset]:peer-data-[state=collapsed]:!mr-auto",
             )}
           >
+            {/* ================= NAVBAR ================= */}
             <header
               data-navbar-style={navbarStyle}
               className={cn(
-                "flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12",
-                "data-[navbar-style=sticky]:bg-background/50 data-[navbar-style=sticky]:sticky data-[navbar-style=sticky]:top-0 data-[navbar-style=sticky]:z-50 data-[navbar-style=sticky]:overflow-hidden data-[navbar-style=sticky]:rounded-t-[inherit] data-[navbar-style=sticky]:backdrop-blur-md",
+                "flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear",
+                "data-[navbar-style=sticky]:bg-background/50 data-[navbar-style=sticky]:sticky data-[navbar-style=sticky]:top-0",
+                "data-[navbar-style=sticky]:z-50 data-[navbar-style=sticky]:backdrop-blur-md",
               )}
             >
               <div className="flex w-full items-center justify-between px-4 lg:px-6">
                 <div className="flex items-center gap-1 lg:gap-2">
                   <SidebarTrigger className="-ml-1" />
-                  <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
+                  <Separator orientation="vertical" className="mx-2 h-4" />
                   <SearchDialog />
                 </div>
                 <div className="flex items-center gap-2">
@@ -83,13 +85,11 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
               </div>
             </header>
 
-            {/* 🔹 Aquí vive el scroll VERTICAL del contenido del dashboard */}
-            {/* 🔹 Horizontal lo bloqueamos; sólo la tabla tendrá overflow-x-auto */}
+            {/* ================= CONTENT ================= */}
             <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6">{children}</div>
           </SidebarInset>
         </SidebarProvider>
 
-        {/* 👇 Los toasts se pintan una sola vez aquí, globales al dashboard */}
         <ToastViewport />
       </ToastProvider>
     </AuthGuard>
