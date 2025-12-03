@@ -27,23 +27,29 @@ export function useCurrentUser(): State {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
-      // No hay sesión → limpiar cookie y fin
+      // 🔴 No hay sesión en el cliente
       if (!fbUser) {
         try {
+          // Limpia cookie __session del server (por si quedaba algo)
           await clearSessionAction();
         } catch {
-          /* ignore on dev */
+          // ignore en dev
         }
 
-        setState({ firebaseUser: null, userDoc: null, loading: false });
+        setState({
+          firebaseUser: null,
+          userDoc: null,
+          loading: false,
+        });
         return;
       }
 
-      // Sí hay sesión
+      // ✅ Sí hay sesión en el cliente
       try {
-        const idToken = await fbUser.getIdToken();
+        // Forzamos refresh del token para evitar usar algo viejo
+        const idToken = await fbUser.getIdToken(true);
 
-        // Actualizamos cookie __session
+        // Sincroniza la cookie __session del server con este usuario
         await createSessionAction(idToken);
 
         // Leemos el userDoc (rol, permisos, foto, etc.)
@@ -56,7 +62,13 @@ export function useCurrentUser(): State {
         });
       } catch (e) {
         console.error("[useCurrentUser] error:", e);
-        setState({ firebaseUser: fbUser, userDoc: null, loading: false });
+
+        // Al menos devolvemos el usuario de Firebase para que la UI no se quede colgada
+        setState({
+          firebaseUser: fbUser,
+          userDoc: null,
+          loading: false,
+        });
       }
     });
 

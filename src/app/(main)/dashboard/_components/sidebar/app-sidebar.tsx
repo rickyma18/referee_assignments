@@ -18,11 +18,27 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_CONFIG } from "@/config/app-config";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { sidebarItems, type SidebarItem, type NavGroup, type NavMainItem } from "@/navigation/sidebar/sidebar-items";
+import { sidebarItems, type SidebarItem } from "@/navigation/sidebar/sidebar-items";
 import type { UserRole } from "@/types/roles";
 
 import { NavMain } from "./nav-main";
 import { NavUser } from "./nav-user";
+
+// ================== TIPOS LOCALES ==================
+
+export type NavMainItem = {
+  title: string;
+  url: string;
+  icon?: any;
+  newTab?: boolean;
+  comingSoon?: boolean;
+  subItems?: NavMainItem[];
+};
+
+export type NavGroup = {
+  id: string;
+  items: NavMainItem[];
+};
 
 // ---- helpers de rol y mapeo ----
 function filterByRole(items: SidebarItem[], role: UserRole | null): SidebarItem[] {

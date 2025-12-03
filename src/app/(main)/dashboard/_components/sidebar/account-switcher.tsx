@@ -16,25 +16,32 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { auth } from "@/lib/firebase";
-import { cn, getInitials } from "@/lib/utils"; // ✅ una sola import
+import { cn, getInitials } from "@/lib/utils";
+import { clearSessionAction } from "@/server/auth/auth.actions"; // 👈 limpiamos cookie del server
 
 export function AccountSwitcher() {
   const router = useRouter();
   const { firebaseUser, userDoc, loading } = useCurrentUser();
 
-  // ✅ Usa ?? para null/undefined (no para falsy)
   const name = userDoc?.displayName ?? firebaseUser?.displayName ?? userDoc?.email ?? "Usuario";
-
   const email = firebaseUser?.email ?? userDoc?.email ?? "";
   const avatar: string | undefined = firebaseUser?.photoURL ?? undefined;
   const role = userDoc?.role ?? "—";
 
   const handleLogout = async () => {
     try {
+      // 1) Cerrar sesión en el cliente (Firebase JS SDK)
       await signOut(auth);
+
+      // 2) Limpiar cookie httpOnly (__session) en el SERVER
+      await clearSessionAction();
+
+      // 3) Enviar al login
       router.replace("/auth/login");
-    } catch {
-      // opcional: toast de error
+    } catch (err) {
+      // aquí podrías meter un toast si quieres
+      // toast.error("No se pudo cerrar sesión.");
+      console.error("Error al cerrar sesión:", err);
     }
   };
 
