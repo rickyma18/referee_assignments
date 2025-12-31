@@ -3,6 +3,13 @@ import "server-only";
 import { getFirestore } from "firebase-admin/firestore";
 import { DateTime } from "luxon";
 
+import { getDelegateContext } from "@/server/auth/get-delegate-context";
+import {
+  assertLeagueBelongsToDelegate,
+  assertEffectiveDelegateId,
+  assertCanEdit,
+} from "@/server/auth/require-delegate-access";
+
 /* ---------------------------------------------------------
  * CREAR PARTIDO
  * --------------------------------------------------------- */
@@ -37,6 +44,11 @@ async function validateAssessors(ids?: string[]) {
 }
 
 export async function createMatchAction(p: CreateMatchParams) {
+  // ✅ Validar permisos y obtener delegateId
+  const ctx = await getDelegateContext();
+  assertCanEdit(ctx);
+  const delegateId = assertEffectiveDelegateId(ctx);
+
   if (p.homeTeamId === p.awayTeamId) throw new Error("Local y Visitante no pueden ser iguales.");
 
   const kickoff = DateTime.fromISO(`${p.fecha}T${p.hora}`, { zone: "America/Mexico_City" });
@@ -100,6 +112,9 @@ export async function createMatchAction(p: CreateMatchParams) {
 
     // 🔹 Nuevo
     assessors,
+
+    // ✅ Multi-tenant: guardar delegateId para consultas directas
+    delegateId,
   });
 
   return { ok: true };
@@ -108,12 +123,31 @@ export async function createMatchAction(p: CreateMatchParams) {
 /* ---------------------------------------------------------
  * OBTENER PARTIDO POR ID
  * --------------------------------------------------------- */
+
+/**
+ * Obtiene un partido por id.
+ *
+ * Seguridad multi-tenant:
+ * - Valida acceso a la league padre
+ *
+ * @param p.activeDelegateId - Para SUPER, el delegado seleccionado en UI
+ */
 export async function getMatchByIdAction(p: {
   leagueId: string;
   groupId: string;
   matchdayId: string;
   matchId: string;
+  activeDelegateId?: string | null;
 }) {
+  const ctx = await getDelegateContext({ activeDelegateId: p.activeDelegateId });
+
+  // Validar acceso a la league
+  try {
+    await assertLeagueBelongsToDelegate(p.leagueId, ctx);
+  } catch {
+    return { ok: false, error: "No tienes acceso a este partido." };
+  }
+
   const db = getFirestore();
   const ref = db
     .collection("leagues")
@@ -140,6 +174,10 @@ export async function getMatchByIdAction(p: {
 
 /* ---------------------------------------------------------
  * ACTUALIZAR PARTIDO
+ *
+ * Seguridad multi-tenant:
+ * - Solo SUPERUSUARIO o DELEGADO pueden editar
+ * - Valida que la league pertenezca al delegado actual
  * --------------------------------------------------------- */
 export async function updateMatchAction(p: {
   leagueId: string;
@@ -163,6 +201,11 @@ export async function updateMatchAction(p: {
   // 🔹 Nuevo opcional
   assessors?: string[] | null;
 }) {
+  // ✅ Validar permisos y ownership multi-tenant
+  const ctx = await getDelegateContext();
+  assertCanEdit(ctx);
+  await assertLeagueBelongsToDelegate(p.leagueId, ctx);
+
   const db = getFirestore();
   const ref = db
     .collection("leagues")

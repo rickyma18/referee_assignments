@@ -62,6 +62,13 @@ const RefereeBaseObj = z.object({
   canAssess: z.boolean().default(false),
 
   tier: z.enum(RefereeTierValues).default("DEBUTANTE"),
+
+  /**
+   * Multi-tenant:
+   * - NO viene del UI (server lo inyecta)
+   * - En inputs debe ser tolerante para no romper parse()
+   */
+  delegateId: z.string().optional(),
 });
 
 // --------------------------------------------------------
@@ -100,17 +107,22 @@ function withAssessorRule<T extends z.ZodTypeAny>(schema: T) {
 // Base “efectiva” (con regla). Útil si necesitas sólo el base validado.
 export const RefereeBaseZ = withAssessorRule(RefereeBaseObj);
 
-// Creación
-export const RefereeCreateZ = withAssessorRule(RefereeBaseObj.extend({}));
-
-// Actualización
-export const RefereeUpdateZ = withAssessorRule(
+// Creación (INPUT desde UI, delegateId tolerante porque server lo mete)
+export const RefereeCreateZ = withAssessorRule(
   RefereeBaseObj.extend({
+    // 👇 redundante por estar en base, pero explícito por claridad
+    delegateId: z.string().optional(),
+  }),
+);
+
+// Actualización (NO permite cambiar delegateId)
+export const RefereeUpdateZ = withAssessorRule(
+  RefereeBaseObj.omit({ delegateId: true }).extend({
     id: z.string().min(1),
   }),
 );
 
-// Salida de repositorio
+// Salida de repositorio (DB)
 export const RefereeZ = withAssessorRule(
   RefereeBaseObj.extend({
     id: z.string(),

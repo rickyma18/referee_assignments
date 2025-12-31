@@ -3,6 +3,7 @@ import "server-only";
 
 import { z, ZodError } from "zod";
 
+import { getDelegateContext } from "@/server/auth/get-delegate-context";
 import { suggestTernasForMatchesBalanced } from "@/server/services/assignments/terna-batch";
 import type { SuggestedTerna, SuggestTernaForMatchParams } from "@/server/services/assignments/terna-types";
 
@@ -68,12 +69,18 @@ export async function suggestAssignmentsForMatchesAction(rawInput: unknown): Pro
   try {
     await requireEditRole(); // 🔒 Sólo SUPERUSUARIO/DELEGADO (o lo que tengas en requireEditRole)
 
+    // ✅ Multi-tenant: obtener contexto para filtrar árbitros por delegado
+    const ctx = await getDelegateContext();
+
     const { matches } = SuggestMatchesInputZ.parse(rawInput);
 
     // matches ya cumple con SuggestTernaForMatchParams, incluyendo campos opcionales
     const params: SuggestTernaForMatchParams[] = matches;
 
-    const results = await suggestTernasForMatchesBalanced(params);
+    // ✅ Pasar delegateId al motor de sugerencias
+    const results = await suggestTernasForMatchesBalanced(params, {
+      delegateId: ctx.effectiveDelegateId ?? undefined,
+    });
 
     return { ok: true, data: results };
   } catch (e: any) {

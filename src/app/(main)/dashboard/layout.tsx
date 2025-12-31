@@ -24,10 +24,9 @@ import {
   type NavbarStyle,
 } from "@/types/preferences/layout";
 
-import { AccountSwitcher } from "./_components/sidebar/account-switcher";
-import { LayoutControls } from "./_components/sidebar/layout-controls";
+import { DashboardClientProviders } from "./_components/dashboard-client-providers";
+import { NavbarControls } from "./_components/sidebar/navbar-controls";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
-import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
@@ -51,46 +50,45 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     // 🔐 Todos estos roles pueden entrar al dashboard
     <AuthGuard allowedRoles={["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"]}>
       <ToastProvider>
-        <SidebarProvider defaultOpen={defaultOpen}>
-          <AppSidebar variant={sidebarVariant} collapsible={sidebarCollapsible} />
+        {/* ✅ Provider CLIENT para hooks (delegate store) sin convertir este layout a client */}
+        <DashboardClientProviders>
+          <SidebarProvider defaultOpen={defaultOpen}>
+            <AppSidebar variant={sidebarVariant} collapsible={sidebarCollapsible} />
 
-          <SidebarInset
-            data-content-layout={contentLayout}
-            className={cn(
-              "flex h-screen flex-col overflow-hidden",
-              "data-[content-layout=centered]:!mx-auto data-[content-layout=centered]:max-w-screen-2xl",
-              "max-[113rem]:peer-data-[variant=inset]:!mr-2 min-[101rem]:peer-data-[variant=inset]:peer-data-[state=collapsed]:!mr-auto",
-            )}
-          >
-            {/* ================= NAVBAR ================= */}
-            <header
-              data-navbar-style={navbarStyle}
+            <SidebarInset
+              data-content-layout={contentLayout}
               className={cn(
-                "flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear",
-                "data-[navbar-style=sticky]:bg-background/50 data-[navbar-style=sticky]:sticky data-[navbar-style=sticky]:top-0",
-                "data-[navbar-style=sticky]:z-50 data-[navbar-style=sticky]:backdrop-blur-md",
+                "flex h-screen flex-col overflow-hidden",
+                "data-[content-layout=centered]:!mx-auto data-[content-layout=centered]:max-w-screen-2xl",
+                "max-[113rem]:peer-data-[variant=inset]:!mr-2 min-[101rem]:peer-data-[variant=inset]:peer-data-[state=collapsed]:!mr-auto",
               )}
             >
-              <div className="flex w-full items-center justify-between px-4 lg:px-6">
-                <div className="flex items-center gap-1 lg:gap-2">
-                  <SidebarTrigger className="-ml-1" />
-                  <Separator orientation="vertical" className="mx-2 h-4" />
-                  <SearchDialog />
+              {/* ================= NAVBAR ================= */}
+              <header
+                data-navbar-style={navbarStyle}
+                className={cn(
+                  "flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear",
+                  "data-[navbar-style=sticky]:bg-background/50 data-[navbar-style=sticky]:sticky data-[navbar-style=sticky]:top-0",
+                  "data-[navbar-style=sticky]:z-50 data-[navbar-style=sticky]:backdrop-blur-md",
+                )}
+              >
+                <div className="flex w-full items-center justify-between px-4 lg:px-6">
+                  <div className="flex items-center gap-1 lg:gap-2">
+                    <SidebarTrigger className="-ml-1" />
+                    <Separator orientation="vertical" className="mx-2 h-4" />
+                    <SearchDialog />
+                  </div>
+                  <NavbarControls {...layoutPreferences} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <LayoutControls {...layoutPreferences} />
-                  <ThemeSwitcher />
-                  <AccountSwitcher />
-                </div>
-              </div>
-            </header>
+              </header>
 
-            {/* ================= CONTENT ================= */}
-            <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6">{children}</div>
-          </SidebarInset>
-        </SidebarProvider>
+              {/* ================= CONTENT ================= */}
+              <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6">{children}</div>
+            </SidebarInset>
+          </SidebarProvider>
 
-        <ToastViewport />
+          <ToastViewport />
+        </DashboardClientProviders>
       </ToastProvider>
     </AuthGuard>
   );

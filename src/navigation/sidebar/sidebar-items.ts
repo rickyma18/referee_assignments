@@ -72,6 +72,12 @@ export const sidebarItems: SidebarItem[] = [
     requiredRoles: ["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"],
   },
   {
+    title: "Panel de Control",
+    href: "/dashboard/default",
+    icon: FaUserTie, // mucho más temático
+    requiredRoles: ["SUPERUSUARIO"],
+  },
+  {
     title: "Ligas - Grupos - Equipos",
     href: "/dashboard/teams-explorer",
     icon: FaUniversity, // más institucional

@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 
 import { ZodError } from "zod";
 
+import { getDelegateContext } from "@/server/auth/get-delegate-context";
 import { secureWrite } from "@/server/auth/secure-action";
 import * as repo from "@/server/repositories/league-groups.repo";
 
@@ -30,8 +31,15 @@ export async function getLeagueGroupAction(leagueId: string, groupId: string) {
 // ------- Escrituras (protegidas) -------
 export async function createLeagueGroupAction(input: unknown): Promise<ActionResult> {
   return secureWrite(async () => {
-    // Si tienes un schema Zod para league-group, valida aquí.
-    const created = await repo.create(input);
+    const ctx = await getDelegateContext();
+
+    // ✅ Inyectar delegateId para guardarlo en el doc del grupo
+    const inputWithDelegate = {
+      ...(input as Record<string, unknown>),
+      delegateId: ctx.effectiveDelegateId ?? undefined,
+    };
+
+    const created = await repo.create(inputWithDelegate);
     const leagueId = (input as { leagueId: string }).leagueId;
     if (leagueId) revalidatePath(`/dashboard/leagues/${leagueId}/groups`);
     return created;

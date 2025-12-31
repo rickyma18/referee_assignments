@@ -4,7 +4,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import "@/server/admin/firebase-admin";
 import { RefereeTierValues } from "@/domain/referees/referee-tier";
 import { RefereeCreateZ, RefereeUpdateZ, RefereeZ, RefStatus, RefRole } from "@/domain/referees/referee.zod";
-import { toPlain } from "@/lib/serialize"; // 👈 tu helper
+import { toPlain } from "@/lib/serialize";
 
 const COL = "referees";
 const db = getFirestore();
@@ -27,21 +27,37 @@ export type ListParams = {
   category?: "TDP" | "LP";
   limit?: number;
   startAfterNameLc?: string;
-  // 🔹 Nuevo: si quieres listar solo los que pueden evaluar (opcional)
   canAssessOnly?: boolean;
+
+  // ✅ multi-tenant
+  delegateId?: string;
 };
 
 export async function create(input: unknown) {
   const data = RefereeCreateZ.parse(input);
   const name_lc = normalizeNameLc(data.name);
 
-  const dup = await db.collection(COL).where("name_lc", "==", name_lc).limit(1).get();
+  // ✅ delegateId debe venir del server action (inyectado)
+  const delegateId = data.delegateId as string | undefined;
+  if (!delegateId) {
+    return { ok: false as const, message: "Falta delegateId (server)." };
+  }
+
+  // ✅ Check duplicado POR DELEGADO (no global)
+  // Índice requerido: delegateId + name_lc
+  const dup = await db
+    .collection(COL)
+    .where("delegateId", "==", delegateId)
+    .where("name_lc", "==", name_lc)
+    .limit(1)
+    .get();
   if (!dup.empty) {
     return { ok: false as const, message: "Ya existe un árbitro con ese nombre." };
   }
 
   const payload = {
-    ...data, // incluye canAssess y tier
+    ...data,
+    delegateId, // ✅ guardado en Firestore
     name_lc,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -56,17 +72,37 @@ export async function update(input: unknown) {
   const data = RefereeUpdateZ.parse(input);
   const { id, ...rest } = data;
 
-  const name_lc = rest.name ? normalizeNameLc(rest.name) : undefined;
+  // ⚠️ no queremos que cambien delegateId por update desde UI
+  // pero si te llega en rest por algún motivo, lo ignoramos.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { delegateId: _ignoredDelegateId, ...safeRest } = rest;
+
+  // Cargar el doc actual para obtener su delegateId (necesario para check unicidad)
+  const currentSnap = await db.collection(COL).doc(id).get();
+  if (!currentSnap.exists) {
+    return { ok: false as const, message: "Árbitro no encontrado." };
+  }
+  const currentData = currentSnap.data() as any;
+  const delegateId = currentData?.delegateId as string | undefined;
+
+  const name_lc = safeRest.name ? normalizeNameLc(safeRest.name) : undefined;
 
   if (name_lc) {
-    const dup = await db.collection(COL).where("name_lc", "==", name_lc).limit(1).get();
-    if (!dup.empty && dup.docs[0].id !== id) {
+    // ✅ Check duplicado POR DELEGADO (no global)
+    // Índice requerido: delegateId + name_lc
+    let dupQuery = db.collection(COL).where("name_lc", "==", name_lc);
+    if (delegateId) {
+      dupQuery = dupQuery.where("delegateId", "==", delegateId);
+    }
+    const dup = await dupQuery.limit(2).get();
+    const hasDuplicate = dup.docs.some((d) => d.id !== id);
+    if (hasDuplicate) {
       return { ok: false as const, message: "Ya existe un árbitro con ese nombre." };
     }
   }
 
   const patch = {
-    ...rest, // incluye canAssess y tier
+    ...safeRest,
     ...(name_lc ? { name_lc } : {}),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -84,17 +120,17 @@ export async function getById(id: string) {
 
   const raw = { id: snap.id, ...(snap.data() as any) };
 
-  // Valida con Zod (permite createdAt/updatedAt opcionales)
+  // Valida con Zod
   const parsed = RefereeZ.parse(raw);
 
-  // 🔥 Serializa a POJO (fechas => ISO)
+  // Serializa a POJO (fechas => ISO)
   const plain = toPlain(parsed);
 
   // (Opcional) si tu form no usa estos campos, quítalos aquí:
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { createdAt, updatedAt, ...initialForForm } = plain;
 
-  return initialForForm; // listo para pasarlo al Client Component
+  return initialForForm;
 }
 
 export async function remove(id: string) {
@@ -107,19 +143,28 @@ export async function setStatus(id: string, status: RefStatus) {
   return { ok: true as const };
 }
 
-/**
- * Cambia solo el tier del árbitro.
- * Usado por el board de drag & drop.
- */
 export async function setTier(id: string, tier: RefTier) {
   await db.collection(COL).doc(id).set({ tier, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { ok: true as const };
 }
 
 export async function list(params: ListParams) {
-  const { q, zones = [], roles = [], status, category, limit = 50, startAfterNameLc, canAssessOnly } = params;
+  const {
+    q,
+    zones = [],
+    roles = [],
+    status,
+    category,
+    limit = 50,
+    startAfterNameLc,
+    canAssessOnly,
+    delegateId,
+  } = params;
 
   let query: FirebaseFirestore.Query = db.collection(COL);
+
+  // ✅ multi-tenant scope
+  if (delegateId) query = query.where("delegateId", "==", delegateId);
 
   if (typeof canAssessOnly === "boolean") query = query.where("canAssess", "==", canAssessOnly);
   if (status) query = query.where("status", "==", status);
@@ -146,9 +191,9 @@ export async function list(params: ListParams) {
   return { items, nextCursor };
 }
 
-// 🔹 Helper opcional (para pickers posteriores)
-export async function listAssessorsSimple(search?: string) {
-  const res = await list({ q: search, canAssessOnly: true, limit: 50 });
+// Helper opcional (para pickers)
+export async function listAssessorsSimple(search?: string, delegateId?: string) {
+  const res = await list({ q: search, canAssessOnly: true, limit: 50, delegateId });
   return res.items.map((r: any) => ({ id: r.id, name: r.name ?? "—" }));
 }
 
@@ -162,7 +207,6 @@ export async function setRcsOverride(
     };
 
     if (rcsOverrideCentral == null) {
-      // Borramos el campo para volver al comportamiento por defecto
       patch.rcsOverrideCentral = FieldValue.delete();
     } else {
       patch.rcsOverrideCentral = rcsOverrideCentral;

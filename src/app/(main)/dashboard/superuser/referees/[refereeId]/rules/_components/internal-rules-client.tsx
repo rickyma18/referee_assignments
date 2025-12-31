@@ -32,6 +32,7 @@ type BasicRef = {
   status?: string | null;
   zones?: string[];
   rolesAllowed?: string[];
+  delegateId?: string | null; // ✅ Multi-tenant
 };
 
 type Props = {
@@ -319,6 +320,7 @@ export function InternalRulesClient({ referee, initialRules }: Props) {
         initialRule={editingRule}
         onSave={handleSave}
         pending={pending}
+        referee={referee}
       />
     </div>
   );
@@ -394,9 +396,10 @@ type RuleDialogProps = {
   initialRule: InternalRule | null;
   pending: boolean;
   onSave: (input: InternalRuleInput) => void;
+  referee: BasicRef;
 };
 
-function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDialogProps) {
+function RuleDialog({ open, onOpenChange, initialRule, onSave, pending, referee }: RuleDialogProps) {
   const isEdit = !!initialRule;
 
   const [type, setType] = React.useState<string>(initialRule?.type ?? "RA_municipios_prohibidos");
@@ -496,14 +499,18 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
     fetchZones();
   }, [open]);
 
-  // Cargar equipos globales cuando se abre el diálogo
+  // Cargar equipos filtrados por delegateId cuando se abre el diálogo
   React.useEffect(() => {
     if (!open) return;
 
     const fetchTeams = async () => {
       try {
         setTeamsLoading(true);
-        const res = await fetch("/api/catalogs/teams-simple");
+        // ✅ Multi-tenant: filtrar por delegateId del referee
+        const url = referee.delegateId
+          ? `/api/catalogs/teams-simple?delegateId=${encodeURIComponent(referee.delegateId)}`
+          : "/api/catalogs/teams-simple";
+        const res = await fetch(url);
         if (!res.ok) return;
         const json = (await res.json()) as {
           ok: boolean;
@@ -517,16 +524,20 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
     };
 
     fetchTeams();
-  }, [open]);
+  }, [open, referee.delegateId]);
 
-  // 🔥 Cargar ligas desde src/app/api/leagues/route.ts
+  // Cargar ligas filtradas por delegateId
   React.useEffect(() => {
     if (!open) return;
 
     const fetchLeagues = async () => {
       try {
         setLeaguesLoading(true);
-        const res = await fetch("/api/leagues");
+        // ✅ Multi-tenant: filtrar por delegateId del referee
+        const url = referee.delegateId
+          ? `/api/leagues?delegateId=${encodeURIComponent(referee.delegateId)}`
+          : "/api/leagues";
+        const res = await fetch(url);
         if (!res.ok) {
           console.error("Error al cargar ligas", await res.text());
           return;
@@ -545,7 +556,7 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
     };
 
     fetchLeagues();
-  }, [open]);
+  }, [open, referee.delegateId]);
 
   // 🔥 Cargar árbitros simples para "compañeros preferidos"
   React.useEffect(() => {
@@ -554,7 +565,11 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
     const fetchRefs = async () => {
       try {
         setRefereesLoading(true);
-        const res = await fetch("/api/catalogs/referees-simple");
+        // ✅ Multi-tenant: filtrar por delegateId del referee
+        const url = referee.delegateId
+          ? `/api/catalogs/referees-simple?delegateId=${encodeURIComponent(referee.delegateId)}`
+          : "/api/catalogs/referees-simple";
+        const res = await fetch(url);
         if (!res.ok) {
           console.error("Error al cargar árbitros", await res.text());
           return;
@@ -571,7 +586,7 @@ function RuleDialog({ open, onOpenChange, initialRule, onSave, pending }: RuleDi
     };
 
     fetchRefs();
-  }, [open]);
+  }, [open, referee.delegateId]);
 
   const splitTrimmed = (input: string): string[] =>
     input

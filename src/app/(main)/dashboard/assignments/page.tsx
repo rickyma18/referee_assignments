@@ -6,6 +6,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import "@/server/admin/firebase-admin";
 import { EntityHeader } from "@/components/entity-header";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getDelegateContext } from "@/server/auth/get-delegate-context";
 
 import { AssignmentsTable } from "./_components/assignments-table";
 
@@ -77,8 +78,25 @@ async function getAssignmentsData(): Promise<{
 }> {
   const db = getFirestore();
 
-  // 1) Ligas
-  const leaguesSnap = await db.collection("leagues").get();
+  // ✅ Multi-tenant context (SUPER global vs impersonation vs DELEGADO)
+  const ctx = await getDelegateContext();
+
+  // Si NO es super global, debemos tener delegateId efectivo para scoping
+  const shouldScope = !(ctx.isSuper && !ctx.effectiveDelegateId);
+  const effectiveDelegateId = ctx.effectiveDelegateId;
+
+  // Si se requiere scope y no hay delegateId (ej: árbitro/asistente), devolvemos vacío
+  if (shouldScope && !effectiveDelegateId) {
+    return { leagues: [], groups: [], matches: [], referees: [] };
+  }
+
+  // 1) Ligas (filtradas por delegateId si aplica)
+  const leaguesQuery = shouldScope
+    ? db.collection("leagues").where("delegateId", "==", effectiveDelegateId)
+    : db.collection("leagues");
+
+  const leaguesSnap = await leaguesQuery.get();
+
   const leagues: LeagueDoc[] = leaguesSnap.docs.map((d) => {
     const data = d.data() as any;
     return {
@@ -89,7 +107,7 @@ async function getAssignmentsData(): Promise<{
     };
   });
 
-  // 2) Grupos (por liga) — UNA sola lectura por liga
+  // 2) Grupos (por liga) — UNA sola lectura por liga (subcolección)
   const groups: GroupDoc[] = [];
   const groupsByLeague = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
 
@@ -107,7 +125,7 @@ async function getAssignmentsData(): Promise<{
     });
   }
 
-  // 3) Partidos (todos; la vista de "próximos" se controla en el cliente)
+  // 3) Partidos (solo de las leagues ya filtradas)
   const matches: AssignmentMatchRow[] = [];
 
   for (const lg of leaguesSnap.docs) {
@@ -115,7 +133,6 @@ async function getAssignmentsData(): Promise<{
     const leagueData = lg.data() as any;
     const leagueName = leagueData?.name ?? "Liga";
 
-    // Reutilizamos los grupos ya leídos para esta liga
     const groupDocs = groupsByLeague.get(leagueId) ?? [];
 
     for (const g of groupDocs) {
@@ -129,7 +146,6 @@ async function getAssignmentsData(): Promise<{
         const matchdayId = md.id;
         const matchdayNumber: number | null = typeof mdData?.number === "number" ? mdData.number : null;
 
-        // Ahora solo ordenamos por fecha para que el cliente decida qué mostrar
         const matchesSnap = await md.ref.collection("matches").orderBy("kickoff", "asc").get();
 
         matchesSnap.forEach((m) => {
@@ -162,8 +178,13 @@ async function getAssignmentsData(): Promise<{
     }
   }
 
-  // 4) Árbitros disponibles (solo DISPONIBLE) — ya filtramos en la query
-  const refereesSnap = await db.collection("referees").where("status", "==", "DISPONIBLE").get();
+  // 4) Árbitros disponibles (filtrados por delegateId si aplica)
+  const refereesBase = db.collection("referees").where("status", "==", "DISPONIBLE");
+
+  const refereesSnap = shouldScope
+    ? await refereesBase.where("delegateId", "==", effectiveDelegateId).get()
+    : await refereesBase.get();
+
   const referees: RefereeOption[] = refereesSnap.docs.map((d) => {
     const data = d.data() as any;
     const status = (data?.status ?? "").toString().toUpperCase();
@@ -186,7 +207,6 @@ export default async function Page() {
   const { leagues, groups, matches, referees } = await getAssignmentsData();
 
   return (
-    // 🔹 Evitamos que toda la página tenga scroll horizontal
     <div className="max-w-full space-y-6 overflow-x-hidden">
       <EntityHeader
         loading={false}
@@ -197,7 +217,6 @@ export default async function Page() {
         canDelete={false}
       />
 
-      {/* 🔹 Solo este contenedor tendrá scroll horizontal */}
       <div className="w-full overflow-x-auto">
         <Suspense
           fallback={
@@ -207,7 +226,6 @@ export default async function Page() {
             </div>
           }
         >
-          {/* min-w opcional para forzar que aparezca scrollbar si la tabla es muy ancha */}
           <div className="min-w-[900px]">
             <AssignmentsTable leagues={leagues} groups={groups} matches={matches} referees={referees} />
           </div>

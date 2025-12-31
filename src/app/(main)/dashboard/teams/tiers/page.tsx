@@ -8,12 +8,13 @@ import "@/server/admin/firebase-admin";
 import { EntityHeader } from "@/components/entity-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TeamTier } from "@/domain/teams/team-tier";
-import type { Team } from "@/domain/teams/team.types";
+import { getDelegateContext } from "@/server/auth/get-delegate-context";
 import { getByGroup } from "@/server/repositories/teams.repo";
 
 import { TeamTiersBoard } from "./_components/team-tiers-board";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 export const runtime = "nodejs";
 
 type PageProps = {
@@ -47,9 +48,28 @@ async function getLeaguesAndGroups(): Promise<{
   leagues: LeagueDoc[];
   groups: GroupDoc[];
 }> {
+  const ctx = await getDelegateContext();
+
+  // DELEGADO sin delegateId => vacío
+  if (ctx.role === "DELEGADO" && !ctx.effectiveDelegateId) {
+    return { leagues: [], groups: [] };
+  }
+
   const db = getFirestore();
 
-  const leaguesSnap = await db.collection("leagues").get();
+  let leaguesQuery: FirebaseFirestore.Query = db.collection("leagues");
+
+  // Si hay filtro activo (delegado o super con delegado seleccionado)
+  if (ctx.effectiveDelegateId) {
+    leaguesQuery = leaguesQuery.where("delegateId", "==", ctx.effectiveDelegateId);
+  } else {
+    // Modo global: solo super debe ver todo
+    if (!ctx.isSuper) {
+      return { leagues: [], groups: [] };
+    }
+  }
+
+  const leaguesSnap = await leaguesQuery.get();
 
   const leagues: LeagueDoc[] = leaguesSnap.docs.map((d) => {
     const data = d.data() as any;
@@ -79,12 +99,17 @@ async function getLeaguesAndGroups(): Promise<{
 
 async function getTeamsForBoard(groupId: string | undefined): Promise<TeamForBoard[]> {
   if (!groupId) return [];
+
+  // Nota: este repo usa Admin SDK; aquí estamos “scoping” por groupId
+  // que proviene SOLO de grupos ya filtrados por league->delegateId (arriba),
+  // así evitamos leaks por query param.
   const { items } = await getByGroup({ groupId, pageSize: 500 });
-  return items.map((t) => ({
+
+  return (items ?? []).map((t: any) => ({
     id: t.id,
     name: t.name,
-    logoUrl: (t as any).logoUrl ?? null,
-    tier: (t as any).tier ?? null,
+    logoUrl: t.logoUrl ?? null,
+    tier: t.tier ?? null,
   }));
 }
 
@@ -102,11 +127,12 @@ export default async function Page({ searchParams }: PageProps) {
         ? leagues[0].id
         : undefined;
 
-  // Group inicial (del league inicial)
+  // Groups del league inicial
   const groupsForInitialLeague = initialLeagueId ? groups.filter((g) => g.leagueId === initialLeagueId) : [];
 
+  // Group inicial
   const initialGroupId =
-    spGroupId && groups.some((g) => g.id === spGroupId)
+    spGroupId && groupsForInitialLeague.some((g) => g.id === spGroupId)
       ? spGroupId
       : groupsForInitialLeague.length > 0
         ? groupsForInitialLeague[0].id
@@ -118,7 +144,6 @@ export default async function Page({ searchParams }: PageProps) {
   const group = initialGroupId ? (groups.find((g) => g.id === initialGroupId) ?? null) : null;
 
   const headerTitle = "Tier List de equipos";
-
   const subtitle =
     "Organiza los equipos por nivel de complejidad (Tranquilos, Regulares, Complicados…) para la sugerencia automática de ternas.";
 

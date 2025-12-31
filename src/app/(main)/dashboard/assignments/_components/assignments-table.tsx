@@ -3,16 +3,18 @@
 import * as React from "react";
 import { useTransition, useMemo, useState, useEffect, useCallback } from "react";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { getCoreRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
-import { FileSpreadsheet, Sparkles, CheckCircle2 } from "lucide-react";
+import { FileSpreadsheet, Sparkles, CheckCircle2, Users } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { DataTableViewOptions } from "@/components/data-table/data-table-view-options";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -54,6 +56,9 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
   const isRefereeView = role === "ARBITRO";
   const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO" || role === "ASISTENTE";
+
+  // ✅ UX: si no hay árbitros cargados, mostramos alerta + bloqueamos generar ternas
+  const hasReferees = referees.length > 0;
 
   const [filterLeagueId, setFilterLeagueId] = useState<string>("all");
   const [filterGroupId, setFilterGroupId] = useState<string>("all");
@@ -245,7 +250,6 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     });
 
     // Vista ARBITRO: solo partidos con terna CONFIRMADA en Firestore
-    // (centralRefereeId, aa1RefereeId y aa2RefereeId con valor)
     const finalRows = isRefereeView
       ? sorted.filter((m) => Boolean(m.centralRefereeId && m.aa1RefereeId && m.aa2RefereeId))
       : sorted;
@@ -397,6 +401,12 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
   const handleGenerateSuggestions = useCallback(async () => {
     if (!canEdit) return;
 
+    // ✅ Bloqueo UX (y seguridad de UI)
+    if (!hasReferees) {
+      toast.error("No hay árbitros creados para este delegado. Registra árbitros antes de generar ternas.");
+      return;
+    }
+
     const coreRows = table.getPrePaginationRowModel().rows;
     const rows = coreRows.map((r) => r.original);
 
@@ -417,7 +427,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
     // A partir de aquí siempre mostramos el diálogo de recalcular
     setIsRecalcDialogOpen(true);
-  }, [table, runSuggestions, hasGeneratedOnce, canEdit]);
+  }, [table, runSuggestions, hasGeneratedOnce, canEdit, hasReferees]);
 
   /* ---------- Confirmar recalcular (diálogo) ---------- */
 
@@ -649,6 +659,24 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
         />
       </div>
 
+      {/* ✅ Alert UX cuando no hay árbitros */}
+      {canEdit && !hasReferees && (
+        <Alert className="border-border bg-muted/40">
+          <Users className="h-4 w-4" />
+          <div>
+            <AlertTitle>No hay árbitros creados</AlertTitle>
+            <AlertDescription className="mt-1">
+              Para poder generar ternas sugeridas, primero registra árbitros para este delegado.
+              <div className="mt-3">
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/dashboard/referees/new">Crear árbitro</Link>
+                </Button>
+              </div>
+            </AlertDescription>
+          </div>
+        </Alert>
+      )}
+
       {/* Tabla + opciones + paginación */}
       <div className="bg-card flex flex-col gap-2 rounded-lg border">
         <div className="flex flex-wrap items-center gap-2 px-3 py-2">
@@ -664,7 +692,8 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
                 size="sm"
                 variant="default"
                 onClick={handleGenerateSuggestions}
-                disabled={isGeneratingSuggestions || isPending}
+                disabled={isGeneratingSuggestions || isPending || !hasReferees}
+                title={!hasReferees ? "Debes crear árbitros primero" : undefined}
               >
                 <Sparkles className="mr-2 h-4 w-4" />
                 {isGeneratingSuggestions ? "Generando…" : "Generar ternas sugeridas"}

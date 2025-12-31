@@ -29,11 +29,15 @@ export const RefereeTierLabels: Record<RefereeTier, string> = {
  * - NO_ELEGIBLE devuelve null a propósito: así es más fácil excluirlo del pool
  *   automático y sólo permitirlo en asignaciones manuales si quieres.
  * - El resto son valores sencillos 1-4 que luego comparamos contra MDS.
+ * - Normaliza a MAYÚSCULAS para tolerar datos legacy con case incorrecto.
  */
 export function refereeTierToRcsCentral(tier: RefereeTier | null | undefined): number | null {
   if (!tier) return null;
 
-  switch (tier) {
+  // ✅ Normalizar a MAYÚSCULAS para tolerar datos con case incorrecto
+  const normalized = typeof tier === "string" ? tier.toUpperCase().trim() : tier;
+
+  switch (normalized) {
     case "NO_ELEGIBLE":
       return null; // no entra a sugerencias automáticas
     case "DEBUTANTE":
@@ -45,6 +49,8 @@ export function refereeTierToRcsCentral(tier: RefereeTier | null | undefined): n
     case "MUY_EXPERIMENTADO":
       return 4;
     default:
+      // 🔍 Log para detectar tiers no reconocidos
+      console.warn(`[refereeTierToRcsCentral] Tier no reconocido: "${tier}" (normalizado: "${normalized}")`);
       return null;
   }
 }

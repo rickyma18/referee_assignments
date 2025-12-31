@@ -2,56 +2,271 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ===== Helpers =====
+    // =====================================================================
+    // HELPERS - Autenticación y UID
+    // =====================================================================
+
     function uid() {
       return request.auth != null ? request.auth.uid : null;
     }
 
-    // Prioridad: custom claims -> (transición) rol desde users/{uid}
-    function hasRole(role) {
-      return (request.auth.token.role == role) ||
-             (roleFromUsersDoc() == role);
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    function hasAnyRole(roles) {
-      return roles.hasAny(request.auth.token.role) ||
-             roles.hasAny(roleFromUsersDoc());
+    // =====================================================================
+    // HELPERS - Role (prioridad: claims > userDoc)
+    // =====================================================================
+
+    // Lee role desde custom claims
+    function roleFromClaims() {
+      return request.auth.token.role;
     }
 
-    // ⚠️ Transitorio: permite leer tu propio users/{uid} para extraer role si aún no seteas claims.
-    // Cuando implementemos Tarea 4 (setUserRole + customClaims), podemos borrar esta función y
-    // las referencias a roleFromUsersDoc() para depender 100% de claims.
+    // Lee role desde /users/{uid} (fallback transicional)
     function roleFromUsersDoc() {
       return uid() == null
         ? null
         : get(/databases/$(database)/documents/users/$(uid())).data.role;
     }
 
-    // ===== Colección: users =====
+    // Role efectivo: claims si existe, si no userDoc
+    function effectiveRole() {
+      return roleFromClaims() != null ? roleFromClaims() : roleFromUsersDoc();
+    }
+
+    // Helpers de rol
+    function hasRole(role) {
+      return effectiveRole() == role;
+    }
+
+    function hasAnyRole(roles) {
+      return effectiveRole() in roles;
+    }
+
+    function isSuperuser() {
+      return hasRole("SUPERUSUARIO");
+    }
+
+    function isDelegate() {
+      return hasRole("DELEGADO");
+    }
+
+    function isAssistant() {
+      return hasRole("ASISTENTE");
+    }
+
+    function isReferee() {
+      return hasRole("ARBITRO");
+    }
+
+    function canEdit() {
+      return isSuperuser() || isDelegate();
+    }
+
+    // =====================================================================
+    // HELPERS - DelegateId (prioridad: claims > userDoc)
+    // =====================================================================
+
+    // Lee delegateId desde custom claims
+    function delegateIdFromClaims() {
+      return request.auth.token.delegateId;
+    }
+
+    // Lee delegateId desde /users/{uid} (fallback transicional)
+    function delegateIdFromUsersDoc() {
+      return uid() == null
+        ? null
+        : get(/databases/$(database)/documents/users/$(uid())).data.delegateId;
+    }
+
+    // DelegateId efectivo: claims si existe, si no userDoc
+    function effectiveDelegateId() {
+      return delegateIdFromClaims() != null ? delegateIdFromClaims() : delegateIdFromUsersDoc();
+    }
+
+    // =====================================================================
+    // HELPERS - Multi-tenant ownership
+    // =====================================================================
+
+    // Verifica si el recurso pertenece al delegado actual
+    function resourceBelongsToDelegate() {
+      return resource.data.delegateId == effectiveDelegateId();
+    }
+
+    // Verifica si el nuevo recurso tendrá el delegateId correcto
+    function requestHasCorrectDelegateId() {
+      return request.resource.data.delegateId == effectiveDelegateId();
+    }
+
+    // Lee el delegateId de una league específica
+    function leagueDelegateId(leagueId) {
+      return get(/databases/$(database)/documents/leagues/$(leagueId)).data.delegateId;
+    }
+
+    // Verifica si la league pertenece al delegado actual
+    function leagueBelongsToDelegate(leagueId) {
+      return leagueDelegateId(leagueId) == effectiveDelegateId();
+    }
+
+    // =====================================================================
+    // COLECCIÓN: users
+    // =====================================================================
     match /users/{userId} {
-      // Todos los autenticados pueden leer (para mostrar nombre/foto/rol en UI)
-      allow read: if request.auth != null;
+      // Lectura: cualquier usuario autenticado (para UI)
+      allow read: if isAuthenticated();
 
-      // Solo SUPERUSUARIO puede crear/actualizar/eliminar usuarios (p. ej. cambiar roles)
-      allow create, update, delete: if hasRole("SUPERUSUARIO")
-        && (!('role' in request.resource.data) || hasRole("SUPERUSUARIO")); // redundante pero explícito
-
-      // Protección adicional: si un no-super intenta cambiar 'role', rechaza
-      allow update: if false; // fallback; arriba ya cubrimos el caso permitido
+      // Escritura: solo SUPERUSUARIO
+      allow create, update, delete: if isSuperuser();
     }
 
-    // ===== Colección: designaciones =====
+    // =====================================================================
+    // COLECCIÓN: leagues (multi-tenant)
+    // =====================================================================
+    match /leagues/{leagueId} {
+      // SUPERUSUARIO: acceso total
+      // DELEGADO: solo sus leagues
+      // Otros: solo lectura de sus leagues
+      allow read: if isAuthenticated() && (
+        isSuperuser() ||
+        resourceBelongsToDelegate()
+      );
+
+      allow create: if canEdit() && (
+        isSuperuser() ||
+        requestHasCorrectDelegateId()
+      );
+
+      allow update, delete: if canEdit() && (
+        isSuperuser() ||
+        resourceBelongsToDelegate()
+      );
+
+      // ===== Subcolección: groups =====
+      match /groups/{groupId} {
+        allow read: if isAuthenticated() && (
+          isSuperuser() ||
+          leagueBelongsToDelegate(leagueId)
+        );
+
+        allow create, update, delete: if canEdit() && (
+          isSuperuser() ||
+          leagueBelongsToDelegate(leagueId)
+        );
+
+        // ===== Subcolección: matchdays =====
+        match /matchdays/{matchdayId} {
+          allow read: if isAuthenticated() && (
+            isSuperuser() ||
+            leagueBelongsToDelegate(leagueId)
+          );
+
+          allow create, update, delete: if canEdit() && (
+            isSuperuser() ||
+            leagueBelongsToDelegate(leagueId)
+          );
+
+          // ===== Subcolección: matches =====
+          match /matches/{matchId} {
+            allow read: if isAuthenticated() && (
+              isSuperuser() ||
+              leagueBelongsToDelegate(leagueId)
+            );
+
+            allow create, update, delete: if canEdit() && (
+              isSuperuser() ||
+              leagueBelongsToDelegate(leagueId)
+            );
+          }
+        }
+      }
+    }
+
+    // =====================================================================
+    // COLECCIÓN: teams (multi-tenant)
+    // =====================================================================
+    match /teams/{teamId} {
+      allow read: if isAuthenticated() && (
+        isSuperuser() ||
+        resourceBelongsToDelegate()
+      );
+
+      allow create: if canEdit() && (
+        isSuperuser() ||
+        requestHasCorrectDelegateId()
+      );
+
+      allow update, delete: if canEdit() && (
+        isSuperuser() ||
+        resourceBelongsToDelegate()
+      );
+    }
+
+    // =====================================================================
+    // COLECCIÓN: referees (multi-tenant)
+    // =====================================================================
+    match /referees/{refereeId} {
+      allow read: if isAuthenticated() && (
+        isSuperuser() ||
+        resourceBelongsToDelegate()
+      );
+
+      allow create: if canEdit() && (
+        isSuperuser() ||
+        requestHasCorrectDelegateId()
+      );
+
+      allow update, delete: if canEdit() && (
+        isSuperuser() ||
+        resourceBelongsToDelegate()
+      );
+    }
+
+    // =====================================================================
+    // COLECCIÓN: venues (catálogo compartido)
+    // Lectura: todos los autenticados
+    // Escritura: solo SUPERUSUARIO (catálogo global)
+    // =====================================================================
+    match /venues/{venueId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperuser();
+    }
+
+    // =====================================================================
+    // COLECCIÓN: zones (catálogo compartido)
+    // Lectura: todos los autenticados
+    // Escritura: solo SUPERUSUARIO (catálogo global)
+    // =====================================================================
+    match /zones/{zoneId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperuser();
+    }
+
+    // =====================================================================
+    // COLECCIÓN: designaciones (multi-tenant)
+    // =====================================================================
     match /designaciones/{docId} {
-      // Lectura para cualquier rol válido
-      allow read: if request.auth != null && hasAnyRole(["SUPERUSUARIO","DELEGADO","ASISTENTE","ARBITRO"]);
+      // Lectura: cualquier rol válido, filtrado por delegateId
+      allow read: if isAuthenticated() && hasAnyRole(["SUPERUSUARIO", "DELEGADO", "ASISTENTE", "ARBITRO"]) && (
+        isSuperuser() ||
+        resourceBelongsToDelegate()
+      );
 
-      // Crear/editar/borrar solo SUPERUSUARIO o DELEGADO
-      allow create, update, delete: if hasAnyRole(["SUPERUSUARIO","DELEGADO"]);
+      // Escritura: solo SUPERUSUARIO o DELEGADO
+      allow create: if canEdit() && (
+        isSuperuser() ||
+        requestHasCorrectDelegateId()
+      );
+
+      allow update, delete: if canEdit() && (
+        isSuperuser() ||
+        resourceBelongsToDelegate()
+      );
     }
 
-    // (Si manejas subcolecciones específicas, puedes anotar reglas adicionales aquí)
-
-    // ===== Deny por defecto =====
+    // =====================================================================
+    // DEFAULT DENY - Cualquier otra colección
+    // =====================================================================
     match /{document=**} {
       allow read, write: if false;
     }

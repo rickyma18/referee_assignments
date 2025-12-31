@@ -1,23 +1,38 @@
 // src/server/auth/require-role.ts
 import "server-only";
 
-import { adminDb } from "@/server/admin/firebase-admin";
+import { adminAuth, adminDb } from "@/server/admin/firebase-admin";
 
 import { ForbiddenError } from "./errors";
 import { getServerAuthUser } from "./get-server-auth-user";
 import type { AppRole } from "./types";
 
+/**
+ * Obtiene el rol de un usuario.
+ * Prioridad: custom claims > userDoc
+ */
 async function getRoleByUid(uid: string): Promise<AppRole> {
-  const snap = await adminDb.collection("users").doc(uid).get();
+  // 1. Intentar leer desde custom claims
+  try {
+    const userRecord = await adminAuth.getUser(uid);
+    const claims = userRecord.customClaims;
 
+    if (claims?.role) {
+      const normalized = (
+        typeof claims.role === "string" ? claims.role.trim().toUpperCase() : "DESCONOCIDO"
+      ) as AppRole;
+      return normalized;
+    }
+  } catch {
+    // Error leyendo claims: continuar con fallback
+  }
+
+  // 2. Fallback: leer desde userDoc
+  const snap = await adminDb.collection("users").doc(uid).get();
   const rawRole = snap.data()?.role;
 
-  // 🔧 Normaliza lo que venga de Firestore
   const normalized: AppRole =
     typeof rawRole === "string" ? (rawRole.trim().toUpperCase() as AppRole) : ("DESCONOCIDO" as AppRole);
-
-  // 👇 debug temporal (si quieres ver en consola qué está pasando)
-  // console.log("[getRoleByUid]", { uid, rawRole, normalized });
 
   return normalized;
 }

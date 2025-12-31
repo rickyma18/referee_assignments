@@ -22,7 +22,10 @@ import { findRecentTeamConflicts, findScheduleConflicts, Conflict, ScheduleConfl
 /* Motor principal: sugerir terna para un partido (unitario)          */
 /* ------------------------------------------------------------------ */
 
-export async function suggestTernaForMatch(params: SuggestTernaForMatchParams): Promise<SuggestedTerna> {
+export async function suggestTernaForMatch(
+  params: SuggestTernaForMatchParams,
+  options?: { delegateId?: string },
+): Promise<SuggestedTerna> {
   const { leagueId, groupId, matchdayId, matchId } = params;
 
   const db = getFirestore();
@@ -104,8 +107,8 @@ export async function suggestTernaForMatch(params: SuggestTernaForMatchParams): 
   const kickoffDate = toDateSafe(matchData?.kickoff ?? matchData?.date);
   const mds = await computeMdsForMatch({ leagueId, groupId, matchData });
 
-  // 3) Pool de árbitros
-  const allRefs = await loadRefereeCandidates();
+  // 3) Pool de árbitros - ✅ Multi-tenant: filtrar por delegateId
+  const allRefs = await loadRefereeCandidates(options?.delegateId);
   const basePool = filterBasePool(allRefs);
 
   if (basePool.length === 0) {

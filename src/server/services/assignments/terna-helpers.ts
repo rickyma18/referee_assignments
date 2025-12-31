@@ -161,10 +161,22 @@ export async function computeMdsForMatch(options: {
  *
  * - Solo usa status / rolesAllowed / tier.
  * - El RCS se deriva de tier (refereeTierToRcsCentral) + override opcional.
+ *
+ * Multi-tenant:
+ * - Si se pasa delegateId, filtra solo árbitros de ese delegado
+ * - Si no se pasa (SUPER global), carga todos
  */
-export async function loadRefereeCandidates(): Promise<CandidateRef[]> {
+export async function loadRefereeCandidates(delegateId?: string): Promise<CandidateRef[]> {
   const db = getFirestore();
-  const snap = await db.collection("referees").where("status", "==", "DISPONIBLE").get();
+
+  let query: FirebaseFirestore.Query = db.collection("referees").where("status", "==", "DISPONIBLE");
+
+  // ✅ Filtrar por delegateId si se proporciona
+  if (delegateId) {
+    query = query.where("delegateId", "==", delegateId);
+  }
+
+  const snap = await query.get();
 
   const candidates: CandidateRef[] = [];
 
@@ -209,17 +221,32 @@ export async function loadRefereeCandidates(): Promise<CandidateRef[]> {
 
 /**
  * Filtra candidatos por:
- * - status "DISPONIBLE"
+ * - status "DISPONIBLE" (normalizado a mayúsculas)
  * - que no sean NO_ELEGIBLE (rcsCentral !== null)
+ * - que tengan al menos un rol si no son asesores
  */
 export function filterBasePool(refs: CandidateRef[]): CandidateRef[] {
-  return refs.filter((r) => r.status === "DISPONIBLE" && r.rcsCentral !== null);
+  return refs.filter((r) => {
+    // ✅ Normalizar status a MAYÚSCULAS para tolerar datos legacy
+    const statusUpper = typeof r.status === "string" ? r.status.toUpperCase().trim() : r.status;
+    if (statusUpper !== "DISPONIBLE") return false;
+    if (r.rcsCentral === null) return false;
+
+    // ✅ Excluir árbitros sin roles y que NO son asesores (inútiles para el motor)
+    const hasRoles = Array.isArray(r.rolesAllowed) && r.rolesAllowed.length > 0;
+    const isAssessor = r.canAssess === true;
+    if (!hasRoles && !isAssessor) return false;
+
+    return true;
+  });
 }
 
 /**
  * Devuelve un subconjunto de candidatos aptos para cada rol:
  * - CENTRAL: debe tener rol "CENTRAL" en rolesAllowed.
  * - ASISTENTES: con rol "AA1" o "AA2".
+ *
+ * Normaliza a MAYÚSCULAS para tolerar datos legacy con case incorrecto.
  */
 export function splitCandidatesByRole(refs: CandidateRef[]): {
   centralCandidates: CandidateRef[];
@@ -230,12 +257,14 @@ export function splitCandidatesByRole(refs: CandidateRef[]): {
 
   for (const r of refs) {
     const roles = r.rolesAllowed ?? [];
+    // ✅ Normalizar a MAYÚSCULAS para tolerar datos legacy
+    const rolesUpper = roles.map((role) => (typeof role === "string" ? role.toUpperCase().trim() : role));
 
-    if (roles.includes("CENTRAL")) {
+    if (rolesUpper.includes("CENTRAL")) {
       centralCandidates.push(r);
     }
 
-    if (roles.includes("AA1") || roles.includes("AA2")) {
+    if (rolesUpper.includes("AA1") || rolesUpper.includes("AA2")) {
       assistantCandidates.push(r);
     }
   }

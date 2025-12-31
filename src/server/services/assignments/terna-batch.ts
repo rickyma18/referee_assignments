@@ -136,13 +136,38 @@ type InternalRulesMap = Map<string, InternalRule[]>;
 
 export async function suggestTernasForMatchesBalanced(
   matches: SuggestTernaForMatchParams[],
+  options?: { delegateId?: string },
 ): Promise<SuggestedTerna[]> {
   const db = getFirestore();
 
   if (matches.length === 0) return [];
 
-  const allRefs = await loadRefereeCandidates();
+  // ✅ Multi-tenant: filtrar árbitros por delegateId si se proporciona
+  const allRefs = await loadRefereeCandidates(options?.delegateId);
+
+  // 🔍 DEBUG: Log para diagnóstico
+  console.log("[terna-batch] delegateId filter:", options?.delegateId ?? "(none - global)");
+  console.log("[terna-batch] allRefs loaded:", allRefs.length);
+  if (allRefs.length > 0 && allRefs.length <= 5) {
+    console.log(
+      "[terna-batch] sample refs:",
+      allRefs.map((r) => ({ id: r.id, tier: r.tier, rcsCentral: r.rcsCentral, rolesAllowed: r.rolesAllowed })),
+    );
+  }
+
   const basePool = filterBasePool(allRefs);
+
+  // 🔍 DEBUG: Ver cuántos pasan filterBasePool
+  console.log("[terna-batch] basePool after filterBasePool:", basePool.length);
+  if (allRefs.length > 0 && basePool.length === 0) {
+    // Diagnóstico: ¿por qué se excluyeron todos?
+    const withNullRcs = allRefs.filter((r) => r.rcsCentral === null);
+    const withWrongStatus = allRefs.filter((r) => r.status !== "DISPONIBLE");
+    console.log("[terna-batch] ⚠️ Excluded - rcsCentral null:", withNullRcs.length, "tiers:", [
+      ...new Set(withNullRcs.map((r) => r.tier)),
+    ]);
+    console.log("[terna-batch] ⚠️ Excluded - status != DISPONIBLE:", withWrongStatus.length);
+  }
 
   if (basePool.length === 0) {
     return matches.map((m) => ({
@@ -169,24 +194,22 @@ export async function suggestTernasForMatchesBalanced(
   const { centralCandidates, assistantCandidates } = splitCandidatesByRole(basePool);
   const assessorCandidates = getAssessorCandidates(basePool);
 
-  if (centralCandidates.length === 0 || assistantCandidates.length === 0) {
-    return matches.map((m) => ({
-      leagueId: m.leagueId,
-      groupId: m.groupId,
-      matchdayId: m.matchdayId,
-      matchId: m.matchId,
-      centralRefereeId: null,
-      aa1RefereeId: null,
-      aa2RefereeId: null,
-      assessorRefereeId: null,
+  // 🔍 DEBUG: Ver candidatos por rol
+  console.log("[terna-batch] centralCandidates:", centralCandidates.length);
+  console.log("[terna-batch] assistantCandidates:", assistantCandidates.length);
+  if (basePool.length > 0 && (centralCandidates.length === 0 || assistantCandidates.length === 0)) {
+    // Diagnóstico: ¿qué roles tienen?
+    const allRoles = basePool.flatMap((r) => r.rolesAllowed);
+    console.log("[terna-batch] ⚠️ Roles found in basePool:", [...new Set(allRoles)]);
+  }
 
-      hasSuggestion: false,
-      reason: "NO_ROLE_CANDIDATES",
-      mds: null,
-      rcsCentral: null,
-      centralTolerance: 0,
-      assistantsTolerance: 0,
-    }));
+  // ✅ Fallar explícitamente si no hay candidatos suficientes
+  if (centralCandidates.length === 0) {
+    throw new Error("No hay árbitros con rol CENTRAL disponibles para este delegado.");
+  }
+
+  if (assistantCandidates.length < 2) {
+    throw new Error("No hay suficientes asistentes disponibles (AA1/AA2). Se requieren al menos 2.");
   }
 
   const leagueCfgCache = new Map<string, { centralTolerance: number; assistantsTolerance: number; leagueData: any }>();
@@ -913,7 +936,10 @@ function pickAssistantWithInternalRules(
 /* Versión batch por jornada                                          */
 /* ------------------------------------------------------------------ */
 
-export async function suggestTernasForMatchday(params: SuggestTernasForMatchdayParams): Promise<SuggestedTerna[]> {
+export async function suggestTernasForMatchday(
+  params: SuggestTernasForMatchdayParams,
+  options?: { delegateId?: string },
+): Promise<SuggestedTerna[]> {
   const { leagueId, groupId, matchdayId } = params;
 
   const db = getFirestore();
@@ -935,5 +961,6 @@ export async function suggestTernasForMatchday(params: SuggestTernasForMatchdayP
     matchData: m.data(),
   }));
 
-  return suggestTernasForMatchesBalanced(matchParams);
+  // ✅ Multi-tenant: pasar delegateId al motor batch
+  return suggestTernasForMatchesBalanced(matchParams, options);
 }

@@ -14,7 +14,7 @@ import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 import type { SidebarVariant, SidebarCollapsible, ContentLayout, NavbarStyle } from "@/types/preferences/layout";
 import { THEME_PRESET_OPTIONS, type ThemePreset, type ThemeMode } from "@/types/preferences/theme";
 
-type LayoutControlsProps = {
+export type LayoutControlsProps = {
   readonly variant: SidebarVariant;
   readonly collapsible: SidebarCollapsible;
   readonly contentLayout: ContentLayout;

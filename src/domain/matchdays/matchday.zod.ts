@@ -27,6 +27,7 @@ export const MatchdayCreateSchema = MatchdayBaseSchema.omit({
 }).extend({
   // mostrarlo en el form como solo-lectura si quieres:
   _prefillNumber: z.number().int().positive().optional(),
+  delegateId: z.string().optional(), // tolerancia
 });
 
 export const MatchdayUpdateSchema = MatchdayBaseSchema.pick({

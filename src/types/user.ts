@@ -8,6 +8,8 @@ export interface UserDoc {
   photoURL: string | null;
   role: UserRole; // 'SUPERUSUARIO' | 'DELEGADO' | 'ASISTENTE' | 'ARBITRO'
   scope?: Record<string, any> | null; // para permisos/tenancy por liga/zona si aplica
+  delegateId?: string; // ID del delegado (para usuarios con rol DELEGADO)
+  activeDelegateId?: string; // ID del delegado activo (para SUPERUSUARIO que impersona)
   createdAt: number; // Date.now()
   updatedAt: number; // Date.now()
 }

@@ -30,7 +30,7 @@ export const TeamBaseSchema = z.object({
 });
 
 // Create: solo necesita los campos base
-export const TeamCreateSchema = TeamBaseSchema;
+export const TeamCreateSchema = TeamBaseSchema; // sin delegateId
 
 // Update: requiere id además de los campos base
 export const TeamUpdateSchema = TeamBaseSchema.extend({

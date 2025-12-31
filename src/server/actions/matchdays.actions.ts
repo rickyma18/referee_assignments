@@ -8,7 +8,9 @@ import { ZodError } from "zod";
 
 import { MatchdayCreateSchema, MatchdayUpdateSchema, type MatchdayCreateInput } from "@/domain/matchdays/matchday.zod";
 import { toPlain } from "@/lib/serialize";
+import { getDelegateContext } from "@/server/auth/get-delegate-context";
 import { getServerAuthUser } from "@/server/auth/get-server-auth-user";
+import { assertLeagueBelongsToDelegate, assertCanEdit } from "@/server/auth/require-delegate-access";
 import { secureWrite } from "@/server/auth/secure-action";
 import * as repo from "@/server/repositories/matchdays.repo";
 // --- Tipos de ActionResult ---
@@ -32,13 +34,54 @@ function rvdList(leagueId: string, groupId: string) {
 }
 
 // --- Actions de lectura ---
-export async function listMatchdaysAction(params: repo.GetAllParams) {
+
+/**
+ * Lista jornadas.
+ *
+ * Seguridad multi-tenant:
+ * - Valida acceso a la league padre
+ *
+ * @param params - Parámetros del repositorio (incluye leagueId)
+ * @param options.activeDelegateId - Para SUPER, el delegado seleccionado en UI
+ */
+export async function listMatchdaysAction(params: repo.GetAllParams, options?: { activeDelegateId?: string | null }) {
+  const ctx = await getDelegateContext({ activeDelegateId: options?.activeDelegateId });
+
+  // Validar acceso a la league
+  if (params.leagueId) {
+    try {
+      await assertLeagueBelongsToDelegate(params.leagueId, ctx);
+    } catch {
+      return [];
+    }
+  }
+
   // Asegura POJO + fechas en ISO ANTES de cruzar al cliente
   const rows = await repo.getAll(params);
   return toPlain(rows);
 }
 
-export async function getMatchdayAction(leagueId: string, groupId: string, id: string) {
+/**
+ * Obtiene una jornada por id.
+ *
+ * Seguridad multi-tenant:
+ * - Valida acceso a la league padre
+ */
+export async function getMatchdayAction(
+  leagueId: string,
+  groupId: string,
+  id: string,
+  options?: { activeDelegateId?: string | null },
+) {
+  const ctx = await getDelegateContext({ activeDelegateId: options?.activeDelegateId });
+
+  // Validar acceso a la league
+  try {
+    await assertLeagueBelongsToDelegate(leagueId, ctx);
+  } catch {
+    return null;
+  }
+
   const row = await repo.getById(leagueId, groupId, id);
   return toPlain(row);
 }
@@ -102,12 +145,15 @@ export async function getNextMatchdayNumberAction(leagueId: string, groupId: str
 // --- Actions de escritura ---
 export async function createMatchdayAction(input: unknown): Promise<ActionResult<{ id: string; number: number }>> {
   try {
+    const ctx = await getDelegateContext();
     const data = MatchdayCreateSchema.parse(input);
     const auth = await getServerAuthUser().catch(() => null);
 
+    // ✅ Inyectar delegateId para guardarlo en el doc del matchday
     const res = await repo.create({
       ...data,
       createdBy: auth?.uid ?? undefined,
+      delegateId: ctx.effectiveDelegateId ?? undefined,
     });
 
     rvdList(data.leagueId, data.groupId);
@@ -118,9 +164,23 @@ export async function createMatchdayAction(input: unknown): Promise<ActionResult
   }
 }
 
+/**
+ * Actualiza una jornada.
+ *
+ * Seguridad multi-tenant:
+ * - Solo SUPERUSUARIO o DELEGADO pueden editar
+ * - Valida que la league pertenezca al delegado actual
+ */
 export async function updateMatchdayAction(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
+    const ctx = await getDelegateContext();
+    assertCanEdit(ctx);
+
     const data = MatchdayUpdateSchema.parse(input);
+
+    // ✅ Validar ownership via league
+    await assertLeagueBelongsToDelegate(data.leagueId, ctx);
+
     const res = await repo.update(data);
     rvdList(data.leagueId, data.groupId);
     return { ok: true, data: res };
@@ -129,8 +189,21 @@ export async function updateMatchdayAction(input: unknown): Promise<ActionResult
   }
 }
 
+/**
+ * Elimina una jornada.
+ *
+ * Seguridad multi-tenant:
+ * - Solo SUPERUSUARIO o DELEGADO pueden eliminar
+ * - Valida que la league pertenezca al delegado actual
+ */
 export async function deleteMatchdayAction(leagueId: string, groupId: string, id: string): Promise<ActionResult> {
   try {
+    const ctx = await getDelegateContext();
+    assertCanEdit(ctx);
+
+    // ✅ Validar ownership via league
+    await assertLeagueBelongsToDelegate(leagueId, ctx);
+
     await repo.remove(leagueId, groupId, id);
     rvdList(leagueId, groupId);
     return { ok: true };
@@ -163,7 +236,9 @@ type GenerateMatchdaysResult = {
  */
 export async function generateMatchdaysBulkAction(payload: GenerateMatchdaysPayload) {
   return secureWrite<GenerateMatchdaysResult>(async () => {
+    const ctx = await getDelegateContext();
     const { leagueId, groupId, count, firstStartDate, intervalDays, durationDays, startNumberOverride } = payload;
+    const delegateId = ctx.effectiveDelegateId;
 
     if (!leagueId || !groupId) {
       throw new Error("Faltan leagueId o groupId.");
@@ -232,14 +307,21 @@ export async function generateMatchdaysBulkAction(payload: GenerateMatchdaysPayl
       const now = new Date();
       const docRef = matchdaysCol.doc();
 
-      batch.set(docRef, {
+      const docPayload: Record<string, any> = {
         number,
         startDate,
         endDate,
         status: "ACTIVE",
         createdAt: now,
         updatedAt: now,
-      });
+      };
+
+      // ✅ Guardar delegateId si está disponible
+      if (delegateId) {
+        docPayload.delegateId = delegateId;
+      }
+
+      batch.set(docRef, docPayload);
 
       createdCount += 1;
     }

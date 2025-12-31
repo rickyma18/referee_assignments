@@ -1,6 +1,5 @@
 "use server";
 import "server-only";
-import { use } from "react";
 
 import { adminDb } from "@/server/admin/firebase-admin";
 
@@ -25,6 +24,7 @@ type TeamBase = {
 export type TeamCreateInput = TeamBase & {
   leagueId: string;
   groupId: string;
+  delegateId?: string; // ✅ Multi-tenant
 };
 
 export type TeamUpdateInput = Partial<TeamBase> & {
@@ -43,6 +43,7 @@ export type TeamRow = {
   createdAt: Date;
   updatedAt: Date;
   name_lc: string;
+  delegateId?: string;
 };
 
 // ========== API esperada por las actions ==========
@@ -63,7 +64,7 @@ export async function create(data: TeamCreateInput) {
   const ref = teamsCol(data.leagueId, data.groupId).doc();
   const now = new Date();
 
-  const payload = {
+  const payload: Record<string, any> = {
     name: data.name,
     name_lc,
     municipality: data.municipality,
@@ -73,6 +74,11 @@ export async function create(data: TeamCreateInput) {
     createdAt: now,
     updatedAt: now,
   };
+
+  // ✅ Guardar delegateId si está disponible
+  if (data.delegateId) {
+    payload.delegateId = data.delegateId;
+  }
 
   await ref.set(payload);
   return { id: ref.id, ...payload };
@@ -84,16 +90,21 @@ export async function update(data: TeamUpdateInput) {
   const snap = await ref.get();
   if (!snap.exists) throw new Error("Equipo no encontrado.");
 
+  // ⚠️ No permitir cambiar delegateId (ignorar si viene en data)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { delegateId: _ignoredDelegateId, ...safeData } = data as any;
+
   const updates: Record<string, any> = { updatedAt: new Date() };
 
-  if (typeof data.name === "string") {
-    updates.name = data.name;
-    updates.name_lc = norm(data.name);
+  if (typeof safeData.name === "string") {
+    updates.name = safeData.name;
+    updates.name_lc = norm(safeData.name);
   }
-  if (typeof data.municipality === "string") updates.municipality = data.municipality;
-  if (typeof data.stadium === "string") updates.stadium = data.stadium;
-  if (typeof data.venue === "string") updates.venue = data.venue;
-  if (data.logoUrl !== undefined) updates.logoUrl = data.logoUrl ?? null;
+  if (typeof safeData.municipality === "string") updates.municipality = safeData.municipality;
+  if (typeof safeData.stadium === "string") updates.stadium = safeData.stadium;
+  if (typeof safeData.venue === "string") updates.venue = safeData.venue;
+  if (safeData.logoUrl !== undefined) updates.logoUrl = safeData.logoUrl ?? null;
+  // ✅ delegateId se preserva del doc original (no se puede cambiar)
 
   await ref.update(updates);
   const after = await ref.get();

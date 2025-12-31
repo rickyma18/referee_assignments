@@ -24,7 +24,7 @@ export type TeamUpdateInput = Partial<TeamBase> & {
   groupId: string;
 };
 
-export async function createTeam(data: TeamCreateInput) {
+export async function createTeam(data: TeamCreateInput & { delegateId?: string }) {
   const nameLc = norm(data.name);
 
   // ✅ data.leagueId ya existe en el tipo
@@ -37,7 +37,7 @@ export async function createTeam(data: TeamCreateInput) {
   const ref = teamsCol(data.leagueId, data.groupId).doc();
 
   const now = new Date();
-  const payload = {
+  const payload: Record<string, any> = {
     name: data.name,
     name_lc: nameLc,
     municipality: data.municipality,
@@ -47,6 +47,11 @@ export async function createTeam(data: TeamCreateInput) {
     createdAt: now,
     updatedAt: now,
   };
+
+  // ✅ Guardar delegateId si está disponible
+  if (data.delegateId) {
+    payload.delegateId = data.delegateId;
+  }
 
   await ref.set(payload);
   return { id: ref.id, ...payload };
@@ -58,18 +63,23 @@ export async function updateTeam(data: TeamUpdateInput) {
   const snap = await ref.get();
   if (!snap.exists) throw new Error("Equipo no encontrado.");
 
+  // ⚠️ No permitir cambiar delegateId (ignorar si viene en data)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { delegateId: _ignoredDelegateId, ...safeData } = data as any;
+
   const updates: Record<string, any> = {
     updatedAt: new Date(),
   };
 
-  if (typeof data.name === "string") {
-    updates.name = data.name;
-    updates.name_lc = norm(data.name);
+  if (typeof safeData.name === "string") {
+    updates.name = safeData.name;
+    updates.name_lc = norm(safeData.name);
   }
-  if (typeof data.municipality === "string") updates.municipality = data.municipality;
-  if (typeof data.stadium === "string") updates.stadium = data.stadium;
-  if (typeof data.venue === "string") updates.venue = data.venue;
-  if (data.logoUrl !== undefined) updates.logoUrl = data.logoUrl ?? null;
+  if (typeof safeData.municipality === "string") updates.municipality = safeData.municipality;
+  if (typeof safeData.stadium === "string") updates.stadium = safeData.stadium;
+  if (typeof safeData.venue === "string") updates.venue = safeData.venue;
+  if (safeData.logoUrl !== undefined) updates.logoUrl = safeData.logoUrl ?? null;
+  // ✅ delegateId se preserva del doc original (no se puede cambiar)
 
   await ref.update(updates);
   return { id: data.id, ...(await (await ref.get()).data()) };

@@ -37,7 +37,8 @@ export type NavMainItem = {
 
 export type NavGroup = {
   id: string;
-  items: NavMainItem[];
+  label?: string;
+  items?: NavMainItem[];
 };
 
 // ---- helpers de rol y mapeo ----
@@ -147,8 +148,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Menú principal normal: incluye el ítem dinámico para que NavMain lo renderice como colapsable */}
-        <NavMain items={navGroups} />
+        {/* ✅ FIX: NavMain ahora recibe `groups`, no `items` */}
+        <NavMain groups={navGroups} />
       </SidebarContent>
 
       <SidebarFooter>

@@ -4,6 +4,8 @@ import "server-only";
 
 import { getFirestore } from "firebase-admin/firestore";
 
+import { getDelegateContext } from "@/server/auth/get-delegate-context";
+import { assertCanEdit, assertLeagueBelongsToDelegate } from "@/server/auth/require-delegate-access";
 import { secureWrite } from "@/server/auth/secure-action";
 import {
   findRecentTeamConflicts,
@@ -40,8 +42,10 @@ export type AssignManualTernaData =
 /**
  * Acción para asignar terna MANUALMENTE a un partido.
  *
- * - La autorización fina (DELEGADO / SUPERUSUARIO) la dejas a Firestore Rules
- *   o la puedes agregar luego leyendo el usuario dentro del callback.
+ * Seguridad multi-tenant:
+ * - Solo SUPERUSUARIO o DELEGADO pueden asignar
+ * - Valida que la league pertenezca al delegado actual
+ *
  * - Aplica:
  *    - Regla de "no repetir equipo en últimas 4 jornadas" (bloqueo duro).
  *    - Regla de "Choque de horario" (bloqueo duro).
@@ -55,6 +59,10 @@ export type AssignManualTernaData =
  */
 export async function assignManualTernaAction(formData: FormData) {
   return secureWrite<AssignManualTernaData>(async () => {
+    // ✅ Validar permisos multi-tenant
+    const ctx = await getDelegateContext();
+    assertCanEdit(ctx);
+
     const leagueId = String(formData.get("leagueId") ?? "");
     const groupId = String(formData.get("groupId") ?? "");
     const matchdayId = String(formData.get("matchdayId") ?? "");
@@ -107,6 +115,16 @@ export async function assignManualTernaAction(formData: FormData) {
     }
 
     const match = matchSnap.data() as any;
+
+    // ✅ Validar ownership usando leagueId REAL del documento (no del formData)
+    const realLeagueId = match.leagueId as string | undefined;
+    if (!realLeagueId) {
+      return {
+        code: "MATCH_NOT_FOUND",
+        error: "Partido sin leagueId asociado.",
+      };
+    }
+    await assertLeagueBelongsToDelegate(realLeagueId, ctx);
 
     const matchdayNumber: number = match.matchdayNumber ?? 0;
     const homeTeamId: string = match.homeTeamId;
@@ -245,6 +263,10 @@ export async function assignManualTernaAction(formData: FormData) {
 /**
  * ✔ Acción para confirmar en lote las ternas sugeridas / editadas desde la tabla.
  *
+ * Seguridad multi-tenant:
+ * - Solo SUPERUSUARIO o DELEGADO pueden confirmar
+ * - Valida que TODAS las leagues pertenezcan al delegado actual
+ *
  * - Recibe la lista de partidos con la terna que está actualmente en el UI.
  * - SOLO hace update de central/aa1/aa2 + nombres + updatedAt/updatedBy.
  * - No borra campos extra del partido.
@@ -265,10 +287,20 @@ export async function confirmSuggestedAssignmentsAction(payload: {
   userId?: string | null;
 }) {
   return secureWrite<{ updatedCount: number }>(async () => {
+    // ✅ Validar permisos multi-tenant
+    const ctx = await getDelegateContext();
+    assertCanEdit(ctx);
+
     const { matches, userId } = payload;
 
     if (!matches || matches.length === 0) {
       return { updatedCount: 0 };
+    }
+
+    // ✅ Validar ownership de TODAS las leagues involucradas
+    const uniqueLeagueIds = [...new Set(matches.map((m) => m.leagueId).filter(Boolean))];
+    for (const leagueId of uniqueLeagueIds) {
+      await assertLeagueBelongsToDelegate(leagueId, ctx);
     }
 
     const db = getFirestore();

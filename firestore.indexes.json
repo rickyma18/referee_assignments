@@ -1,4 +1,64 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "referees",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "delegateId", "order": "ASCENDING" },
+        { "fieldPath": "name_lc", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "referees",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "delegateId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "referees",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "delegateId", "order": "ASCENDING" },
+        { "fieldPath": "canAssess", "order": "ASCENDING" },
+        { "fieldPath": "name_lc", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "referees",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "delegateId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "name_lc", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "referees",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "delegateId", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "name_lc", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "leagues",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "delegateId", "order": "ASCENDING" },
+        { "fieldPath": "slug", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "leagues",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "delegateId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }

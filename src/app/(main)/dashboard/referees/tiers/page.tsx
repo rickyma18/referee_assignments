@@ -1,4 +1,5 @@
 // src/app/(main)/dashboard/referees/tiers/page.tsx
+
 import "@/server/admin/firebase-admin";
 
 import { EntityHeader } from "@/components/entity-header";
@@ -6,12 +7,13 @@ import { listRefereesAction } from "@/server/actions/referees.actions";
 
 import { RefereeTiersBoard } from "./_components/referee-tiers-board";
 
-export const dynamic = "force-static"; // o simplemente borrar la línea
-export const revalidate = 60; // o 0 si usarás revalidatePath en las actions
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 export const runtime = "nodejs";
 
 export default async function Page() {
   const { items } = await listRefereesAction({ limit: 100 });
+
   const referees = (items ?? []).map((r: any) => ({
     id: r.id,
     name: r.name,

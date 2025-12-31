@@ -12,6 +12,7 @@ export const GroupBaseSchema = z.object({
 
 export const GroupCreateSchema = GroupBaseSchema.extend({
   leagueId: z.string().min(1, "Liga requerida"),
+  delegateId: z.string().optional(), // tolerancia
 });
 
 export const GroupUpdateSchema = GroupBaseSchema.extend({

@@ -63,8 +63,14 @@ export async function existsByNameAndSeason(leagueId: string, name: string, seas
   return true;
 }
 
-export async function create(input: { leagueId: string; name: string; season: string; order?: number }) {
-  const { leagueId, name, season } = input;
+export async function create(input: {
+  leagueId: string;
+  name: string;
+  season: string;
+  order?: number;
+  delegateId?: string;
+}) {
+  const { leagueId, name, season, delegateId } = input;
   const order = typeof input.order === "number" ? input.order : 0;
 
   if (await existsByNameAndSeason(leagueId, name, season)) {
@@ -75,7 +81,7 @@ export async function create(input: { leagueId: string; name: string; season: st
   const season_lc = toLc(season);
   const now = FieldValue.serverTimestamp();
 
-  const docRef = await groupsCol(leagueId).add({
+  const payload: Record<string, any> = {
     leagueId,
     name,
     season,
@@ -84,7 +90,14 @@ export async function create(input: { leagueId: string; name: string; season: st
     order, // 👈 persistimos order
     createdAt: now,
     updatedAt: now,
-  });
+  };
+
+  // ✅ Guardar delegateId si está disponible (para consultas directas)
+  if (delegateId) {
+    payload.delegateId = delegateId;
+  }
+
+  const docRef = await groupsCol(leagueId).add(payload);
 
   const snap = await docRef.get();
   return serialize<Group>({ id: snap.id, ...(snap.data() as any) });

@@ -47,9 +47,11 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
   const isEdit = !!initial?.id;
 
   // Schema dinámico por modo
-  const schema = (isEdit ? LeagueUpdateSchema : LeagueCreateSchema) as unknown as z.ZodType<any>;
+  type LeagueFormValues = z.infer<typeof LeagueCreateSchema> | z.infer<typeof LeagueUpdateSchema>;
 
-  const form = useForm<z.infer<typeof schema>>({
+  const schema = isEdit ? LeagueUpdateSchema : LeagueCreateSchema;
+
+  const form = useForm<LeagueFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: initial?.name ?? "",
@@ -151,7 +153,8 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
 
     try {
       const autoSlug = initial?.slug && isEdit ? (initial.slug as string) : slugify(values.name, values.season);
-      const payload = isEdit ? { ...values, id: initial.id, slug: autoSlug } : { ...values, slug: autoSlug };
+      const { delegateId, ...safeValues } = values as any;
+      const payload = isEdit ? { ...safeValues, id: initial.id, slug: autoSlug } : { ...safeValues, slug: autoSlug };
       const action = isEdit ? updateLeagueAction : createLeagueAction;
 
       const res = await action(payload);
@@ -382,7 +385,12 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
                 <FormItem>
                   <FormLabel>Región (opcional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ej. Jalisco / Occidente" {...field} disabled={disabled} />
+                    <Input
+                      placeholder="Ej. Jalisco / Occidente"
+                      {...field}
+                      value={field.value ?? ""} // 👈 fuerza string
+                      disabled={disabled}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -470,6 +478,7 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
                       className="border-input bg-background ring-offset-background focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                       placeholder="Información adicional de la liga: reglamentos, contacto del delegado, observaciones, etc."
                       {...field}
+                      value={field.value ?? ""} // 👈 evita null
                       disabled={disabled}
                     />
                   </FormControl>

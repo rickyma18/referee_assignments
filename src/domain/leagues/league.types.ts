@@ -14,4 +14,5 @@ export interface League {
   notes?: string;
   createdAt?: Date;
   updatedAt?: Date;
+  delegateId: string;
 }

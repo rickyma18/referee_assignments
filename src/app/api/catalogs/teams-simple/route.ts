@@ -6,11 +6,20 @@ import "@/server/admin/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const delegateId = searchParams.get("delegateId");
+
     const db = getFirestore();
 
-    const snap = await db.collection("teams").get();
+    // ✅ Multi-tenant: filtrar por delegateId si se proporciona
+    let query: FirebaseFirestore.Query = db.collection("teams");
+    if (delegateId) {
+      query = query.where("delegateId", "==", delegateId);
+    }
+
+    const snap = await query.get();
 
     const collator = new Intl.Collator("es", {
       sensitivity: "base",

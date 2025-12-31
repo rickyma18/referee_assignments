@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,35 +10,34 @@ import { ChevronRight } from "lucide-react";
 import { DynamicGroupsChildren } from "@/app/(main)/dashboard/_components/sidebar/dynamic-groups-children";
 import { DynamicMatchdaysChildren } from "@/app/(main)/dashboard/_components/sidebar/dynamic-matchday-children";
 import { DynamicTeamsChildren } from "@/app/(main)/dashboard/_components/sidebar/dynamic-teams-children";
-import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarMenuSubButton,
-  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
-interface NavMainProps {
-  readonly items?: readonly NavGroup[];
+function IsComingSoon() {
+  return (
+    <span className="border-sidebar-border bg-sidebar-accent text-sidebar-foreground ml-auto rounded-md border px-1.5 py-0.5 text-[10px]">
+      Pronto
+    </span>
+  );
 }
-
-const IsComingSoon = () => (
-  <span className="ml-auto rounded-md bg-gray-200 px-2 py-1 text-xs dark:text-gray-800">Soon</span>
-);
 
 function SimpleLinkItem({
   item,
@@ -47,9 +48,14 @@ function SimpleLinkItem({
 }) {
   return (
     <SidebarMenuItem key={item.title}>
-      <SidebarMenuButton asChild aria-disabled={item.comingSoon} isActive={isActive(item.url)} tooltip={item.title}>
+      <SidebarMenuButton
+        asChild
+        disabled={item.comingSoon}
+        tooltip={item.title}
+        isActive={isActive(item.url, item.subItems)}
+      >
         <Link href={item.url} target={item.newTab ? "_blank" : undefined}>
-          {item.icon && <item.icon />}
+          {item.icon && <item.icon className="[&>svg]:text-sidebar-foreground" />}
           <span>{item.title}</span>
           {item.comingSoon && <IsComingSoon />}
         </Link>
@@ -62,49 +68,52 @@ function CollapsibleItem({
   item,
   isActive,
   isSubmenuOpen,
-  defaultOpen = false,
+  defaultOpen,
   children,
 }: {
   item: NavMainItem;
   isActive: (url: string, subItems?: NavMainItem["subItems"]) => boolean;
-  isSubmenuOpen: (subItems?: NavMainItem["subItems"]) => boolean;
+  isSubmenuOpen: (item: NavMainItem) => boolean;
   defaultOpen?: boolean;
-  children?: React.ReactNode;
+  children?: ReactNode;
 }) {
+  const open = defaultOpen ?? isSubmenuOpen(item);
+
   return (
-    <Collapsible
-      key={item.title}
-      asChild
-      defaultOpen={defaultOpen ?? isSubmenuOpen(item.subItems)}
-      className="group/collapsible"
-    >
-      <SidebarMenuItem>
+    <Collapsible asChild defaultOpen={open}>
+      <SidebarMenuItem key={item.title}>
         <CollapsibleTrigger asChild>
           <SidebarMenuButton
             disabled={item.comingSoon}
-            isActive={isActive(item.url, item.subItems)}
             tooltip={item.title}
+            isActive={isActive(item.url, item.subItems)}
           >
-            {item.icon && <item.icon />}
+            {item.icon && <item.icon className="[&>svg]:text-sidebar-foreground" />}
             <span>{item.title}</span>
+            <ChevronRight className="ml-auto h-4 w-4 transition-transform data-[state=open]:rotate-90" />
             {item.comingSoon && <IsComingSoon />}
-            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
           </SidebarMenuButton>
         </CollapsibleTrigger>
 
         <CollapsibleContent>
+          {/* Si me pasas children (dinámicos), uso eso; si no, uso los subItems normales */}
           {children ?? (
             <SidebarMenuSub>
               {(item.subItems ?? []).map((subItem) => (
-                <SidebarMenuSubItem key={subItem.title}>
-                  <SidebarMenuSubButton aria-disabled={subItem.comingSoon} isActive={isActive(subItem.url)} asChild>
+                <SidebarMenuItem key={subItem.title}>
+                  <SidebarMenuSubButton
+                    asChild
+                    className="focus-visible:ring-0"
+                    aria-disabled={subItem.comingSoon}
+                    isActive={isActive(subItem.url)}
+                  >
                     <Link href={subItem.url} target={subItem.newTab ? "_blank" : undefined}>
-                      {subItem.icon && <subItem.icon />}
+                      {subItem.icon && <subItem.icon className="[&>svg]:text-sidebar-foreground" />}
                       <span>{subItem.title}</span>
                       {subItem.comingSoon && <IsComingSoon />}
                     </Link>
                   </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
+                </SidebarMenuItem>
               ))}
             </SidebarMenuSub>
           )}
@@ -130,72 +139,128 @@ function CollapsedDropdown({
             tooltip={item.title}
             isActive={isActive(item.url, item.subItems)}
           >
-            {item.icon && <item.icon />}
+            {item.icon && <item.icon className="[&>svg]:text-sidebar-foreground" />}
             <span>{item.title}</span>
-            <ChevronRight />
+            <ChevronRight className="ml-auto h-4 w-4" />
+            {item.comingSoon && <IsComingSoon />}
           </SidebarMenuButton>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-50 space-y-1" side="right" align="start">
-          {(item.subItems ?? []).map((subItem) => (
-            <DropdownMenuItem key={subItem.title} asChild>
-              <SidebarMenuSubButton
-                asChild
-                className="focus-visible:ring-0"
-                aria-disabled={subItem.comingSoon}
-                isActive={isActive(subItem.url)}
-              >
-                <Link href={subItem.url} target={subItem.newTab ? "_blank" : undefined}>
-                  {subItem.icon && <subItem.icon className="[&>svg]:text-sidebar-foreground" />}
-                  <span>{subItem.title}</span>
-                  {subItem.comingSoon && <IsComingSoon />}
-                </Link>
-              </SidebarMenuSubButton>
-            </DropdownMenuItem>
-          ))}
+
+        <DropdownMenuContent className="w-56" side="right" align="start">
+          {(item.subItems ?? []).map((subItem, idx) => {
+            const isLast = idx === (item.subItems?.length ?? 0) - 1;
+
+            return (
+              <div key={subItem.title}>
+                <DropdownMenuItem asChild className={cn("cursor-pointer", subItem.comingSoon && "opacity-50")}>
+                  <Link
+                    href={subItem.url}
+                    target={subItem.newTab ? "_blank" : undefined}
+                    className="flex items-center gap-2"
+                  >
+                    {subItem.icon && <subItem.icon className="h-4 w-4" />}
+                    <span>{subItem.title}</span>
+                    {subItem.comingSoon && <IsComingSoon />}
+                  </Link>
+                </DropdownMenuItem>
+                {!isLast && <DropdownMenuSeparator />}
+              </div>
+            );
+          })}
         </DropdownMenuContent>
       </DropdownMenu>
     </SidebarMenuItem>
   );
 }
 
-export function NavMain({ items = [] }: NavMainProps) {
+/**
+ * ✅ Dropdown colapsado para items DINÁMICOS
+ * - En modo collapsed, los dinámicos NO traen subItems (se renderizan como <Dynamic...Children />)
+ * - Antes se mostraba un dropdown vacío y por eso “no servían”.
+ */
+function CollapsedDynamicDropdown({
+  item,
+  isActive,
+  children,
+}: {
+  item: NavMainItem;
+  isActive: (url: string, subItems?: NavMainItem["subItems"]) => boolean;
+  children: ReactNode;
+}) {
+  return (
+    <SidebarMenuItem key={item.title}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <SidebarMenuButton
+            disabled={item.comingSoon}
+            tooltip={item.title}
+            isActive={isActive(item.url, item.subItems)}
+          >
+            {item.icon && <item.icon className="[&>svg]:text-sidebar-foreground" />}
+            <span>{item.title}</span>
+            <ChevronRight className="ml-auto h-4 w-4" />
+            {item.comingSoon && <IsComingSoon />}
+          </SidebarMenuButton>
+        </DropdownMenuTrigger>
+
+        <DropdownMenuContent className="w-56" side="right" align="start">
+          <SidebarMenuSub>{children}</SidebarMenuSub>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </SidebarMenuItem>
+  );
+}
+
+/**
+ * ✅ FIX: groups puede venir undefined desde AppSidebar durante el primer render
+ * (por ejemplo si se arma desde contexto o fetch).
+ */
+export function NavMain({ groups }: { groups?: NavGroup[] }) {
+  const safeGroups = groups ?? [];
+
   const path = usePathname();
-  const { state, isMobile } = useSidebar();
+  const { isMobile, state } = useSidebar();
 
   const isItemActive = (url: string, subItems?: NavMainItem["subItems"]) => {
-    if (!url) return false;
-
-    if (subItems?.length) {
-      return path === url || subItems.some((sub) => sub.url === path);
-    }
-    return path === url;
+    if (path === url) return true;
+    if (!subItems?.length) return false;
+    return subItems.some((s) => path === s.url || path.startsWith(`${s.url}/`));
   };
 
-  const isSubmenuOpen = (subItems?: NavMainItem["subItems"]) =>
-    subItems?.some((sub) => path.startsWith(sub.url)) ?? false;
+  const isSubmenuOpen = (item: NavMainItem) => {
+    if (!item.subItems?.length) return false;
+    return item.subItems.some((s) => path === s.url || path.startsWith(`${s.url}/`));
+  };
 
   return (
     <>
-      {items.map((group) => (
+      {safeGroups.map((group) => (
         <SidebarGroup key={group.id}>
-          {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
-          <SidebarGroupContent className="flex flex-col gap-2">
+          {group.label ? (
+            <div className="text-muted-foreground px-3 pb-2 text-xs font-medium">{group.label}</div>
+          ) : null}
+
+          <SidebarGroupContent>
             <SidebarMenu>
               {(group.items ?? []).map((item) => {
-                // 🔹 Dinámico: Administrar grupos
+                // 🔹 Dinámico: Grupos
                 const isDynamicGroups = item.title === "Grupos" && item.url === "/dashboard/leagues";
                 if (isDynamicGroups) {
-                  const openByRoute = path.startsWith("/dashboard/leagues");
                   if (state === "collapsed" && !isMobile) {
-                    return <CollapsedDropdown key={item.title} item={item} isActive={isItemActive} />;
+                    return (
+                      <CollapsedDynamicDropdown key={item.title} item={item} isActive={isItemActive}>
+                        <DynamicGroupsChildren />
+                      </CollapsedDynamicDropdown>
+                    );
                   }
+
                   return (
                     <CollapsibleItem
                       key={item.title}
                       item={item}
                       isActive={isItemActive}
                       isSubmenuOpen={isSubmenuOpen}
-                      defaultOpen={openByRoute ? false : false}
+                      defaultOpen={false}
                     >
                       <SidebarMenuSub>
                         <DynamicGroupsChildren />
@@ -204,21 +269,27 @@ export function NavMain({ items = [] }: NavMainProps) {
                   );
                 }
 
-                // 🔹 Dinámico: jornadas
+                // 🔹 Dinámico: Jornadas
                 const isDynamicMatchdays = item.title === "Jornadas" && item.url === "/dashboard/leagues";
                 if (isDynamicMatchdays) {
                   const openByRoute =
                     path.startsWith("/dashboard/leagues/") && path.includes("/groups/") && path.endsWith("/matchdays");
+
                   if (state === "collapsed" && !isMobile) {
-                    return <CollapsedDropdown key={item.title} item={item} isActive={isItemActive} />;
+                    return (
+                      <CollapsedDynamicDropdown key={item.title} item={item} isActive={isItemActive}>
+                        <DynamicMatchdaysChildren />
+                      </CollapsedDynamicDropdown>
+                    );
                   }
+
                   return (
                     <CollapsibleItem
                       key={item.title}
                       item={item}
                       isActive={isItemActive}
                       isSubmenuOpen={isSubmenuOpen}
-                      defaultOpen={openByRoute ? true : false}
+                      defaultOpen={openByRoute}
                     >
                       <SidebarMenuSub>
                         <DynamicMatchdaysChildren />
@@ -232,16 +303,22 @@ export function NavMain({ items = [] }: NavMainProps) {
                 if (isDynamicTeams) {
                   const openByRoute =
                     path.startsWith("/dashboard/leagues/") && path.includes("/groups/") && path.endsWith("/teams");
+
                   if (state === "collapsed" && !isMobile) {
-                    return <CollapsedDropdown key={item.title} item={item} isActive={isItemActive} />;
+                    return (
+                      <CollapsedDynamicDropdown key={item.title} item={item} isActive={isItemActive}>
+                        <DynamicTeamsChildren />
+                      </CollapsedDynamicDropdown>
+                    );
                   }
+
                   return (
                     <CollapsibleItem
                       key={item.title}
                       item={item}
                       isActive={isItemActive}
                       isSubmenuOpen={isSubmenuOpen}
-                      defaultOpen={openByRoute ? true : false}
+                      defaultOpen={openByRoute}
                     >
                       <SidebarMenuSub>
                         <DynamicTeamsChildren />
@@ -252,13 +329,13 @@ export function NavMain({ items = [] }: NavMainProps) {
 
                 // 🔹 Ítems normales
                 if (state === "collapsed" && !isMobile) {
-                  if (!item.subItems) {
+                  if (!item.subItems?.length) {
                     return <SimpleLinkItem key={item.title} item={item} isActive={isItemActive} />;
                   }
                   return <CollapsedDropdown key={item.title} item={item} isActive={isItemActive} />;
                 }
 
-                if (!item.subItems) {
+                if (!item.subItems?.length) {
                   return <SimpleLinkItem key={item.title} item={item} isActive={isItemActive} />;
                 }
 

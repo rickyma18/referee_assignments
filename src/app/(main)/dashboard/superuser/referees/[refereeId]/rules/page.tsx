@@ -37,6 +37,7 @@ export default async function RefereeInternalRulesPage({ params }: Props) {
     status: refData?.status ?? null,
     zones: (refData?.zones as string[] | undefined) ?? [],
     rolesAllowed: (refData?.rolesAllowed as string[] | undefined) ?? [],
+    delegateId: (refData?.delegateId as string | undefined) ?? null, // ✅ Multi-tenant
   };
 
   return (

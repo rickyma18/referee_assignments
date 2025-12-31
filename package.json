@@ -13,7 +13,9 @@
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "generate:presets": "ts-node -P tsconfig.scripts.json src/scripts/generate-theme-presets.ts",
-    "backfill:users": "node scripts/backfill-users.mjs"
+    "backfill:users": "node scripts/backfill-users.mjs",
+    "claims": "npx tsx scripts/set-custom-claims.ts",
+    "migrate-delegate": "npx tsx scripts/migrate-add-delegate-id.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -31,7 +33,7 @@
     "dotenv": "^17.2.3",
     "embla-carousel-react": "^8.6.0",
     "eslint-plugin-unicorn": "^56.0.1",
-    "firebase": "^12.4.0",
+    "firebase": "^12.7.0",
     "firebase-admin": "^13.5.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.453.0",

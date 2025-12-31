@@ -63,9 +63,9 @@ export async function getNextNumber(leagueId: string, groupId: string): Promise<
 
 // Crear con transacción (unicidad de `number`)
 export async function create(
-  input: MatchdayCreateInput & { createdBy?: string },
+  input: MatchdayCreateInput & { createdBy?: string; delegateId?: string },
 ): Promise<{ id: string; number: number }> {
-  const { leagueId, groupId, startDate, endDate, createdBy } = input;
+  const { leagueId, groupId, startDate, endDate, createdBy, delegateId } = input;
 
   return await adminDb.runTransaction(async (tx: FirebaseFirestore.Transaction) => {
     // 1) calcular siguiente número
@@ -79,7 +79,7 @@ export async function create(
 
     // 2) crear doc
     const ref = adminDb.collection(colPath(leagueId, groupId)).doc();
-    tx.set(ref, {
+    const payload: Record<string, any> = {
       leagueId,
       groupId,
       number: nextNumber,
@@ -89,7 +89,14 @@ export async function create(
       createdBy: createdBy ?? null,
       createdAt: AdminFieldValue.serverTimestamp(),
       updatedAt: AdminFieldValue.serverTimestamp(),
-    });
+    };
+
+    // ✅ Guardar delegateId si está disponible (para consultas directas)
+    if (delegateId) {
+      payload.delegateId = delegateId;
+    }
+
+    tx.set(ref, payload);
 
     return { id: ref.id, number: nextNumber };
   });

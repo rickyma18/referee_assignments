@@ -21,6 +21,9 @@ export async function create(input: unknown) {
   const nameLc = data.name.trim().toLowerCase();
   const seasonLc = data.season.trim().toLowerCase();
 
+  // ✅ delegateId viene del server action (inyectado)
+  const delegateId = (data as any).delegateId as string | undefined;
+
   // Duplicado por nombre+temporada en la misma liga
   const dup = await groupsCol(data.leagueId)
     .where("name_lc", "==", nameLc)
@@ -31,7 +34,7 @@ export async function create(input: unknown) {
   if (!dup.empty) throw new Error("Ya existe un grupo con ese nombre en esta temporada de la liga.");
 
   const ref = groupsCol(data.leagueId).doc();
-  await ref.set({
+  const payload: Record<string, any> = {
     name: data.name,
     name_lc: nameLc,
     season: data.season,
@@ -39,7 +42,14 @@ export async function create(input: unknown) {
     order: data.order ?? 0,
     createdAt: AdminFieldValue.serverTimestamp(),
     updatedAt: AdminFieldValue.serverTimestamp(),
-  });
+  };
+
+  // ✅ Guardar delegateId si está disponible
+  if (delegateId) {
+    payload.delegateId = delegateId;
+  }
+
+  await ref.set(payload);
 
   const snap = await ref.get();
   return { id: ref.id, ...serialize(snap.data()) };

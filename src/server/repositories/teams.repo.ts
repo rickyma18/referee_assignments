@@ -94,6 +94,17 @@ export async function existsByNameInGroup(name: string, groupId: string, exclude
 export async function create(input: TeamCreateInput) {
   const name_lc = normTeamName(input.name);
 
+  // ✅ delegateId viene del server action (inyectado)
+  const delegateId = (input as any).delegateId as string | undefined;
+  const leagueId = (input as any).leagueId as string | undefined;
+
+  if (!delegateId || !delegateId.trim()) {
+    throw new Error("MISSING_DELEGATE_ID");
+  }
+  if (!leagueId || !leagueId.trim()) {
+    throw new Error("MISSING_LEAGUE_ID");
+  }
+
   // Evitar duplicados en el mismo grupo
   const dup = await existsByNameInGroup(input.name, input.groupId);
   if (dup) {
@@ -105,10 +116,12 @@ export async function create(input: TeamCreateInput) {
 
   const nowServer = AdminFieldValue.serverTimestamp();
 
-  const payload = {
+  const payload: Record<string, any> = {
     name: input.name.trim(),
     name_lc,
     groupId: input.groupId,
+    leagueId,
+    delegateId,
     municipality: (input.municipality ?? "").trim(),
     stadium: (input.stadium ?? "").trim(),
     venue: (input.venue ?? "").trim(),
@@ -135,12 +148,16 @@ export async function update(id: string, input: Omit<TeamUpdateInput, "id">) {
 
   const prev = before.data() as any;
 
-  // Si cambia el name o el groupId, validar duplicado
-  const nameChanged = input.name && input.name.trim() !== (prev.name ?? "");
-  const groupChanged = input.groupId && input.groupId !== (prev.groupId ?? "");
+  // ⚠️ No permitir cambiar delegateId (ignorar si viene en input)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { delegateId: _ignoredDelegateId, ...safeInput } = input as any;
 
-  const nextName = input.name?.trim() ?? prev.name ?? "";
-  const nextGroup = input.groupId ?? prev.groupId ?? "";
+  // Si cambia el name o el groupId, validar duplicado
+  const nameChanged = safeInput.name && safeInput.name.trim() !== (prev.name ?? "");
+  const groupChanged = safeInput.groupId && safeInput.groupId !== (prev.groupId ?? "");
+
+  const nextName = safeInput.name?.trim() ?? prev.name ?? "";
+  const nextGroup = safeInput.groupId ?? prev.groupId ?? "";
 
   if (nameChanged || groupChanged) {
     const dup = await existsByNameInGroup(nextName, nextGroup, id);
@@ -153,17 +170,18 @@ export async function update(id: string, input: Omit<TeamUpdateInput, "id">) {
   }
 
   const patch: Record<string, any> = {
-    groupId: input.groupId ?? prev.groupId ?? "",
+    groupId: safeInput.groupId ?? prev.groupId ?? "",
     name: nextName,
     name_lc: nameChanged ? normTeamName(nextName) : (prev.name_lc ?? normTeamName(nextName)),
-    municipality: input.municipality ?? prev.municipality ?? "",
-    stadium: input.stadium ?? prev.stadium ?? "",
-    venue: input.venue ?? prev.venue ?? "",
-    logoUrl: input.logoUrl ?? prev.logoUrl ?? null,
+    municipality: safeInput.municipality ?? prev.municipality ?? "",
+    stadium: safeInput.stadium ?? prev.stadium ?? "",
+    venue: safeInput.venue ?? prev.venue ?? "",
+    logoUrl: safeInput.logoUrl ?? prev.logoUrl ?? null,
     // 👇 mantener/actualizar tier
-    tier: (input as any).tier ?? prev.tier ?? "REGULARES",
+    tier: safeInput.tier ?? prev.tier ?? "REGULARES",
     updatedAt: AdminFieldValue.serverTimestamp(),
   };
+  // ✅ delegateId se preserva del doc original (no se puede cambiar)
 
   await ref.update(patch);
   const after = await ref.get();
