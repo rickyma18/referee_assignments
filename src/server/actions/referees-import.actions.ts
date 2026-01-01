@@ -1,6 +1,8 @@
 "use server";
 import "server-only";
 import { RefereeCreateZ } from "@/domain/referees/referee.zod";
+import { getDelegateContext } from "@/server/auth/get-delegate-context";
+import { assertEffectiveDelegateId } from "@/server/auth/require-delegate-access";
 import { secureWrite } from "@/server/auth/secure-action";
 import * as repo from "@/server/repositories/referees.repo";
 
@@ -19,6 +21,62 @@ type ExcelRefRow = {
   FotoURL: string;
   Tipo: string; // "ARBITRO" | "ASESOR" (opcional)
 };
+
+type NormalizedRefRow = {
+  name: string;
+  zones: string[];
+  status: string;
+  category: string;
+  email?: string;
+};
+
+function isNormalizedRefRow(v: unknown): v is NormalizedRefRow {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return (
+    "name" in o &&
+    "zones" in o &&
+    "status" in o &&
+    "category" in o &&
+    // email puede venir o no, pero si viene debe ser string
+    (!("email" in o) || typeof o.email === "string" || o.email === undefined)
+  );
+}
+function isBlank(v: unknown): boolean {
+  if (v === null || v === undefined) return true;
+  if (Array.isArray(v)) return v.length === 0 || v.every((x) => isBlank(x));
+  return String(v).trim() === "";
+}
+
+/**
+ * Detecta si una fila está vacía (debe ignorarse).
+ * Soporta filas crudas de Excel (con "Nombre") y normalizadas (con "name").
+ */
+// eslint-disable-next-line complexity
+function isEmptyRow(row: unknown): boolean {
+  if (!row || typeof row !== "object") return true;
+
+  const r = row as Record<string, unknown>;
+
+  // Caso 1: Fila cruda de Excel (tiene key "Nombre")
+  if ("Nombre" in r) {
+    return (
+      isBlank(r["Nombre"]) &&
+      isBlank(r["Zonas"]) &&
+      isBlank(r["Estado"]) &&
+      isBlank(r["Categoría"]) &&
+      isBlank(r["Correo"])
+    );
+  }
+
+  // Caso 2: Fila normalizada (tiene key "name")
+  if ("name" in r) {
+    return isBlank(r.name) && isBlank(r.zones) && isBlank(r.status) && isBlank(r.category) && isBlank(r.email);
+  }
+
+  // Si no tiene ninguna key conocida, la consideramos vacía
+  return true;
+}
 
 // 🔹 Normaliza una fila de Excel al shape esperado por RefereeCreateZ
 function normalizeExcelRow(row: ExcelRefRow) {
@@ -66,10 +124,12 @@ function normalizeExcelRow(row: ExcelRefRow) {
 
   return normalized;
 }
+export async function validateRefereesDryRun(rows: ExcelRefRow[]) {
+  const input = rows;
 
-export async function validateRefereesDryRun(rows: any[]) {
-  // rows viene como array de ExcelRefRow desde el cliente
-  const resultRows = rows.map((raw: ExcelRefRow, index: number) => {
+  const filtered = input.filter((r) => !isEmptyRow(r));
+
+  const resultRows = filtered.map((raw, index) => {
     const normalized = normalizeExcelRow(raw);
     const parsed = RefereeCreateZ.safeParse(normalized);
 
@@ -85,33 +145,66 @@ export async function validateRefereesDryRun(rows: any[]) {
     return { errors, normalized };
   });
 
-  const ok = resultRows.every((r) => r.errors.length === 0);
-
-  return { ok, rows: resultRows };
+  return {
+    ok: resultRows.every((r) => r.errors.length === 0),
+    rows: resultRows,
+    ignored: input.length - filtered.length,
+  };
 }
 
 export async function confirmRefereesImport({ rows }: { rows: any[] }) {
+  // eslint-disable-next-line complexity
   return secureWrite(async () => {
+    // ✅ Obtener delegateId del contexto de sesión
+    const ctx = await getDelegateContext();
+    const delegateId = assertEffectiveDelegateId(ctx);
+
     let created = 0;
     const errors: string[] = [];
 
-    for (const r of rows) {
-      try {
-        // rows aquí ya deberían venir normalizadas desde el cliente:
-        // payload.rows = (result.rows ?? rows).map((r) => r.normalized ?? r)
-        const parsed = RefereeCreateZ.parse(r);
+    const debug: Array<{
+      i: number;
+      name?: string;
+      ok?: boolean;
+      message?: string;
+    }> = [];
 
-        const res = await repo.create(parsed);
-        if (res.ok) {
-          created++;
-        } else {
-          errors.push(res.message ?? "Error desconocido");
-        }
+    for (let i = 0; i < (rows?.length ?? 0); i++) {
+      const r = rows[i];
+
+      try {
+        const candidate = r?.normalized ?? r;
+        const parsed = RefereeCreateZ.parse(candidate);
+
+        // ✅ Inyectar delegateId al crear
+        const res = await repo.create({ ...parsed, delegateId });
+
+        debug.push({
+          i,
+          name: parsed.name,
+          ok: res?.ok,
+          message: res?.message ?? "(sin message)",
+        });
+
+        if (res?.ok) created++;
+        else errors.push(res?.message ?? `repo.create devolvió ok=false (fila ${i + 1})`);
       } catch (e: any) {
-        errors.push(e?.message ?? "Error");
+        const msg = e?.message ?? "Error";
+        debug.push({
+          i,
+          name: r?.name ?? r?.normalized?.name,
+          ok: false,
+          message: msg,
+        });
+        errors.push(msg);
       }
     }
 
-    return { ok: errors.length === 0, created, errors };
+    return {
+      ok: errors.length === 0,
+      created,
+      errors,
+      debug,
+    };
   });
 }

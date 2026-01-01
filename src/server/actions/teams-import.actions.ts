@@ -10,8 +10,17 @@ import { ZodError, z } from "zod";
 
 import { normTeamName } from "@/domain/teams/team.normalizers";
 import { adminDb, AdminFieldValue } from "@/server/admin/firebase-admin";
+import { getDelegateContext } from "@/server/auth/get-delegate-context";
+import { assertEffectiveDelegateId } from "@/server/auth/require-delegate-access";
 import { secureWrite } from "@/server/auth/secure-action";
 import * as teamsRepo from "@/server/repositories/teams.repo";
+
+/** Obtiene el delegateId de una liga. */
+async function getLeagueDelegateId(leagueId: string): Promise<string | null> {
+  const snap = await adminDb.collection("leagues").doc(leagueId).get();
+  if (!snap.exists) return null;
+  return (snap.data() as any)?.delegateId ?? null;
+}
 
 type ActionResult<T = any> =
   | { ok: true; data?: T }
@@ -69,6 +78,7 @@ export async function importTeamsAction(params: {
   fallbackGroupId?: string; // groupId de la URL actual, si las filas no traen "group"
   rows: ImportRow[];
 }): Promise<ActionResult<ImportReport>> {
+  // eslint-disable-next-line complexity
   return secureWrite<ImportReport>(async () => {
     const { leagueId, fallbackGroupId, rows } = params;
 
@@ -76,6 +86,21 @@ export async function importTeamsAction(params: {
     if (!leagueId) throw new Error("leagueId requerido.");
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       throw new Error("No hay filas para importar.");
+    }
+
+    // ✅ Obtener delegateId de la liga
+    const ctx = await getDelegateContext();
+    let delegateId = await getLeagueDelegateId(leagueId);
+
+    if (!delegateId) {
+      // Solo SUPERUSUARIO puede usar fallback de sesión
+      if (ctx.role !== "SUPERUSUARIO") {
+        throw new Error(
+          "La liga no tiene delegado asignado. Contacta al administrador para asignar un delegado a esta liga.",
+        );
+      }
+      // Fallback para admin: usar el delegateId del contexto de sesión
+      delegateId = assertEffectiveDelegateId(ctx);
     }
 
     const report: ImportReport = {
@@ -150,6 +175,7 @@ export async function importTeamsAction(params: {
         }
 
         const ref = q.docs[0].ref;
+        const existingData = q.docs[0].data() as any;
         const patch: any = {
           municipality: row.municipality ?? "",
           stadium: row.stadium ?? "",
@@ -162,6 +188,12 @@ export async function importTeamsAction(params: {
           patch.logoUrl = cleanedLogoUrl;
         }
 
+        // ✅ Backfill: si el team existente no tiene delegateId, agregarlo
+        if (!existingData.delegateId) {
+          patch.delegateId = delegateId;
+          patch.leagueId = leagueId;
+        }
+
         await ref.update(patch);
         report.updated.push({ id: ref.id, name: row.name, groupId });
       } else {
@@ -170,10 +202,13 @@ export async function importTeamsAction(params: {
           name: row.name.trim(),
           name_lc,
           groupId,
+          leagueId, // ✅ Multi-tenant
+          delegateId, // ✅ Multi-tenant
           municipality: row.municipality ?? "",
           stadium: row.stadium ?? "",
           venue: row.venue ?? "",
           logoUrl: cleanedLogoUrl || null,
+          tier: "REGULARES", // ✅ Default tier
           createdAt: AdminFieldValue.serverTimestamp(),
           updatedAt: AdminFieldValue.serverTimestamp(),
         };
@@ -192,5 +227,76 @@ export async function importTeamsAction(params: {
     }
 
     return report; // ⬅️ dato plano (secureWrite lo envolverá en { ok: true, data })
+  });
+}
+
+/** Resuelve delegateId de un grupo vía leagueId. */
+async function resolveGroupDelegateId(
+  groupId: string,
+  cache: Map<string, { leagueId: string; delegateId: string } | null>,
+): Promise<{ leagueId: string; delegateId: string } | null> {
+  if (cache.has(groupId)) return cache.get(groupId) ?? null;
+
+  const groupSnap = await adminDb.collection("groups").doc(groupId).get();
+  if (!groupSnap.exists) {
+    cache.set(groupId, null);
+    return null;
+  }
+
+  const leagueId = (groupSnap.data() as any)?.leagueId;
+  if (!leagueId) {
+    cache.set(groupId, null);
+    return null;
+  }
+
+  const delegateId = await getLeagueDelegateId(leagueId);
+  if (!delegateId) {
+    cache.set(groupId, null);
+    return null;
+  }
+
+  const result = { leagueId, delegateId };
+  cache.set(groupId, result);
+  return result;
+}
+
+/**
+ * Backfill: asigna delegateId a teams que no lo tienen,
+ * usando el delegateId de su liga (vía groupId → leagueId → delegateId).
+ *
+ * Solo para SUPERUSUARIO o mantenimiento.
+ */
+export async function backfillTeamsDelegateId(): Promise<ActionResult<{ updated: number; skipped: number }>> {
+  return secureWrite(async () => {
+    // Buscar todos los teams sin delegateId (null o undefined)
+    const allTeams = await adminDb.collection("teams").get();
+    const teamsToFix = allTeams.docs.filter((d) => !(d.data() as any).delegateId);
+
+    let updated = 0;
+    let skipped = 0;
+    const cache = new Map<string, { leagueId: string; delegateId: string } | null>();
+
+    for (const doc of teamsToFix) {
+      const groupId = (doc.data() as any)?.groupId;
+      if (!groupId) {
+        skipped++;
+        continue;
+      }
+
+      const resolved = await resolveGroupDelegateId(groupId, cache);
+      if (!resolved) {
+        skipped++;
+        continue;
+      }
+
+      await doc.ref.update({
+        delegateId: resolved.delegateId,
+        leagueId: resolved.leagueId,
+        updatedAt: AdminFieldValue.serverTimestamp(),
+      });
+      updated++;
+    }
+
+    return { updated, skipped };
   });
 }

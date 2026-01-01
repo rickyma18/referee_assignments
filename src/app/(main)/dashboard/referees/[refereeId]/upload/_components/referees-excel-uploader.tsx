@@ -66,6 +66,29 @@ const VALID_TYPES = ["ARBITRO", "ASESOR"] as const;
 // Email muy básico, solo para filtrar burradas
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Detecta si un valor está "vacío" (null, undefined, "", espacios, NBSP, etc.)
+ */
+function isBlankValue(v: unknown): boolean {
+  if (v === null || v === undefined) return true;
+  if (typeof v === "string") {
+    // Limpia espacios normales, NBSP (\u00A0), y otros whitespace Unicode
+    return v.replace(/[\s\u00A0\u200B]+/g, "") === "";
+  }
+  return false;
+}
+
+/**
+ * Detecta si una fila cruda del Excel está vacía (debe ignorarse).
+ * Revisa las 5 columnas obligatorias: Nombre, Zonas, Estado, Categoría, Correo.
+ */
+function isEmptyExcelRow(row: Record<string, unknown>): boolean {
+  if (!row || typeof row !== "object") return true;
+
+  const keys = ["Nombre", "Zonas", "Estado", "Categoría", "Correo"];
+  return keys.every((k) => isBlankValue(row[k]));
+}
+
 export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
   const [rows, setRows] = React.useState<RefRow[]>([]);
   const [result, setResult] = React.useState<any | null>(null);
@@ -108,14 +131,20 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
       const data = new Uint8Array(e.target?.result as ArrayBuffer);
       const wb = XLSX.read(data, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+        defval: "",
+        blankrows: false, // Ya es default, pero explícito para claridad
+      });
 
-      if (json.length > maxRows) {
+      // Filtrar filas vacías (por formato de plantilla o NBSP)
+      const filtered = json.filter((row) => !isEmptyExcelRow(row));
+
+      if (filtered.length > maxRows) {
         toast.error(`Máximo ${maxRows} filas por carga.`);
         return;
       }
 
-      const normalized = normalizeJson(json);
+      const normalized = normalizeJson(filtered);
 
       setRows(normalized);
       setResult(null);
@@ -331,9 +360,11 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
     }
   }
 
+  // eslint-disable-next-line complexity
   async function onConfirm() {
     if (!result?.ok) return toast.error("No puedes confirmar con errores.");
     setBusy(true);
+
     try {
       const payload = {
         rows: (result.rows ?? rows).map((r: any) => r.normalized ?? r),
@@ -341,12 +372,21 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
 
       const res = (await confirmRefereesImport(payload)) as ConfirmRefereesResponse;
 
-      if (res.ok) {
-        const created = res.data?.created ?? rows.length; // fallback amistoso
+      // res.ok = secureWrite pasó (autenticación/permisos)
+      // res.data.ok = operación real pasó (repo.create exitoso)
+      if (!res.ok) {
+        // Error de permisos o wrapper
+        toast.error(res.message ?? "No tienes permisos para importar.");
+        return;
+      }
+
+      if (res.data?.ok) {
+        const created = res.data.created ?? rows.length;
         toast.success(`Registros creados/actualizados: ${created}`);
         onClear();
       } else {
-        const msg = res.message ?? (res.data?.errors?.length ? res.data.errors.join("; ") : "No se pudo confirmar.");
+        // Error en la operación (ej: duplicados, falta delegateId, etc.)
+        const msg = res.data?.errors?.length ? res.data.errors.join("; ") : "No se pudo confirmar la importación.";
         toast.error(msg);
       }
     } catch (e: any) {
@@ -419,6 +459,7 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
         <Button onClick={onValidate} disabled={rows.length === 0 || busy}>
           Validar
         </Button>
+
         <Button onClick={onConfirm} disabled={!result?.ok || busy} variant="secondary">
           Confirmar
         </Button>

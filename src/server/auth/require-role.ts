@@ -64,9 +64,6 @@ export async function requireSuperuser(): Promise<{ uid: string; role: AppRole }
 
   const role = await getRoleByUid(uid);
 
-  // 👇 puedes dejar esto un rato para confirmar que te está leyendo bien:
-  // console.log("[requireSuperuser] uid=", uid, "role=", role);
-
   const allowed = role === "SUPERUSUARIO";
   if (!allowed) throw new ForbiddenError("Requiere rol SUPERUSUARIO.");
 

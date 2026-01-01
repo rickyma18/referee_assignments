@@ -55,6 +55,7 @@ export async function loadInternalRulesForReferees(refereeIds: string[]): Promis
  *
  * Ajusta aquí si tus campos reales de municipio cambian.
  */
+// eslint-disable-next-line complexity
 export function buildMatchRuleContext(args: { leagueId: string; matchData: any }): MatchRuleContext {
   const { leagueId, matchData } = args;
 
@@ -112,6 +113,7 @@ export type InternalRulesScoreResult = {
  * - IDs de compañeros con los que va en la terna (central, AA1...),
  *   usado para RA_companeros_preferidos.
  */
+// eslint-disable-next-line complexity
 export function applyInternalRulesToScore(options: {
   match: MatchRuleContext;
   referee: CandidateRef;
@@ -150,13 +152,6 @@ export function applyInternalRulesToScore(options: {
           debug.push(`RA_municipios_prohibidos: municipio prohibido ${municipio}`);
 
           // Observabilidad interna solo en server (NO viaja al cliente)
-          console.log(
-            "[RA-XX] Excluyendo árbitro por municipio prohibido",
-            referee.id,
-            referee.name,
-            municipio,
-            rule.id,
-          );
 
           return { allowed, score: 0, debug };
         }
@@ -181,8 +176,6 @@ export function applyInternalRulesToScore(options: {
           allowed = false;
           debug.push(`RA_dias_prohibidos: día prohibido ${weekday}`);
 
-          console.log("[RA-XX] Excluyendo árbitro por día prohibido", referee.id, referee.name, weekday, rule.id);
-
           return { allowed, score: 0, debug };
         }
         break;
@@ -206,14 +199,6 @@ export function applyInternalRulesToScore(options: {
           allowed = false;
           debug.push(
             `RA_equipos_prohibidos: equipo prohibido en partido (${homeTeamId ?? "-"} vs ${awayTeamId ?? "-"})`,
-          );
-
-          console.log(
-            "[RA-XX] Excluyendo árbitro por equipo prohibido",
-            referee.id,
-            referee.name,
-            { homeTeamId, awayTeamId },
-            rule.id,
           );
 
           return { allowed, score: 0, debug };
@@ -242,8 +227,6 @@ export function applyInternalRulesToScore(options: {
         if (leagueId && list.includes(leagueId)) {
           allowed = false;
           debug.push(`RA_ligas_prohibidas: liga prohibida ${leagueId}`);
-
-          console.log("[RA-XX] Excluyendo árbitro por liga prohibida", referee.id, referee.name, leagueId, rule.id);
 
           return { allowed, score: 0, debug };
         }

@@ -7,8 +7,69 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { validateMatchesDryRun, confirmMatchesImport } from "@/server/actions/matches-import.actions";
+
+/**
+ * Helper para normalizar respuestas de server actions.
+ * Soporta:
+ *   Formato A (directo): { ok, created, message?, errors? }
+ *   Formato B (secureWrite): { ok, data: { ok, created, errors? }, message? }
+ */
+// eslint-disable-next-line complexity
+type AnyRes = any;
+
+// eslint-disable-next-line complexity
+export function getActionResult(res: AnyRes) {
+  // ✅ Formato A: { ok, rows, created?, errors?, message? }
+  if (res && typeof res === "object" && "ok" in res) {
+    return {
+      ok: Boolean(res.ok),
+      created: res.created ?? 0,
+      rows: res.rows ?? [],
+      errors: res.errors ?? [],
+      message: res.message,
+    };
+  }
+
+  // ✅ Formato B: { data: { ok, ... } }
+  if (res?.data && typeof res.data === "object" && "ok" in res.data) {
+    const outerOk = typeof res?.ok === "boolean" ? res.ok : true;
+    return {
+      ok: outerOk && Boolean(res.data.ok),
+      created: res.data.created ?? 0,
+      rows: res.data.rows ?? [],
+      errors: res.data.errors ?? [],
+      message: res.message ?? res.data.message,
+    };
+  }
+
+  // fallback
+  return { ok: false, created: 0, rows: [], errors: ["Respuesta inesperada del servidor"] };
+}
+
+/**
+ * Detecta si un valor está "vacío" (null, undefined, "", espacios, NBSP, etc.)
+ */
+function isBlankValue(v: unknown): boolean {
+  if (v === null || v === undefined) return true;
+  if (typeof v === "string") {
+    return v.replace(/[\s\u00A0\u200B]+/g, "") === "";
+  }
+  return false;
+}
+
+/**
+ * Detecta si una fila de partidos está vacía (debe ignorarse).
+ */
+function isEmptyMatchRow(row: Record<string, unknown>): boolean {
+  if (!row || typeof row !== "object") return true;
+  return (
+    isBlankValue(row.Local ?? row.local) &&
+    isBlankValue(row.Visitante ?? row.visitante) &&
+    isBlankValue(row.Fecha ?? row.fecha) &&
+    isBlankValue(row.Hora ?? row.hora)
+  );
+}
 
 export function ExcelUploader({
   leagueId,
@@ -38,14 +99,20 @@ export function ExcelUploader({
       const data = new Uint8Array(e.target?.result as ArrayBuffer);
       const wb = XLSX.read(data, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+        defval: "",
+        blankrows: false,
+      });
 
-      if (json.length > maxRows) {
+      // Filtrar filas vacías (por formato de plantilla o NBSP)
+      const filtered = json.filter((row) => !isEmptyMatchRow(row));
+
+      if (filtered.length > maxRows) {
         toast.error(`Máximo ${maxRows} filas por carga.`);
         return;
       }
 
-      const normalized = (json as any[]).map((r) => ({
+      const normalized = filtered.map((r) => ({
         Local: String(r.Local ?? r.local ?? "").trim(),
         Visitante: String(r.Visitante ?? r.visitante ?? "").trim(),
         Fecha: String(r.Fecha ?? r.fecha ?? "").trim(),
@@ -144,9 +211,11 @@ export function ExcelUploader({
     }
   }
 
+  // eslint-disable-next-line complexity
   async function onValidate() {
     if (rows.length === 0) return toast.error("Sube un archivo primero.");
     setBusy(true);
+
     try {
       const res = await validateMatchesDryRun({
         leagueId,
@@ -157,9 +226,40 @@ export function ExcelUploader({
         userId,
         limit: maxRows,
       });
+
       setResult(res);
-      if (res.ok) toast.success("Validación OK. Puedes confirmar.");
-      else toast.error("Hay errores. Corrige antes de confirmar.");
+
+      // Normalizar respuesta (soporta formato directo y secureWrite)
+      const ar = getActionResult(res);
+
+      // ✅ Detectar errores globales
+      const globalErrors = Array.isArray(ar.errors) ? ar.errors : [];
+      const hasGlobalErrors = globalErrors.length > 0;
+
+      // ✅ Detectar errores por fila (si existen rows en la respuesta)
+      const normalizedRows = Array.isArray((ar as any).rows)
+        ? (ar as any).rows
+        : Array.isArray((res as any).rows)
+          ? (res as any).rows
+          : [];
+
+      const hasRowErrors = normalizedRows.some((r: any) => Array.isArray(r?.errors) && r.errors.length > 0);
+
+      // ✅ OK real = ok && no hay errores globales ni por fila
+      const okReal = Boolean(ar.ok) && !hasGlobalErrors && !hasRowErrors;
+
+      if (okReal) {
+        toast.success("Validación OK. Puedes confirmar.");
+      } else {
+        // Mensaje con prioridad: errores globales → errores por fila → message → genérico
+        const msg = hasGlobalErrors
+          ? globalErrors.join(" · ")
+          : hasRowErrors
+            ? "Hay filas con errores. Corrige antes de confirmar."
+            : (ar.message ?? "Hay errores. Corrige antes de confirmar.");
+
+        toast.error(msg);
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Error al validar.");
     } finally {
@@ -168,26 +268,41 @@ export function ExcelUploader({
   }
 
   async function onConfirm() {
-    if (!result?.ok) return toast.error("No puedes confirmar con errores.");
+    // Verificar que la validación pasó (usando el resultado normalizado)
+    const validationResult = getActionResult(result);
+    if (!validationResult.ok) {
+      return toast.error("No puedes confirmar con errores.");
+    }
+
     setBusy(true);
     try {
       const importBatchId = crypto.randomUUID();
-      const res = await confirmMatchesImport({
+
+      // Construir payload con filas normalizadas
+      const payload = {
         leagueId,
         groupId,
         matchdayId,
         matchdayNumber,
-        rows,
+        rows: rows,
         userId,
         importBatchId,
-      });
-      if (res.ok) {
-        toast.success(`Partidos creados: ${res.created}`);
+      };
+
+      const res = await confirmMatchesImport(payload);
+
+      // Normalizar respuesta (soporta formato directo y secureWrite)
+      const { ok, created, errors, message } = getActionResult(res);
+
+      if (ok) {
+        toast.success(`Partidos creados: ${created}`);
         setRows([]);
         setResult(null);
         setFileName("");
       } else {
-        toast.error(res.message ?? "No se pudo confirmar.");
+        // Mostrar errores reales si existen
+        const errorMsg = errors.length > 0 ? errors.join("; ") : (message ?? "No se pudo confirmar la importación.");
+        toast.error(errorMsg);
       }
     } catch (e: any) {
       toast.error(e?.message ?? "Error al confirmar.");
@@ -212,6 +327,16 @@ export function ExcelUploader({
   function onDragOver(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
   }
+
+  // Calcular si la validación pasó para habilitar el botón Confirmar
+  const ar = result ? getActionResult(result) : null;
+  const canConfirm =
+    !!ar &&
+    Boolean(ar.ok) &&
+    Array.isArray(ar.errors) &&
+    ar.errors.length === 0 &&
+    Array.isArray(ar.rows) &&
+    ar.rows.every((r: any) => !Array.isArray(r?.errors) || r.errors.length === 0);
 
   return (
     <div className="space-y-6">
@@ -271,7 +396,7 @@ export function ExcelUploader({
         <Button onClick={onValidate} disabled={rows.length === 0 || busy}>
           Validar
         </Button>
-        <Button onClick={onConfirm} disabled={!result?.ok || busy} variant="secondary">
+        <Button onClick={onConfirm} disabled={!canConfirm || busy} variant="secondary">
           Confirmar
         </Button>
         <Button onClick={onClear} disabled={busy} variant="outline">

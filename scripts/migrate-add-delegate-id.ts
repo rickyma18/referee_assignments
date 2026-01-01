@@ -110,11 +110,7 @@ async function findLeagueByGroupId(
   groupId: string,
   delegateId?: string,
 ): Promise<{ leagueId: string; leagueName: string; delegateId: string | null } | null> {
-  // Primero buscar en leagues del delegado (si se proporciona)
-  const leaguesQuery = db.collection("leagues").select("name", "delegateId");
-
   if (delegateId) {
-    // Primero intentar con las leagues del delegado
     const delegateLeagues = await db.collection("leagues").where("delegateId", "==", delegateId).get();
 
     for (const leagueDoc of delegateLeagues.docs) {
@@ -130,7 +126,6 @@ async function findLeagueByGroupId(
     }
   }
 
-  // Si no encontramos, buscar en todas las leagues
   const allLeagues = await db.collection("leagues").get();
   for (const leagueDoc of allLeagues.docs) {
     const groupSnap = await db.collection("leagues").doc(leagueDoc.id).collection("groups").doc(groupId).get();
@@ -145,6 +140,60 @@ async function findLeagueByGroupId(
   }
 
   return null;
+}
+
+async function transferDelegateIdInCollection(params: {
+  collection: "leagues" | "teams" | "referees" | "venues";
+  from: string;
+  to: string;
+  apply: boolean;
+  limit?: number;
+}) {
+  const db = initAdmin();
+
+  const { collection, from, to, apply, limit = 50_000 } = params;
+
+  log("");
+  log(`${colors.bright}=== TRANSFER ${collection.toUpperCase()} delegateId ===${colors.reset}`);
+  log(`from: ${from}`);
+  log(`to:   ${to}`);
+  log(apply ? "Modo: APPLY" : "Modo: DRY-RUN");
+
+  const snap = await db.collection(collection).where("delegateId", "==", from).limit(limit).get();
+
+  log(`Encontrados: ${snap.size}`);
+
+  if (snap.empty) {
+    logInfo("Nada que transferir.");
+    return;
+  }
+
+  if (!apply) {
+    logDryRun(`Se actualizarían ${snap.size} docs en "${collection}" (delegateId: "${from}" -> "${to}")`);
+    logInfo("Usa --apply para ejecutar la migración");
+    return;
+  }
+
+  let updated = 0;
+  const batchSize = 500;
+
+  for (let i = 0; i < snap.docs.length; i += batchSize) {
+    const chunk = snap.docs.slice(i, i + batchSize);
+    const batch = db.batch();
+
+    for (const doc of chunk) {
+      batch.update(doc.ref, {
+        delegateId: to,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
+    updated += chunk.length;
+    logSuccess(`Batch aplicado: ${updated}/${snap.size}`);
+  }
+
+  logSuccess(`Listo. Docs actualizados en ${collection}: ${updated}`);
 }
 
 async function assignRefereesAll(delegateId: string, apply: boolean) {
@@ -200,6 +249,24 @@ async function assignRefereesAll(delegateId: string, apply: boolean) {
 // ============================================================================
 // COMMAND: dry-run-leagues / apply-leagues
 // ============================================================================
+
+async function handleTransfer(args: string[], collection: "leagues" | "teams" | "referees" | "venues") {
+  const from = getArg(args, "--from");
+  const to = getArg(args, "--to");
+  const apply = args.includes("--apply");
+
+  if (!from || !to) {
+    logError("Se requiere --from <delegateId> y --to <delegateId>");
+    process.exit(1);
+  }
+
+  await transferDelegateIdInCollection({
+    collection,
+    from,
+    to,
+    apply,
+  });
+}
 
 async function handleLeagues(args: string[], apply: boolean) {
   const delegateId = getArg(args, "--delegate");
@@ -927,6 +994,13 @@ ${colors.cyan}Ejemplos:${colors.reset}
   npm run migrate-delegate -- propagate-teams --delegate del_abc123 --apply
   npm run migrate-delegate -- assign-referees --delegate del_abc123 --query "garcia" --apply
   npm run migrate-delegate -- report --delegate del_abc123
+
+  transfer-leagues --from <old> --to <new> [--apply]
+  transfer-teams --from <old> --to <new> [--apply]
+  transfer-referees --from <old> --to <new> [--apply]
+  transfer-venues --from <old> --to <new> [--apply]
+  Cambia delegateId SOLO a docs que actualmente tengan delegateId=old.
+
   `);
 }
 
@@ -972,6 +1046,21 @@ async function main() {
         await assignRefereesAll(delegateId, apply);
         break;
       }
+      case "transfer-leagues":
+        await handleTransfer(args, "leagues");
+        break;
+
+      case "transfer-teams":
+        await handleTransfer(args, "teams");
+        break;
+
+      case "transfer-referees":
+        await handleTransfer(args, "referees");
+        break;
+
+      case "transfer-venues":
+        await handleTransfer(args, "venues");
+        break;
 
       default:
         logError(`Comando desconocido: ${command}`);

@@ -24,6 +24,7 @@ export function ActionsCell({ row: m, meta }: Props) {
   // La terna "completa" sigue siendo central + AA1 + AA2; 4º y asesor son opcionales
   const hasTerna = Boolean(m.central && m.aa1 && m.aa2);
 
+  // eslint-disable-next-line complexity
   async function doAssign(options?: { ignoreRecentTeamConflicts?: boolean }) {
     if (!m.central || !m.aa1 || !m.aa2) {
       toast.error("Debes seleccionar al menos Central y los dos Asistentes.");
@@ -103,7 +104,7 @@ export function ActionsCell({ row: m, meta }: Props) {
       if (data.code === "SCHEDULE_CONFLICT") {
         // Aquí NO damos opción de continuar: choque de horario = bloqueo duro
         toast.error(data.error ?? "Choque de horario: algún árbitro ya tiene otro partido en la misma fecha/hora.");
-        console.log("Choques de horario:", data.scheduleConflicts);
+
         return;
       }
 
@@ -140,8 +141,6 @@ export function ActionsCell({ row: m, meta }: Props) {
             },
           },
         );
-
-        console.log("Conflictos recientes (4 jornadas):", data.conflicts);
         return;
       }
 
@@ -150,7 +149,7 @@ export function ActionsCell({ row: m, meta }: Props) {
         toast.error(
           data.error ?? "Bloqueado: el RCS del central está por debajo del mínimo permitido para este partido.",
         );
-        console.log("Evaluación RCS (bloqueo):", data.rcsEvaluation);
+
         return;
       }
 
@@ -159,7 +158,7 @@ export function ActionsCell({ row: m, meta }: Props) {
         toast.info(
           data.error ?? "Advertencia: el RCS del central está por debajo del MDS recomendado para este partido.",
         );
-        console.log("Evaluación RCS (warning):", data.rcsEvaluation);
+
         meta.onSaved();
         return;
       }
@@ -167,10 +166,11 @@ export function ActionsCell({ row: m, meta }: Props) {
       // 🔹 Éxito normal
       if (data.code === "OK") {
         toast.success("Terna asignada correctamente.");
+
         if (data.rcsEvaluation) {
-          console.log("Evaluación RCS:", data.rcsEvaluation);
+          meta.onSaved();
         }
-        meta.onSaved();
+
         return;
       }
 

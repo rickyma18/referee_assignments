@@ -61,8 +61,6 @@ const dbInstance: Firestore = globalThis.ADMIN_DB ?? getFirestore(adminApp);
 if (!globalThis.firestoreSettingsApplied) {
   // Soporte Firestore Emulator
   if (process.env.FIRESTORE_EMULATOR_HOST) {
-    console.log("🔥 Conectando firebase-admin al Firestore Emulator:", process.env.FIRESTORE_EMULATOR_HOST);
-
     dbInstance.settings({
       host: process.env.FIRESTORE_EMULATOR_HOST,
       ssl: false,

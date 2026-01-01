@@ -89,7 +89,7 @@ export async function validateMatchesDryRun(params: ValidateParams) {
 
     // kickoff (permitimos pasado)
     let kickoffJS: Date | null = null;
-    const dt = DateTime.fromISO(`${raw.Fecha}T${raw.Hora}`, { zone: "America/Mexico_City" });
+    const dt = DateTime.fromFormat(`${raw.Fecha} ${raw.Hora}`, "dd-MM-yyyy HH:mm", { zone: "America/Mexico_City" });
     if (!dt.isValid) errors.push("Fecha u hora inválidas.");
     else kickoffJS = dt.toJSDate();
 

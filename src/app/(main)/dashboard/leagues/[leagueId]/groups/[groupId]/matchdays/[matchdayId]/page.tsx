@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { useParams, useRouter } from "next/navigation";
 
+import { DateTime } from "luxon";
 import { toast } from "sonner";
 
 import { EntityHeader } from "@/components/entity-header";
@@ -34,6 +35,12 @@ type LeagueUI = {
   color?: string | null;
   logoUrl?: string | null;
 };
+
+function isoToDDMMYYYY(iso: string) {
+  if (!iso) return "";
+  const dt = DateTime.fromISO(iso, { zone: "America/Mexico_City" });
+  return dt.isValid ? dt.toFormat("dd-MM-yyyy") : "";
+}
 
 export default function MatchdayDetailPage() {
   const { leagueId, groupId, matchdayId } = useParams<{
@@ -75,8 +82,8 @@ export default function MatchdayDetailPage() {
         setItem(data as MatchdayDTO);
 
         // Parsear Timestamps a YYYY-MM-DD
-        const s = tsToInputDate((data as any).startDate);
-        const e = tsToInputDate((data as any).endDate);
+        const s = isoToDDMMYYYY((data as any).startDate);
+        const e = isoToDDMMYYYY((data as any).endDate);
         setStart(s);
         setEnd(e);
         setStatus((data as any).status ?? "ACTIVE");

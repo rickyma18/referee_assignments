@@ -134,6 +134,7 @@ type InternalRulesMap = Map<string, InternalRule[]>;
 /* Motor batch balanceado: varios partidos                            */
 /* ------------------------------------------------------------------ */
 
+// eslint-disable-next-line complexity
 export async function suggestTernasForMatchesBalanced(
   matches: SuggestTernaForMatchParams[],
   options?: { delegateId?: string },
@@ -146,8 +147,7 @@ export async function suggestTernasForMatchesBalanced(
   const allRefs = await loadRefereeCandidates(options?.delegateId);
 
   // 🔍 DEBUG: Log para diagnóstico
-  console.log("[terna-batch] delegateId filter:", options?.delegateId ?? "(none - global)");
-  console.log("[terna-batch] allRefs loaded:", allRefs.length);
+
   if (allRefs.length > 0 && allRefs.length <= 5) {
     console.log(
       "[terna-batch] sample refs:",
@@ -158,7 +158,7 @@ export async function suggestTernasForMatchesBalanced(
   const basePool = filterBasePool(allRefs);
 
   // 🔍 DEBUG: Ver cuántos pasan filterBasePool
-  console.log("[terna-batch] basePool after filterBasePool:", basePool.length);
+
   if (allRefs.length > 0 && basePool.length === 0) {
     // Diagnóstico: ¿por qué se excluyeron todos?
     const withNullRcs = allRefs.filter((r) => r.rcsCentral === null);
@@ -166,7 +166,6 @@ export async function suggestTernasForMatchesBalanced(
     console.log("[terna-batch] ⚠️ Excluded - rcsCentral null:", withNullRcs.length, "tiers:", [
       ...new Set(withNullRcs.map((r) => r.tier)),
     ]);
-    console.log("[terna-batch] ⚠️ Excluded - status != DISPONIBLE:", withWrongStatus.length);
   }
 
   if (basePool.length === 0) {
@@ -195,12 +194,10 @@ export async function suggestTernasForMatchesBalanced(
   const assessorCandidates = getAssessorCandidates(basePool);
 
   // 🔍 DEBUG: Ver candidatos por rol
-  console.log("[terna-batch] centralCandidates:", centralCandidates.length);
-  console.log("[terna-batch] assistantCandidates:", assistantCandidates.length);
+
   if (basePool.length > 0 && (centralCandidates.length === 0 || assistantCandidates.length === 0)) {
     // Diagnóstico: ¿qué roles tienen?
     const allRoles = basePool.flatMap((r) => r.rolesAllowed);
-    console.log("[terna-batch] ⚠️ Roles found in basePool:", [...new Set(allRoles)]);
   }
 
   // ✅ Fallar explícitamente si no hay candidatos suficientes
