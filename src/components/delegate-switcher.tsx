@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Check, Globe, Loader2, Users } from "lucide-react";
 
@@ -16,24 +16,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useDelegateContext } from "@/context/delegate-context";
-import { setActiveDelegateCookie } from "@/server/actions/delegate-cookie.actions";
-import { type DelegateInfo, listDelegatesAction } from "@/server/actions/delegates.actions";
+import { type DelegateInfo, listDelegatesAction, listDelegatesByIdsAction } from "@/server/actions/delegates.actions";
 
 /**
  * DelegateSwitcher - Selector de delegado activo
  *
- * Visible SOLO para SUPERUSUARIO.
- * Permite seleccionar qué delegado "impersonar" para ver sus datos.
+ * Visible para SUPERUSUARIO, ARBITRO y ASISTENTE (si tienen más de 1 delegación permitida).
+ * Usa query param ?delegateId=... como fuente de verdad (shareable URLs).
  */
 export function DelegateSwitcher() {
   const router = useRouter();
-  const { role, activeDelegateId, setActiveDelegateId } = useDelegateContext();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { role, activeDelegateId, setActiveDelegateId, allowedDelegateIds, canSwitchDelegate } = useDelegateContext();
   const [delegates, setDelegates] = useState<DelegateInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Solo visible para SUPERUSUARIO
-  if (role !== "SUPERUSUARIO") {
+  const isSuper = role === "SUPERUSUARIO";
+
+  // No mostrar si no puede cambiar de delegado
+  if (!canSwitchDelegate) {
     return null;
   }
 
@@ -42,8 +45,15 @@ export function DelegateSwitcher() {
     if (open && delegates.length === 0) {
       setIsLoading(true);
       try {
-        const result = await listDelegatesAction();
-        setDelegates(result);
+        if (isSuper) {
+          // SUPERUSUARIO: cargar todos los delegados
+          const result = await listDelegatesAction();
+          setDelegates(result);
+        } else {
+          // ARBITRO/ASISTENTE: cargar solo los permitidos
+          const result = await listDelegatesByIdsAction(allowedDelegateIds);
+          setDelegates(result);
+        }
       } catch (error) {
         console.error("Error loading delegates:", error);
       } finally {
@@ -52,15 +62,23 @@ export function DelegateSwitcher() {
     }
   };
 
-  // Seleccionar delegado
-  const handleSelectDelegate = async (delegateId: string | null) => {
-    // 1. Guardar en cookie para server components
-    await setActiveDelegateCookie(delegateId);
-    // 2. Guardar en store para client components
+  // Seleccionar delegado usando query param
+  const handleSelectDelegate = (delegateId: string | null) => {
+    // 1. Guardar en store para client components
     setActiveDelegateId(delegateId);
-    // 3. Refrescar la ruta para que server components re-rendericen
+
+    // 2. Actualizar URL con query param
+    const params = new URLSearchParams(searchParams.toString());
+    if (delegateId) {
+      params.set("delegateId", delegateId);
+    } else {
+      params.delete("delegateId");
+    }
+
+    // 3. Navegar con el nuevo query param
     startTransition(() => {
-      router.refresh();
+      const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+      router.push(newUrl);
     });
   };
 
@@ -88,16 +106,19 @@ export function DelegateSwitcher() {
         <DropdownMenuLabel>Delegado activo</DropdownMenuLabel>
         <DropdownMenuSeparator />
 
-        {/* Opción Modo Global */}
-        <DropdownMenuItem onClick={() => handleSelectDelegate(null)} className="flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <Globe className="h-4 w-4" />
-            Modo global
-          </span>
-          {!activeDelegateId && <Check className="h-4 w-4" />}
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
+        {/* Opción Modo Global - solo para SUPERUSUARIO */}
+        {isSuper && (
+          <>
+            <DropdownMenuItem onClick={() => handleSelectDelegate(null)} className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Globe className="h-4 w-4" />
+                Modo global
+              </span>
+              {!activeDelegateId && <Check className="h-4 w-4" />}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
 
         {/* Lista de delegados */}
         {isLoading ? (
@@ -107,18 +128,18 @@ export function DelegateSwitcher() {
           </DropdownMenuItem>
         ) : delegates.length === 0 ? (
           <DropdownMenuItem disabled className="text-muted-foreground">
-            No hay delegados registrados
+            No hay delegados disponibles
           </DropdownMenuItem>
         ) : (
           delegates.map((delegate) => (
             <DropdownMenuItem
-              key={delegate.uid}
+              key={delegate.uid ?? delegate.delegateId}
               onClick={() => handleSelectDelegate(delegate.delegateId)}
               className="flex items-center justify-between"
             >
               <span className="flex flex-col">
-                <span className="truncate">{delegate.displayName ?? delegate.email}</span>
-                {delegate.displayName && (
+                <span className="truncate">{delegate.displayName ?? delegate.email ?? delegate.delegateId}</span>
+                {delegate.displayName && delegate.email && (
                   <span className="text-muted-foreground truncate text-xs">{delegate.email}</span>
                 )}
               </span>

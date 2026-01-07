@@ -13,14 +13,13 @@ import {
   signOut,
   Auth,
 } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { getUserDoc, upsertUserDoc } from "@/data/users";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { createSessionAction, clearSessionAction } from "@/server/auth/auth.actions";
-import type { UserDoc } from "@/types/user";
 
 type Props = React.ComponentProps<typeof Button>;
 
@@ -59,34 +58,32 @@ export function GoogleButton({ className, ...props }: Props) {
       const idToken = await user.getIdToken(true);
       await createSessionAction(idToken);
 
-      // 3) Obtener (o crear) el documento de usuario
-      let doc: UserDoc | null = await getUserDoc(user.uid);
+      // 3) Leer el documento de usuario directamente (sin crear)
+      const userDocRef = doc(db, "users", user.uid);
+      const snap = await getDoc(userDocRef);
 
-      if (!doc) {
-        // upsert aplica DEFAULT_ROLE = 'ARBITRO' si no envías role
-        await upsertUserDoc({
-          uid: user.uid,
-          email: user.email ?? "",
-          displayName: user.displayName ?? null,
-          photoURL: user.photoURL ?? null,
-        });
-
-        doc = await getUserDoc(user.uid);
-      }
-
-      if (!doc) {
-        // si algo falló al crear/leer el doc, limpiamos sesión para no dejar basura
-        await signOut(auth);
-        await clearSessionAction();
-        toast.error("No se pudo inicializar tu perfil. Contacta al administrador.");
+      // Usuario nuevo: no existe documento => ir a onboarding
+      if (!snap.exists()) {
+        console.log("[GoogleButton] Usuario nuevo, redirigiendo a onboarding");
+        toast.info("Completa tu información para continuar.");
+        router.replace("/onboarding/delegate");
         return;
       }
 
-      const role = doc.role; // 'SUPERUSUARIO' | 'DELEGADO' | 'ASISTENTE' | 'ARBITRO'
-      const isActive = (doc as any).active ?? true; // si no existe, asumimos true
+      const userData = snap.data();
+
+      // Usuario existente pero sin delegateId => ir a onboarding
+      if (!userData?.delegateId) {
+        console.log("[GoogleButton] Usuario sin delegateId, redirigiendo a onboarding");
+        toast.info("Selecciona tu delegación para continuar.");
+        router.replace("/onboarding/delegate");
+        return;
+      }
+
+      const role = userData.role as string;
+      const isActive = userData.active ?? true;
 
       if (!isActive) {
-        // Usuario marcado como inactivo → limpiar todo
         await signOut(auth);
         await clearSessionAction();
         toast.error("Usuario inactivo. Contacta al administrador.");
@@ -96,14 +93,12 @@ export function GoogleButton({ className, ...props }: Props) {
       // 4) Routing por rol (MAYÚSCULAS)
       switch (role) {
         case "SUPERUSUARIO":
-          router.replace("/dashboard/default"); // Admin area
+          router.replace("/dashboard/default");
           break;
         case "DELEGADO":
-          router.replace("/dashboard/assignments"); // CRUD designaciones
-          break;
         case "ASISTENTE":
         case "ARBITRO":
-          router.replace("/dashboard/assignments"); // vista read-only
+          router.replace("/dashboard/assignments");
           break;
         default:
           await signOut(auth);

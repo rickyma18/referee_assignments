@@ -13,6 +13,7 @@ type SearchParams = {
   status?: string;
   category?: string;
   limit?: string; // 👈 añadimos limit como string (viene de la URL)
+  delegateId?: string; // 👈 para multi-tenant
 };
 
 export default async function RefereesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -23,6 +24,7 @@ export default async function RefereesPage({ searchParams }: { searchParams: Pro
   const q = sp.q ?? "";
   const status = (sp.status as any) ?? undefined;
   const category = (sp.category as any) ?? undefined;
+  const delegateId = sp.delegateId ?? undefined;
 
   // 👇 parseamos el limit que viene de la URL
   const rawLimit = sp.limit;
@@ -36,7 +38,7 @@ export default async function RefereesPage({ searchParams }: { searchParams: Pro
     }
   }
 
-  const data = await listRefereesAction({ q, status, category, limit });
+  const data = await listRefereesAction({ q, status, category, limit }, { selectedDelegateId: delegateId });
 
   const setStatus = async (formData: FormData) => {
     "use server";

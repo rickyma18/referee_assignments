@@ -23,6 +23,10 @@ type TeamInitial = {
   venue?: string;
   logoUrl?: string | null;
   tier?: Tier | null;
+  // Campos de travel (opcionales, pueden ser null)
+  travelKmToLopezMateos?: number | null;
+  travelCarMaxMinToLopezMateos?: number | null;
+  travelPublicMaxMinToLopezMateos?: number | null;
 };
 
 type Props = {
@@ -50,6 +54,10 @@ export function TeamForm({ initial }: Props) {
     venue: initial?.venue ?? "",
     logoUrl: initial?.logoUrl ?? "",
     tier: (initial?.tier as Tier | null) ?? "REGULARES",
+    // Campos de travel: string para el input, se convierte en server
+    travelKmToLopezMateos: initial?.travelKmToLopezMateos?.toString() ?? "",
+    travelCarMaxMinToLopezMateos: initial?.travelCarMaxMinToLopezMateos?.toString() ?? "",
+    travelPublicMaxMinToLopezMateos: initial?.travelPublicMaxMinToLopezMateos?.toString() ?? "",
   });
 
   const [loading, setLoading] = React.useState(false);
@@ -106,6 +114,10 @@ export function TeamForm({ initial }: Props) {
           logoUrl: form.logoUrl || undefined,
           leagueId,
           tier: form.tier ?? "REGULARES",
+          // Campos de travel (Zod preprocess convierte "" -> undefined/null)
+          travelKmToLopezMateos: form.travelKmToLopezMateos as any,
+          travelCarMaxMinToLopezMateos: form.travelCarMaxMinToLopezMateos as any,
+          travelPublicMaxMinToLopezMateos: form.travelPublicMaxMinToLopezMateos as any,
         });
 
         if (!res.ok) {
@@ -126,6 +138,10 @@ export function TeamForm({ initial }: Props) {
           logoUrl: form.logoUrl || undefined,
           leagueId,
           tier: form.tier ?? "REGULARES",
+          // Campos de travel (Zod preprocess convierte "" -> undefined/null)
+          travelKmToLopezMateos: form.travelKmToLopezMateos as any,
+          travelCarMaxMinToLopezMateos: form.travelCarMaxMinToLopezMateos as any,
+          travelPublicMaxMinToLopezMateos: form.travelPublicMaxMinToLopezMateos as any,
         });
 
         if (!res.ok) {
@@ -255,6 +271,79 @@ export function TeamForm({ initial }: Props) {
         />
         <FieldError value={errors.logoUrl} />
         <p className="text-muted-foreground mt-1 text-xs"></p>
+      </div>
+
+      {/* === Campos de Travel (opcionales) === */}
+      <div className="border-border rounded-md border p-4">
+        <h3 className="text-muted-foreground mb-3 text-sm font-medium">Datos de viaje a Lopez Mateos (opcional)</h3>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {/* Distancia en km */}
+          <div>
+            <Label htmlFor="travelKmToLopezMateos">Distancia (km)</Label>
+            <div className="relative">
+              <Input
+                id="travelKmToLopezMateos"
+                type="number"
+                min={0}
+                max={1000}
+                step="0.1"
+                value={form.travelKmToLopezMateos}
+                onChange={onChange("travelKmToLopezMateos")}
+                placeholder="0"
+                className="pr-10"
+              />
+              <span className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs">
+                km
+              </span>
+            </div>
+            <FieldError value={errors.travelKmToLopezMateos} />
+          </div>
+
+          {/* Tiempo en auto */}
+          <div>
+            <Label htmlFor="travelCarMaxMinToLopezMateos">Tiempo en auto (min)</Label>
+            <div className="relative">
+              <Input
+                id="travelCarMaxMinToLopezMateos"
+                type="number"
+                min={0}
+                max={1000}
+                step="1"
+                value={form.travelCarMaxMinToLopezMateos}
+                onChange={onChange("travelCarMaxMinToLopezMateos")}
+                placeholder="0"
+                className="pr-10"
+              />
+              <span className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs">
+                min
+              </span>
+            </div>
+            <FieldError value={errors.travelCarMaxMinToLopezMateos} />
+          </div>
+
+          {/* Tiempo en transporte público */}
+          <div>
+            <Label htmlFor="travelPublicMaxMinToLopezMateos">Transporte publico (min)</Label>
+            <div className="relative">
+              <Input
+                id="travelPublicMaxMinToLopezMateos"
+                type="number"
+                min={0}
+                max={1000}
+                step="1"
+                value={form.travelPublicMaxMinToLopezMateos}
+                onChange={onChange("travelPublicMaxMinToLopezMateos")}
+                placeholder="Sin dato"
+                className="pr-10"
+              />
+              <span className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs">
+                min
+              </span>
+            </div>
+            <FieldError value={errors.travelPublicMaxMinToLopezMateos} />
+            <p className="text-muted-foreground mt-1 text-xs">Dejar vacio si no hay ruta</p>
+          </div>
+        </div>
       </div>
 
       <div className="flex justify-end gap-2">

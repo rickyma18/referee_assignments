@@ -10,6 +10,7 @@ export interface UserDoc {
   scope?: Record<string, any> | null; // para permisos/tenancy por liga/zona si aplica
   delegateId?: string; // ID del delegado (para usuarios con rol DELEGADO)
   activeDelegateId?: string; // ID del delegado activo (para SUPERUSUARIO que impersona)
+  allowedDelegateIds?: string[]; // Lista de delegateIds que puede ver (para ARBITRO/ASISTENTE)
   createdAt: number; // Date.now()
   updatedAt: number; // Date.now()
 }

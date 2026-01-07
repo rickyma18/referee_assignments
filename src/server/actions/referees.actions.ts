@@ -45,21 +45,27 @@ function pickCategory(v: unknown): RefCategory | undefined {
  *
  * Seguridad multi-tenant:
  * - DELEGADO: solo ve árbitros con su delegateId
- * - SUPERUSUARIO: ve todos (modo global) o filtra por activeDelegateId
+ * - SUPERUSUARIO: ve todos (modo global) o filtra por selectedDelegateId
+ * - ARBITRO/ASISTENTE: ve árbitros de selectedDelegateId (validado contra allowedDelegateIds)
  *
  * @param params - Parámetros de búsqueda
- * @param options.activeDelegateId - Para SUPER, el delegado seleccionado en UI
+ * @param options.selectedDelegateId - El delegateId del query param ?delegateId=...
  */
-export async function listRefereesAction(params: UiListParams, options?: { activeDelegateId?: string | null }) {
-  const ctx = await getDelegateContext(options);
+export async function listRefereesAction(
+  params: UiListParams,
+  options?: { selectedDelegateId?: string | null; activeDelegateId?: string | null },
+) {
+  const ctx = await getDelegateContext({
+    selectedDelegateId: options?.selectedDelegateId ?? options?.activeDelegateId,
+  });
 
   // ✅ Multi-tenant: filtrar en Firestore (no en memoria)
   // - SUPER global (sin effectiveDelegateId): ve todos
-  // - SUPER impersonando / DELEGADO: filtra por delegateId
+  // - SUPER impersonando / DELEGADO / ARBITRO: filtra por delegateId
   const delegateIdFilter = ctx.effectiveDelegateId ?? undefined;
 
-  // DELEGADO sin delegateId asignado: devolver vacío
-  if (ctx.role === "DELEGADO" && !delegateIdFilter) {
+  // DELEGADO/ARBITRO sin delegateId asignado: devolver vacío
+  if ((ctx.role === "DELEGADO" || ctx.role === "ARBITRO" || ctx.role === "ASISTENTE") && !delegateIdFilter) {
     return { items: [], nextCursor: null };
   }
 
