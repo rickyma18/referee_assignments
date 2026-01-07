@@ -1,9 +1,23 @@
 // src/data/users.ts
-import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+
 import { db } from "@/lib/firebase";
 import { userConverter } from "@/lib/firestore-converters";
-import type { UserDoc } from "@/types/user";
-import { DEFAULT_ROLE } from "@/types/user";
+import { DEFAULT_ROLE, type UserDoc } from "@/types/user";
+
+/**
+ * Remueve claves con valor undefined de un objeto.
+ * Firestore no acepta undefined, solo null.
+ */
+function stripUndefined<T extends object>(obj: T): { [K in keyof T]?: T[K] } {
+  const result: Partial<T> = {};
+  for (const key of Object.keys(obj) as Array<keyof T>) {
+    if (obj[key] !== undefined) {
+      result[key] = obj[key];
+    }
+  }
+  return result;
+}
 
 export function userDocRef(uid: string) {
   return doc(db, "users", uid).withConverter(userConverter);
@@ -25,10 +39,17 @@ export async function upsertUserDoc(payload: Partial<UserDoc> & { uid: string; e
     photoURL: payload.photoURL ?? prev?.photoURL ?? null,
     role: (payload as any).role ?? prev?.role ?? DEFAULT_ROLE,
     scope: payload.scope ?? prev?.scope ?? null,
+    // delegateId: solo actualizar si viene en payload, sino mantener previo
+    delegateId: payload.delegateId ?? prev?.delegateId,
+    // allowedDelegateIds: solo actualizar si viene en payload, sino mantener previo
+    allowedDelegateIds: payload.allowedDelegateIds ?? prev?.allowedDelegateIds,
     createdAt: prev?.createdAt ?? now,
     updatedAt: now,
   };
 
-  await setDoc(userDocRef(payload.uid), docToWrite, { merge: true });
+  // Strip undefined keys antes de enviar a Firestore (Firestore no acepta undefined)
+  const sanitized = stripUndefined(docToWrite);
+
+  await setDoc(userDocRef(payload.uid), sanitized, { merge: true });
   return docToWrite;
 }

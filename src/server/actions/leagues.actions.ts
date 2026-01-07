@@ -50,22 +50,32 @@ function slugify(name: string, season: string) {
  * Lista ligas.
  *
  * Seguridad multi-tenant:
- * - SUPERUSUARIO: puede ver todas (modo global) o filtrar por activeDelegateId
+ * - SUPERUSUARIO: puede ver todas (modo global) o filtrar por selectedDelegateId
  * - DELEGADO: solo ve ligas con su delegateId
- * - Otros: sin filtro delegado
+ * - ARBITRO/ASISTENTE: ve ligas de selectedDelegateId (validado contra allowedDelegateIds)
  *
  * @param params - Parámetros del repositorio
- * @param options.activeDelegateId - Para SUPER, el delegado seleccionado en UI
+ * @param options.selectedDelegateId - El delegateId del query param ?delegateId=...
  */
-export async function listLeaguesAction(params: GetLeaguesParams, options?: { activeDelegateId?: string | null }) {
-  const ctx = await getDelegateContext(options);
+export async function listLeaguesAction(
+  params: GetLeaguesParams,
+  options?: { selectedDelegateId?: string | null; activeDelegateId?: string | null },
+) {
+  const ctx = await getDelegateContext({
+    selectedDelegateId: options?.selectedDelegateId ?? options?.activeDelegateId,
+  });
 
-  // ✅ Determinar delegateId para filtrar en Firestore (más eficiente)
+  // ✅ Determinar delegateId para filtrar en Firestore
   let filterDelegateId: string | undefined;
 
   if (ctx.role === "DELEGADO") {
     if (!ctx.effectiveDelegateId) {
-      // DELEGADO sin delegateId: devolver lista vacía (no romper UI)
+      return [];
+    }
+    filterDelegateId = ctx.effectiveDelegateId;
+  } else if (ctx.role === "ARBITRO" || ctx.role === "ASISTENTE") {
+    // ARBITRO/ASISTENTE: usar effectiveDelegateId (ya validado en getDelegateContext)
+    if (!ctx.effectiveDelegateId) {
       return [];
     }
     filterDelegateId = ctx.effectiveDelegateId;
@@ -73,7 +83,7 @@ export async function listLeaguesAction(params: GetLeaguesParams, options?: { ac
     // SUPER impersonando: filtrar por el delegado seleccionado
     filterDelegateId = ctx.effectiveDelegateId;
   }
-  // SUPERUSUARIO sin activeDelegateId: ve todas (filterDelegateId = undefined)
+  // SUPERUSUARIO sin selección: ve todas (filterDelegateId = undefined)
 
   // ✅ Pasar delegateId al repo para filtrar en Firestore query
   const items = await repo.getAll({

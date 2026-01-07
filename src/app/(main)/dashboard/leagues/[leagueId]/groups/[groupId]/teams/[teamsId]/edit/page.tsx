@@ -69,6 +69,9 @@ export default function EditTeamPage() {
     stadium?: string;
     venue?: string;
     logoUrl?: string | null;
+    travelKmToLopezMateos?: number | null;
+    travelCarMaxMinToLopezMateos?: number | null;
+    travelPublicMaxMinToLopezMateos?: number | null;
   } | null>(null);
   const [loadingTeam, setLoadingTeam] = useState(true);
 
@@ -198,6 +201,9 @@ export default function EditTeamPage() {
           stadium: data.stadium ?? "",
           venue: data.venue ?? "",
           logoUrl: data.logoUrl ?? "",
+          travelKmToLopezMateos: data.travelKmToLopezMateos ?? null,
+          travelCarMaxMinToLopezMateos: data.travelCarMaxMinToLopezMateos ?? null,
+          travelPublicMaxMinToLopezMateos: data.travelPublicMaxMinToLopezMateos ?? null,
         });
       } catch (e: any) {
         toast.error(e?.message ?? "Error al cargar equipo");

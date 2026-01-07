@@ -393,36 +393,36 @@ export default function TeamDetailPage() {
           </div>
         </div>
 
-        {/* Metadatos y trazabilidad */}
+        {/* Traslado a Unidad López Mateos */}
         <div className="bg-card rounded-lg border p-4 text-sm">
-          <h2 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wide uppercase">Metadatos</h2>
-          <div className="space-y-2">
+          <h2 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wide uppercase">
+            Traslado a Unidad López Mateos
+          </h2>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             <div>
-              <span className="text-muted-foreground">Creado:</span>{" "}
-              <span className="font-medium">{formatDateTime(createdAt)}</span>
+              <span className="text-muted-foreground">Distancia (km):</span>
+            </div>
+            <div className="font-medium">{team.travelKmToLopezMateos ?? "—"}</div>
+
+            <div>
+              <span className="text-muted-foreground">En carro (min):</span>
+            </div>
+            <div className="font-medium">{team.travelCarMaxMinToLopezMateos ?? "—"}</div>
+
+            <div>
+              <span className="text-muted-foreground">En transporte público (min):</span>
+            </div>
+            <div className="font-medium">{team.travelPublicMaxMinToLopezMateos ?? "—"}</div>
+          </div>
+
+          {/* Trazabilidad de travel */}
+          <div className="text-muted-foreground mt-4 space-y-1 border-t pt-3 text-xs">
+            <div>
+              <span>Actualizado:</span> <span className="font-medium">{formatDateTime(team.travelUpdatedAt)}</span>
             </div>
             <div>
-              <span className="text-muted-foreground">Última actualización:</span>{" "}
-              <span className="font-medium">{formatDateTime(updatedAt)}</span>
+              <span>Fuente:</span> <span className="font-medium">{team.travelSource ?? "—"}</span>
             </div>
-            {teamId && (
-              <div>
-                <span className="text-muted-foreground">ID equipo:</span>{" "}
-                <span className="font-mono text-xs">{teamId}</span>
-              </div>
-            )}
-            {group?.id && (
-              <div>
-                <span className="text-muted-foreground">ID grupo:</span>{" "}
-                <span className="font-mono text-xs">{group.id}</span>
-              </div>
-            )}
-            {league?.id && (
-              <div>
-                <span className="text-muted-foreground">ID liga:</span>{" "}
-                <span className="font-mono text-xs">{league.id}</span>
-              </div>
-            )}
           </div>
         </div>
       </div>

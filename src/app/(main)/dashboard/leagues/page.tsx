@@ -3,8 +3,15 @@ import { listLeaguesAction, deleteLeagueAction } from "@/server/actions/leagues.
 
 import { LeaguesClient } from "./_components/leagues-client";
 
-export default async function LeaguesPage() {
-  const data = await listLeaguesAction({});
+type SearchParams = {
+  delegateId?: string;
+};
+
+export default async function LeaguesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const sp = await searchParams;
+  const delegateId = sp.delegateId ?? undefined;
+
+  const data = await listLeaguesAction({}, { selectedDelegateId: delegateId });
 
   // 👇 ESTA es la Server Action que SÍ puedes pasar a un Client Component
   const deleteAction = async (formData: FormData) => {

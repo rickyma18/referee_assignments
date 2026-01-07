@@ -153,3 +153,47 @@ npm run migrate-delegate -- assign-referees --delegate del_abc --ids ref1,ref2 -
 - **Zones**: No se migran (catálogo global compartido)
 - **Referees**: No tienen relación automática con leagues, se asignan manualmente
 - **Conflictos**: Si un doc tiene `delegateId` diferente, se reporta pero no se modifica
+
+---
+
+## seed-delegates.ts
+
+Script para poblar la colección `/delegates` con el catálogo inicial de delegaciones.
+
+### Requisitos
+
+- Credenciales de Firebase Admin configuradas (igual que `set-custom-claims.ts`)
+
+### Uso
+
+```bash
+npx tsx scripts/seed-delegates.ts
+```
+
+### Comportamiento
+
+- **Idempotente**: Si un documento ya existe, no lo sobrescribe
+- **No automático**: Debe ejecutarse manualmente
+- Crea los siguientes documentos:
+
+| ID | Nombre | Orden |
+|----|--------|-------|
+| `del_jalisco` | Jalisco | 1 |
+| `del_bc` | Baja California | 2 |
+| `del_cdmx` | Ciudad de México | 3 |
+| `del_nuevo_leon` | Nuevo León | 4 |
+| `del_guanajuato` | Guanajuato | 5 |
+
+### Alternativa: Firestore Console
+
+También puedes crear los documentos manualmente en la [Firestore Console](https://console.firebase.google.com):
+
+1. Navega a Firestore Database
+2. Crea colección `delegates`
+3. Para cada delegación, crea un documento con:
+   - **Document ID**: `del_jalisco`, `del_bc`, etc.
+   - **Campos**:
+     - `name` (string): "Jalisco"
+     - `isActive` (boolean): true
+     - `order` (number): 1, 2, 3...
+

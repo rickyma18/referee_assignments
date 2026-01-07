@@ -132,6 +132,20 @@ export async function create(input: TeamCreateInput) {
     updatedAt: nowServer,
   };
 
+  // Campos de travel (opcionales, solo si vienen definidos)
+  // NO seteamos travelUpdatedAt/travelSource desde form (solo script)
+  const travelInput = input as any;
+  if (travelInput.travelKmToLopezMateos !== undefined) {
+    payload.travelKmToLopezMateos = travelInput.travelKmToLopezMateos;
+  }
+  if (travelInput.travelCarMaxMinToLopezMateos !== undefined) {
+    payload.travelCarMaxMinToLopezMateos = travelInput.travelCarMaxMinToLopezMateos;
+  }
+  // Para travelPublicMaxMinToLopezMateos: null es valor válido (significa "sin transporte público")
+  if (travelInput.travelPublicMaxMinToLopezMateos !== undefined) {
+    payload.travelPublicMaxMinToLopezMateos = travelInput.travelPublicMaxMinToLopezMateos;
+  }
+
   const ref = await adminDb.collection(COL).add(payload);
   const snap = await ref.get();
   return toPlain<Team>({ id: ref.id, ...(snap.data() as any) });
@@ -182,6 +196,22 @@ export async function update(id: string, input: Omit<TeamUpdateInput, "id">) {
     updatedAt: AdminFieldValue.serverTimestamp(),
   };
   // ✅ delegateId se preserva del doc original (no se puede cambiar)
+
+  // Campos de travel (opcionales)
+  // Si viene undefined -> preservar valor anterior
+  // Si viene null (solo para TP) -> guardar null
+  // Si viene number -> guardar number
+  // NO permitimos setear travelUpdatedAt/travelSource desde form (solo script)
+  if (safeInput.travelKmToLopezMateos !== undefined) {
+    patch.travelKmToLopezMateos = safeInput.travelKmToLopezMateos;
+  }
+  if (safeInput.travelCarMaxMinToLopezMateos !== undefined) {
+    patch.travelCarMaxMinToLopezMateos = safeInput.travelCarMaxMinToLopezMateos;
+  }
+  // Para travelPublicMaxMinToLopezMateos: null es valor válido
+  if (safeInput.travelPublicMaxMinToLopezMateos !== undefined) {
+    patch.travelPublicMaxMinToLopezMateos = safeInput.travelPublicMaxMinToLopezMateos;
+  }
 
   await ref.update(patch);
   const after = await ref.get();

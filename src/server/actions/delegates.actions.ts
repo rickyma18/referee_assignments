@@ -63,3 +63,61 @@ export async function listDelegatesAction(): Promise<DelegateInfo[]> {
     return [];
   }
 }
+
+/**
+ * Lista delegados por IDs específicos.
+ *
+ * Usado por ARBITRO/ASISTENTE para cargar solo sus delegaciones permitidas.
+ * No requiere SUPERUSUARIO porque solo devuelve info de delegados por IDs dados.
+ */
+export async function listDelegatesByIdsAction(delegateIds: string[]): Promise<DelegateInfo[]> {
+  try {
+    if (!delegateIds || delegateIds.length === 0) {
+      return [];
+    }
+
+    // Buscar usuarios con rol DELEGADO que tengan estos delegateIds
+    const usersSnap = await adminDb.collection("users").where("role", "==", "DELEGADO").get();
+
+    const delegates: DelegateInfo[] = [];
+
+    for (const doc of usersSnap.docs) {
+      const data = doc.data();
+      const docDelegateId = data.delegateId ?? doc.id;
+
+      // Solo incluir si el delegateId está en la lista solicitada
+      if (delegateIds.includes(docDelegateId)) {
+        delegates.push({
+          uid: doc.id,
+          displayName: data.displayName ?? null,
+          email: data.email ?? "",
+          delegateId: docDelegateId,
+        });
+      }
+    }
+
+    // Si algunos delegateIds no tienen usuario DELEGADO asociado, crear entradas placeholder
+    for (const delegateId of delegateIds) {
+      if (!delegates.some((d) => d.delegateId === delegateId)) {
+        delegates.push({
+          uid: delegateId,
+          displayName: null,
+          email: "",
+          delegateId,
+        });
+      }
+    }
+
+    // Ordenar por displayName o email o delegateId
+    delegates.sort((a, b) => {
+      const nameA = a.displayName ?? a.email ?? a.delegateId;
+      const nameB = b.displayName ?? b.email ?? b.delegateId;
+      return nameA.localeCompare(nameB);
+    });
+
+    return delegates;
+  } catch (e) {
+    console.error("Error listing delegates by IDs:", e);
+    return [];
+  }
+}

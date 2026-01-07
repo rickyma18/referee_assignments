@@ -13,12 +13,13 @@ import { getServerAuthUser } from "./get-server-auth-user";
 const DELEGATE_COOKIE_NAME = "activeDelegateId";
 
 /**
- * Lee role y delegateId desde custom claims o userDoc (fallback).
+ * Lee role, delegateId y allowedDelegateIds desde custom claims o userDoc (fallback).
  * Prioridad: claims > userDoc
  */
 async function getRoleAndDelegateId(uid: string): Promise<{
   role: UserRole;
   delegateId: string | null;
+  allowedDelegateIds: string[] | null;
   source: "claims" | "userDoc";
 }> {
   // 1. Intentar leer custom claims
@@ -30,7 +31,8 @@ async function getRoleAndDelegateId(uid: string): Promise<{
       // Claims existen: usarlos como fuente de verdad
       const role = (typeof claims.role === "string" ? claims.role.toUpperCase() : "ARBITRO") as UserRole;
       const delegateId = typeof claims.delegateId === "string" ? claims.delegateId : null;
-      return { role, delegateId, source: "claims" };
+      const allowedDelegateIds = Array.isArray(claims.allowedDelegateIds) ? claims.allowedDelegateIds : null;
+      return { role, delegateId, allowedDelegateIds, source: "claims" };
     }
   } catch {
     // Error leyendo claims: continuar con fallback
@@ -48,8 +50,11 @@ async function getRoleAndDelegateId(uid: string): Promise<{
   const role: UserRole =
     typeof rawRole === "string" ? (rawRole.trim().toUpperCase() as UserRole) : ("ARBITRO" as UserRole);
   const delegateId: string | null = typeof userData.delegateId === "string" ? userData.delegateId : null;
+  const allowedDelegateIds: string[] | null = Array.isArray(userData.allowedDelegateIds)
+    ? userData.allowedDelegateIds
+    : null;
 
-  return { role, delegateId, source: "userDoc" };
+  return { role, delegateId, allowedDelegateIds, source: "userDoc" };
 }
 
 /**
@@ -61,10 +66,14 @@ export type DelegateContext = {
   role: UserRole;
   userDelegateId: string | null; // delegateId propio del usuario (para DELEGADO)
   effectiveDelegateId: string | null; // delegateId a usar para operaciones
+  allowedDelegateIds: string[]; // lista de delegateIds permitidos
   isSuper: boolean;
 };
 
 export type GetDelegateContextInput = {
+  /** delegateId seleccionado (del query param ?delegateId=...) */
+  selectedDelegateId?: string | null;
+  /** @deprecated Usar selectedDelegateId en su lugar */
   activeDelegateId?: string | null;
 };
 
@@ -76,11 +85,11 @@ export type GetDelegateContextInput = {
  * 2. userDoc en Firestore (fallback)
  *
  * - DELEGADO: effectiveDelegateId = userDelegateId (fijo, obligatorio)
- * - SUPERUSUARIO: effectiveDelegateId = activeDelegateId (del parámetro/cookie) o null (modo global)
- * - Otros roles: effectiveDelegateId = null
+ * - SUPERUSUARIO: effectiveDelegateId = selectedDelegateId (del query param) o cookie/null
+ * - ARBITRO/ASISTENTE: effectiveDelegateId = selectedDelegateId si está en allowedDelegateIds
  * - Sin sesión: devuelve contexto vacío (para páginas estáticas)
  *
- * @param input.activeDelegateId - Para SUPERUSUARIO, el delegado seleccionado en UI
+ * @param input.selectedDelegateId - El delegateId seleccionado (del query param ?delegateId=...)
  */
 export async function getDelegateContext(input?: GetDelegateContextInput): Promise<DelegateContext> {
   // 1. Obtener usuario autenticado
@@ -94,44 +103,68 @@ export async function getDelegateContext(input?: GetDelegateContextInput): Promi
       role: "ARBITRO" as UserRole,
       userDelegateId: null,
       effectiveDelegateId: null,
+      allowedDelegateIds: [],
       isSuper: false,
     };
   }
 
-  // 2. Obtener role y delegateId (prioriza claims, fallback userDoc)
-  const { role, delegateId: userDelegateId } = await getRoleAndDelegateId(authUser.uid);
+  // 2. Obtener role, delegateId y allowedDelegateIds (prioriza claims, fallback userDoc)
+  const { role, delegateId: userDelegateId, allowedDelegateIds: rawAllowed } = await getRoleAndDelegateId(authUser.uid);
 
   const isSuper = role === "SUPERUSUARIO";
 
-  // 4. Determinar effectiveDelegateId según el rol
+  // 3. Calcular allowedDelegateIds según rol
+  // Si no hay allowedDelegateIds explícito, tratar como [userDelegateId] (si existe)
+  let allowedDelegateIds: string[];
+  if (isSuper) {
+    // SUPERUSUARIO: puede ver todo (array vacío = sin restricción)
+    allowedDelegateIds = [];
+  } else if (role === "DELEGADO") {
+    // DELEGADO: solo su delegación
+    allowedDelegateIds = userDelegateId ? [userDelegateId] : [];
+  } else {
+    // ARBITRO/ASISTENTE: usar allowedDelegateIds o fallback a [userDelegateId]
+    allowedDelegateIds = rawAllowed && rawAllowed.length > 0 ? rawAllowed : userDelegateId ? [userDelegateId] : [];
+  }
+
+  // 4. Resolver selectedDelegateId (soportar ambos nombres por compatibilidad)
+  const selectedDelegateId = input?.selectedDelegateId ?? input?.activeDelegateId ?? undefined;
+
+  // 5. Determinar effectiveDelegateId según el rol
   let effectiveDelegateId: string | null = null;
 
   if (role === "DELEGADO") {
-    // DELEGADO: siempre usa su propio delegateId
+    // DELEGADO: siempre usa su propio delegateId (ignora selección)
     effectiveDelegateId = userDelegateId;
-    // Nota: si userDelegateId es null, las validaciones posteriores lo manejarán
   } else if (isSuper) {
-    // SUPERUSUARIO: usa activeDelegateId del parámetro, o lee de cookie si no se pasó
-    if (input?.activeDelegateId !== undefined) {
-      effectiveDelegateId = input.activeDelegateId;
+    // SUPERUSUARIO: usa selectedDelegateId del parámetro, o lee de cookie si no se pasó
+    if (selectedDelegateId !== undefined) {
+      effectiveDelegateId = selectedDelegateId;
     } else {
-      // Leer de cookie (para server components que no pasan el param)
+      // Fallback: leer de cookie (para server components que no pasan el param)
       try {
         const cookieStore = await cookies();
         effectiveDelegateId = cookieStore.get(DELEGATE_COOKIE_NAME)?.value ?? null;
       } catch {
-        // Si falla la lectura de cookie, usar null (modo global)
         effectiveDelegateId = null;
       }
     }
+  } else {
+    // ARBITRO/ASISTENTE: usa selectedDelegateId si está en allowedDelegateIds
+    if (selectedDelegateId && allowedDelegateIds.includes(selectedDelegateId)) {
+      effectiveDelegateId = selectedDelegateId;
+    } else {
+      // Fallback: primer delegateId permitido o userDelegateId
+      effectiveDelegateId = allowedDelegateIds[0] ?? userDelegateId;
+    }
   }
-  // Otros roles (ASISTENTE, ARBITRO): effectiveDelegateId = null
 
   return {
     uid: authUser.uid,
     role,
     userDelegateId,
     effectiveDelegateId,
+    allowedDelegateIds,
     isSuper,
   };
 }
