@@ -29,7 +29,7 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 
 import { RefStatusCell } from "./referee-status-cell";
 
-const STATUS_ALL = ["", "DISPONIBLE", "DUDOSO", "LESIONADO"] as const;
+const STATUS_ALL = ["", "DISPONIBLE", "LESIONADO", "INACTIVO"] as const;
 
 export function RefereesClient({
   initialItems,
@@ -140,9 +140,9 @@ export function RefereesClient({
           const dot =
             st === "DISPONIBLE"
               ? "bg-emerald-500"
-              : st === "DUDOSO"
+              : st === "LESIONADO"
                 ? "bg-amber-500"
-                : st === "LESIONADO"
+                : st === "INACTIVO"
                   ? "bg-rose-500"
                   : "bg-muted";
 
@@ -224,8 +224,8 @@ export function RefereesClient({
             <TabsList className="grid w-full grid-cols-4 md:inline-flex md:w-auto">
               <TabsTrigger value="">Todos</TabsTrigger>
               <TabsTrigger value="DISPONIBLE">Disponible</TabsTrigger>
-              <TabsTrigger value="DUDOSO">Dudoso</TabsTrigger>
               <TabsTrigger value="LESIONADO">Lesionado</TabsTrigger>
+              <TabsTrigger value="INACTIVO">INACTIVO</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>

@@ -83,7 +83,7 @@ export default async function RefereeProfilePage({ params }: { params: Promise<P
   const item = result.data;
   const assignmentsSummary = await getRefereeAssignmentsSummary(refereeId);
 
-  const status = (item.status ?? "DISPONIBLE") as "DISPONIBLE" | "DUDOSO" | "LESIONADO";
+  const status = (item.status ?? "DISPONIBLE") as "DISPONIBLE" | "LESIONADO" | "INACTIVO";
 
   const rolesAllowed: string[] = Array.isArray(item.rolesAllowed) ? item.rolesAllowed : [];
 

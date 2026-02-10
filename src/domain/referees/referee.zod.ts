@@ -7,7 +7,7 @@ import { RefereeTierValues } from "./referee-tier";
 // Enums controlados (roles, estado, categoría)
 // ------------------------------
 export const RefRoleZ = z.enum(["CENTRAL", "AA1", "AA2", "4TO"]);
-export const RefStatusZ = z.enum(["DISPONIBLE", "DUDOSO", "LESIONADO"]);
+export const RefStatusZ = z.enum(["DISPONIBLE", "LESIONADO", "INACTIVO"]);
 export const RefCategoryZ = z.enum(["TDP", "LP"]); // ampliable después
 
 // ------------------------------
