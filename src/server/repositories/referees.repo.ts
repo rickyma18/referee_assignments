@@ -23,7 +23,7 @@ export type ListParams = {
   q?: string;
   zones?: string[];
   roles?: RefRole[];
-  status?: "DISPONIBLE" | "DUDOSO" | "LESIONADO";
+  status?: "DISPONIBLE" | "LESIONADO" | "INACTIVO";
   category?: "TDP" | "LP";
   limit?: number;
   startAfterNameLc?: string;

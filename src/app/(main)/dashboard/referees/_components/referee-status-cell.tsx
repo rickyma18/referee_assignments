@@ -11,7 +11,7 @@ import {
 
 import { RefStatusBadge } from "./referee-status";
 
-const STATUS: Array<"DISPONIBLE" | "DUDOSO" | "LESIONADO"> = ["DISPONIBLE", "DUDOSO", "LESIONADO"];
+const STATUS: Array<"DISPONIBLE" | "LESIONADO" | "INACTIVO"> = ["DISPONIBLE", "LESIONADO", "INACTIVO"];
 
 export function RefStatusCell({
   id,
@@ -19,7 +19,7 @@ export function RefStatusCell({
   setStatusAction,
 }: {
   id: string;
-  status: "DISPONIBLE" | "DUDOSO" | "LESIONADO";
+  status: "DISPONIBLE" | "LESIONADO" | "INACTIVO";
   setStatusAction: (formData: FormData) => Promise<void>;
 }) {
   const formRef = React.useRef<HTMLFormElement>(null);

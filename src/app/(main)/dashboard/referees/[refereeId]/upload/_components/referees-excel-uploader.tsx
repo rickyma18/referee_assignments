@@ -19,7 +19,7 @@ type RefRow = {
   Nombre: string;
   Zonas: string; // CSV "ZMG, Altos"
   Roles: string; // CSV "CENTRAL, AA1"
-  Estado: string; // "DISPONIBLE" | "DUDOSO" | "LESIONADO"
+  Estado: string; // "DISPONIBLE" | "LESIONADO" | "INACTIVO"
   Categoría: string; // "TDP" | "LP" (ampliable)
   Teléfono: string;
   Correo: string;
@@ -58,7 +58,7 @@ const FIELD_LABELS: Record<keyof RefRow, string> = {
   Tipo: "Tipo",
 };
 
-const VALID_ESTADOS = ["DISPONIBLE", "DUDOSO", "LESIONADO"] as const;
+const VALID_ESTADOS = ["DISPONIBLE", "LESIONADO", "INACTIVO"] as const;
 const VALID_CATEGORIES = ["TDP", "LP"] as const;
 const VALID_ROLES = ["CENTRAL", "AA1", "AA2", "4TO"] as const;
 const VALID_TYPES = ["ARBITRO", "ASESOR"] as const;
@@ -281,7 +281,7 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
       if (r.Estado) {
         const estadoUpper = r.Estado.toUpperCase();
         if (!VALID_ESTADOS.includes(estadoUpper as (typeof VALID_ESTADOS)[number])) {
-          errors.push(`Estado inválido "${r.Estado}". Usa: DISPONIBLE, DUDOSO o LESIONADO.`);
+          errors.push(`Estado inválido "${r.Estado}". Usa: DISPONIBLE, LESIONADO o INACTIVO.`);
         }
       }
 
