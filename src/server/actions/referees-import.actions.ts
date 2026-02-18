@@ -60,18 +60,12 @@ function isEmptyRow(row: unknown): boolean {
 
   // Caso 1: Fila cruda de Excel (tiene key "Nombre")
   if ("Nombre" in r) {
-    return (
-      isBlank(r["Nombre"]) &&
-      isBlank(r["Zonas"]) &&
-      isBlank(r["Estado"]) &&
-      isBlank(r["Categoría"]) &&
-      isBlank(r["Correo"])
-    );
+    return isBlank(r["Nombre"]) && isBlank(r["Zonas"]) && isBlank(r["Estado"]) && isBlank(r["Categoría"]);
   }
 
   // Caso 2: Fila normalizada (tiene key "name")
   if ("name" in r) {
-    return isBlank(r.name) && isBlank(r.zones) && isBlank(r.status) && isBlank(r.category) && isBlank(r.email);
+    return isBlank(r.name) && isBlank(r.zones) && isBlank(r.status) && isBlank(r.category);
   }
 
   // Si no tiene ninguna key conocida, la consideramos vacía
