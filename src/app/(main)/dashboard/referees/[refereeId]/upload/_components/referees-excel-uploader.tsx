@@ -41,7 +41,7 @@ type ConfirmRefereesResponse = {
 };
 
 // 🔹 Campos obligatorios (por clave de RefRow)
-const REQUIRED_FIELDS: Array<keyof RefRow> = ["Nombre", "Zonas", "Estado", "Categoría", "Correo"];
+const REQUIRED_FIELDS: Array<keyof RefRow> = ["Nombre", "Zonas", "Estado", "Categoría"];
 
 const FIELD_LABELS: Record<keyof RefRow, string> = {
   Nombre: "Nombre",
@@ -85,7 +85,7 @@ function isBlankValue(v: unknown): boolean {
 function isEmptyExcelRow(row: Record<string, unknown>): boolean {
   if (!row || typeof row !== "object") return true;
 
-  const keys = ["Nombre", "Zonas", "Estado", "Categoría", "Correo"];
+  const keys = ["Nombre", "Zonas", "Estado", "Categoría"];
   return keys.every((k) => isBlankValue(row[k]));
 }
 
@@ -409,7 +409,7 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
               <span className="font-mono">Nombre*</span>, <span className="font-mono">Zonas*</span>,{" "}
               <span className="font-mono">Roles</span>, <span className="font-mono">Estado*</span>,{" "}
               <span className="font-mono">Categoría*</span>, <span className="font-mono">Teléfono</span>,{" "}
-              <span className="font-mono">Correo*</span>, <span className="font-mono">RFC</span>,{" "}
+              <span className="font-mono">Correo</span>, <span className="font-mono">RFC</span>,{" "}
               <span className="font-mono">CURP</span>, <span className="font-mono">NUI</span>,{" "}
               <span className="font-mono">FotoURL</span>, <span className="font-mono">Tipo</span> (opcional:
               ARBITRO/ASESOR). Usa comas para múltiples <span className="font-mono">Zonas</span> y{" "}
@@ -482,7 +482,7 @@ export function RefereesExcelUploader({ maxRows = 2000 }: Props) {
                 <th className="p-2 text-left">Estado*</th>
                 <th className="p-2 text-left">Categoría*</th>
                 <th className="p-2 text-left">Teléfono</th>
-                <th className="p-2 text-left">Correo*</th>
+                <th className="p-2 text-left">Correo</th>
                 <th className="p-2 text-left">RFC</th>
                 <th className="p-2 text-left">CURP</th>
                 <th className="p-2 text-left">NUI</th>
