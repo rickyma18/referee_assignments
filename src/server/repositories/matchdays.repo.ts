@@ -61,28 +61,50 @@ export async function getNextNumber(leagueId: string, groupId: string): Promise<
   return (top?.number ?? 0) + 1;
 }
 
+// Error específico para número de jornada ya ocupado
+export class MatchdayNumberConflictError extends Error {
+  readonly number: number;
+  constructor(num: number) {
+    super(`Ya existe la jornada ${num} en este grupo.`);
+    this.name = "MatchdayNumberConflictError";
+    this.number = num;
+  }
+}
+
 // Crear con transacción (unicidad de `number`)
 export async function create(
   input: MatchdayCreateInput & { createdBy?: string; delegateId?: string },
 ): Promise<{ id: string; number: number }> {
-  const { leagueId, groupId, startDate, endDate, createdBy, delegateId } = input;
+  const { leagueId, groupId, startDate, endDate, createdBy, delegateId, _prefillNumber } = input;
 
   return await adminDb.runTransaction(async (tx: FirebaseFirestore.Transaction) => {
-    // 1) calcular siguiente número
-    const nextNumberSnap = await tx.get(
-      adminDb.collection(colPath(leagueId, groupId)).orderBy("number", "desc").limit(1),
-    );
+    let assignedNumber: number;
 
-    const nextNumber = nextNumberSnap.empty
-      ? 1
-      : ((nextNumberSnap.docs[0].data() as { number?: number })?.number ?? 0) + 1;
+    if (typeof _prefillNumber === "number") {
+      // Modo prefill: verificar que el número no exista ya en el mismo scope
+      const existSnap = await tx.get(
+        adminDb.collection(colPath(leagueId, groupId)).where("number", "==", _prefillNumber).limit(1),
+      );
+      if (!existSnap.empty) {
+        throw new MatchdayNumberConflictError(_prefillNumber);
+      }
+      assignedNumber = _prefillNumber;
+    } else {
+      // Modo autoincrement: max + 1
+      const nextNumberSnap = await tx.get(
+        adminDb.collection(colPath(leagueId, groupId)).orderBy("number", "desc").limit(1),
+      );
+      assignedNumber = nextNumberSnap.empty
+        ? 1
+        : ((nextNumberSnap.docs[0].data() as { number?: number })?.number ?? 0) + 1;
+    }
 
-    // 2) crear doc
+    // Crear doc
     const ref = adminDb.collection(colPath(leagueId, groupId)).doc();
     const payload: Record<string, any> = {
       leagueId,
       groupId,
-      number: nextNumber,
+      number: assignedNumber,
       startDate: Timestamp.fromDate(startDate),
       endDate: Timestamp.fromDate(endDate),
       status: "ACTIVE",
@@ -91,14 +113,51 @@ export async function create(
       updatedAt: AdminFieldValue.serverTimestamp(),
     };
 
-    // ✅ Guardar delegateId si está disponible (para consultas directas)
     if (delegateId) {
       payload.delegateId = delegateId;
     }
 
     tx.set(ref, payload);
 
-    return { id: ref.id, number: nextNumber };
+    return { id: ref.id, number: assignedNumber };
+  });
+}
+
+// Cambiar el número de una jornada existente (transaccional, valida unicidad)
+export async function updateNumber(
+  leagueId: string,
+  groupId: string,
+  id: string,
+  newNumber: number,
+): Promise<{ id: string; number: number }> {
+  return await adminDb.runTransaction(async (tx: FirebaseFirestore.Transaction) => {
+    const ref = adminDb.doc(`${colPath(leagueId, groupId)}/${id}`);
+    const docSnap = await tx.get(ref);
+
+    if (!docSnap.exists) {
+      throw new Error(`Jornada no encontrada: ${id}`);
+    }
+
+    const current = docSnap.data() as { number?: number };
+    if (current?.number === newNumber) {
+      // Sin cambio real, no escribimos
+      return { id, number: newNumber };
+    }
+
+    // Verificar unicidad del nuevo número en el mismo scope
+    const existSnap = await tx.get(
+      adminDb.collection(colPath(leagueId, groupId)).where("number", "==", newNumber).limit(1),
+    );
+    if (!existSnap.empty) {
+      throw new MatchdayNumberConflictError(newNumber);
+    }
+
+    tx.update(ref, {
+      number: newNumber,
+      updatedAt: AdminFieldValue.serverTimestamp(),
+    });
+
+    return { id, number: newNumber };
   });
 }
 

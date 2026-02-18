@@ -157,10 +157,46 @@ export async function createMatchdayAction(input: unknown): Promise<ActionResult
     });
 
     rvdList(data.leagueId, data.groupId);
-    // res tipa { id, number }. Si tu repo regresa fechas u objetos complejos, envuelve con toPlain(res).
     return { ok: true, data: res };
   } catch (e) {
+    if (e instanceof repo.MatchdayNumberConflictError) {
+      return {
+        ok: false,
+        message: e.message,
+        fieldErrors: { _prefillNumber: [e.message] },
+      };
+    }
     return { ok: false, message: msg(e), fieldErrors: zodFields(e) };
+  }
+}
+
+/**
+ * Cambia el número de una jornada existente de forma transaccional.
+ * Valida unicidad por (leagueId, groupId, number) antes de escribir.
+ */
+export async function updateMatchdayNumberAction(
+  leagueId: string,
+  groupId: string,
+  id: string,
+  newNumber: number,
+): Promise<ActionResult<{ id: string; number: number }>> {
+  try {
+    const ctx = await getDelegateContext();
+    assertCanEdit(ctx);
+    await assertLeagueBelongsToDelegate(leagueId, ctx);
+
+    const res = await repo.updateNumber(leagueId, groupId, id, newNumber);
+    rvdList(leagueId, groupId);
+    return { ok: true, data: res };
+  } catch (e) {
+    if (e instanceof repo.MatchdayNumberConflictError) {
+      return {
+        ok: false,
+        message: e.message,
+        fieldErrors: { number: [e.message] },
+      };
+    }
+    return { ok: false, message: msg(e) };
   }
 }
 

@@ -225,7 +225,7 @@ export function RefereesClient({
               <TabsTrigger value="">Todos</TabsTrigger>
               <TabsTrigger value="DISPONIBLE">Disponible</TabsTrigger>
               <TabsTrigger value="LESIONADO">Lesionado</TabsTrigger>
-              <TabsTrigger value="INACTIVO">INACTIVO</TabsTrigger>
+              <TabsTrigger value="INACTIVO">Inactivo</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
