@@ -12,9 +12,11 @@ import { secureWrite } from "@/server/auth/secure-action";
 import {
   findRecentTeamConflicts,
   findScheduleConflicts,
+  findSameDayConflicts,
   evaluateCentralRcs,
   type Conflict,
   type ScheduleConflict,
+  type SameDayConflict,
   type RcsEvaluation,
 } from "@/server/services/assignments/validation";
 
@@ -31,13 +33,15 @@ export type AssignManualTernaData =
         | "REFEREE_NOT_AVAILABLE"
         | "RECENT_TEAM_CONFLICT"
         | "SCHEDULE_CONFLICT"
+        | "SAME_DAY_CONFLICT"
         | "RCS_BELOW_THRESHOLD_BLOCK"
         | "RCS_BELOW_THRESHOLD_WARNING"
-        | "DUPLICATE_REFEREES"; // 👈 NUEVO
+        | "DUPLICATE_REFEREES";
       error: string;
       conflicts?: Conflict[];
       unavailableRefs?: string[];
       scheduleConflicts?: ScheduleConflict[];
+      sameDayConflicts?: SameDayConflict[];
       rcsEvaluation?: RcsEvaluation;
     };
 
@@ -217,6 +221,29 @@ export async function assignManualTernaAction(formData: FormData) {
           code: "SCHEDULE_CONFLICT",
           error: "Choque de horario: algún árbitro ya tiene otro partido en la misma fecha/hora.",
           scheduleConflicts,
+        };
+      }
+    }
+
+    // 4.5) Regla de "mismo día" (soft-block) – misma liga, mismo día calendario
+    if (kickoff) {
+      const ignoreSameDayConflicts = String(formData.get("ignoreSameDayConflicts") ?? "").toLowerCase() === "true";
+      const sameDayConflicts = await findSameDayConflicts({
+        leagueId,
+        matchId,
+        kickoff,
+        centralRefereeId,
+        aa1RefereeId,
+        aa2RefereeId,
+        fourthRefereeId: fourthRawId !== null ? String(fourthRawId) || null : null,
+        assessorRefereeId: assessorRawId !== null ? String(assessorRawId) || null : null,
+      });
+
+      if (sameDayConflicts.length > 0 && !ignoreSameDayConflicts) {
+        return {
+          code: "SAME_DAY_CONFLICT",
+          error: "Algún árbitro ya tiene otro partido asignado el mismo día.",
+          sameDayConflicts,
         };
       }
     }

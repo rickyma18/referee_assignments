@@ -41,7 +41,7 @@ export function ActionsCell({ row: m, meta }: Props) {
   const hasTerna = Boolean(m.central && m.aa1 && m.aa2);
 
   // eslint-disable-next-line complexity
-  async function doAssign(options?: { ignoreRecentTeamConflicts?: boolean }) {
+  async function doAssign(options?: { ignoreRecentTeamConflicts?: boolean; ignoreSameDayConflicts?: boolean }) {
     if (!m.central || !m.aa1 || !m.aa2) {
       toast.error("Debes seleccionar al menos Central y los dos Asistentes.");
       return;
@@ -89,6 +89,9 @@ export function ActionsCell({ row: m, meta }: Props) {
 
       if (options?.ignoreRecentTeamConflicts) {
         fd.append("ignoreRecentTeamConflicts", "true");
+      }
+      if (options?.ignoreSameDayConflicts) {
+        fd.append("ignoreSameDayConflicts", "true");
       }
 
       const res = await assignManualTernaAction(fd);
@@ -150,6 +153,38 @@ export function ActionsCell({ row: m, meta }: Props) {
               onClick: () => {
                 // Segundo intento ignorando la regla de 4 jornadas
                 void doAssign({ ignoreRecentTeamConflicts: true });
+              },
+            },
+          },
+        );
+        return;
+      }
+
+      if (data.code === "SAME_DAY_CONFLICT") {
+        const conflicts = data.sameDayConflicts ?? [];
+
+        const details =
+          conflicts.length === 0
+            ? null
+            : conflicts
+                .map((c) => {
+                  const refName = meta.referees.find((r) => r.id === c.refereeId)?.name ?? c.refereeId;
+                  const vs = [c.otherHomeTeamName, c.otherAwayTeamName].filter(Boolean).join(" vs ");
+                  return `${refName} (${c.refereeRole}) ya tiene partido ese día${vs ? `: ${vs}` : ""}`;
+                })
+                .join("\n");
+
+        toast.error(
+          <div className="text-left whitespace-pre-line">
+            <strong>Conflicto: mismo día calendario</strong>
+            <br />
+            {details ?? "Algún árbitro ya tiene otro partido asignado el mismo día."}
+          </div>,
+          {
+            action: {
+              label: "Continuar de todas formas",
+              onClick: () => {
+                void doAssign({ ignoreSameDayConflicts: true });
               },
             },
           },

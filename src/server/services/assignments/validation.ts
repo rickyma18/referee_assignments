@@ -20,6 +20,20 @@ export type Conflict = {
 };
 
 /**
+ * Conflicto por partido el mismo día calendario (soft-block)
+ */
+export type SameDayConflictRole = "CENTRAL" | "AA1" | "AA2" | "FOURTH" | "ASSESSOR";
+
+export type SameDayConflict = {
+  refereeId: string;
+  refereeRole: SameDayConflictRole;
+  otherMatchId: string;
+  otherMatchKickoffIso: string | null;
+  otherHomeTeamName: string | null;
+  otherAwayTeamName: string | null;
+};
+
+/**
  * Conflicto de horario (Choque) para un árbitro
  */
 export type ScheduleConflict = {
@@ -283,6 +297,153 @@ export async function findScheduleConflicts(params: FindScheduleConflictsParams)
       groupId,
       matchIdToSkip: matchId,
       ternaRefIds,
+      conflicts,
+    });
+  }
+
+  return conflicts;
+}
+
+type FindSameDayConflictsParams = {
+  leagueId: string;
+  matchId: string;
+  kickoff: Date;
+  centralRefereeId: string;
+  aa1RefereeId: string;
+  aa2RefereeId: string;
+  fourthRefereeId?: string | null;
+  assessorRefereeId?: string | null;
+};
+
+/** Helper para no pasar max-depth en findSameDayConflicts */
+function collectSameDayConflictsFromMatch(options: {
+  matchDoc: FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData>;
+  matchIdToSkip: string;
+  refSlots: Array<{ refereeId: string; role: SameDayConflictRole }>;
+  refIdSet: Set<string>;
+  conflicts: SameDayConflict[];
+}): void {
+  const { matchDoc, matchIdToSkip, refSlots, refIdSet, conflicts } = options;
+
+  if (matchDoc.id === matchIdToSkip) return;
+
+  const data = matchDoc.data() as any;
+
+  const otherSlots: Array<{ refereeId?: string }> = [
+    { refereeId: data.centralRefereeId ?? undefined },
+    { refereeId: data.aa1RefereeId ?? undefined },
+    { refereeId: data.aa2RefereeId ?? undefined },
+    { refereeId: data.fourthRefereeId ?? undefined },
+    { refereeId: data.assessorRefereeId ?? undefined },
+  ];
+
+  const otherRefIds = new Set(otherSlots.map((s) => s.refereeId).filter(Boolean) as string[]);
+
+  const kickoffIso = normalizeKickoffToIso(data.kickoff ?? null);
+  const homeTeamName: string | null = data.homeTeamName ?? null;
+  const awayTeamName: string | null = data.awayTeamName ?? null;
+
+  for (const slot of refSlots) {
+    if (!refIdSet.has(slot.refereeId)) continue;
+    if (!otherRefIds.has(slot.refereeId)) continue;
+
+    conflicts.push({
+      refereeId: slot.refereeId,
+      refereeRole: slot.role,
+      otherMatchId: matchDoc.id,
+      otherMatchKickoffIso: kickoffIso,
+      otherHomeTeamName: homeTeamName,
+      otherAwayTeamName: awayTeamName,
+    });
+  }
+}
+
+/**
+ * Regla de "Mismo día calendario" (soft-block):
+ * Busca partidos del mismo día (America/Mexico_City) en la liga
+ * donde un árbitro de los 5 slots ya esté asignado.
+ */
+export async function findSameDayConflicts(params: FindSameDayConflictsParams): Promise<SameDayConflict[]> {
+  const {
+    leagueId,
+    matchId,
+    kickoff,
+    centralRefereeId,
+    aa1RefereeId,
+    aa2RefereeId,
+    fourthRefereeId,
+    assessorRefereeId,
+  } = params;
+
+  // Convert kickoff to calendar date in America/Mexico_City
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const dateStr = formatter.format(kickoff); // "YYYY-MM-DD"
+
+  // Build start/end of day in Mexico City timezone
+  // Parse the date string and create boundaries using the timezone offset
+  const startOfDayLocal = new Date(`${dateStr}T00:00:00`);
+  const endOfDayLocal = new Date(`${dateStr}T23:59:59.999`);
+
+  // Get UTC equivalents by computing the offset for America/Mexico_City
+  // We use a trick: format a known date in the target TZ, parse it, and diff
+  const getMexicoCityOffset = (d: Date): number => {
+    const utcStr = d.toISOString();
+    const mxParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Mexico_City",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(d);
+
+    const get = (type: string) => parseInt(mxParts.find((p) => p.type === type)?.value ?? "0", 10);
+    const mxDate = new Date(
+      Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")),
+    );
+    return mxDate.getTime() - d.getTime();
+  };
+
+  const offset = getMexicoCityOffset(kickoff);
+  const startOfDayUtc = new Date(startOfDayLocal.getTime() - offset);
+  const endOfDayUtc = new Date(endOfDayLocal.getTime() - offset);
+
+  const db = getFirestore();
+
+  // Build referee slots to check
+  const refSlots: Array<{ refereeId: string; role: SameDayConflictRole }> = [];
+  if (centralRefereeId) refSlots.push({ refereeId: centralRefereeId, role: "CENTRAL" });
+  if (aa1RefereeId) refSlots.push({ refereeId: aa1RefereeId, role: "AA1" });
+  if (aa2RefereeId) refSlots.push({ refereeId: aa2RefereeId, role: "AA2" });
+  if (fourthRefereeId) refSlots.push({ refereeId: fourthRefereeId, role: "FOURTH" });
+  if (assessorRefereeId) refSlots.push({ refereeId: assessorRefereeId, role: "ASSESSOR" });
+
+  const refIdSet = new Set(refSlots.map((s) => s.refereeId));
+
+  if (refIdSet.size === 0) return [];
+
+  const matchesSnap = await db
+    .collectionGroup("matches")
+    .where("leagueId", "==", leagueId)
+    .where("kickoff", ">=", startOfDayUtc)
+    .where("kickoff", "<=", endOfDayUtc)
+    .get();
+
+  const conflicts: SameDayConflict[] = [];
+
+  for (const m of matchesSnap.docs) {
+    collectSameDayConflictsFromMatch({
+      matchDoc: m,
+      matchIdToSkip: matchId,
+      refSlots,
+      refIdSet,
       conflicts,
     });
   }
