@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { DEFAULT_ZONES } from "@/config/zones.constants";
 import { createTeamAction, updateTeamAction } from "@/server/actions/teams.actions";
 
-type Tier = "TRANQUILO" | "REGULARES" | "COMPLICADO" | "MUY_COMPLICADO";
+type Tier = "ESTANDAR" | "REGULARES" | "COMPLICADO" | "MUY_COMPLICADO";
 
 type TeamInitial = {
   id?: string;
@@ -251,7 +251,7 @@ export function TeamForm({ initial }: Props) {
           onChange={onChangeTier}
           className="border-input bg-background focus-visible:ring-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-2 focus-visible:outline-none"
         >
-          <option value="TRANQUILO">TRANQUILO (partidos sencillos)</option>
+          <option value="ESTANDAR">ESTANDAR (partidos sencillos)</option>
           <option value="REGULARES">REGULARES (equilibrados)</option>
           <option value="COMPLICADO">COMPLICADO (alto grado de dificultad)</option>
           <option value="MUY_COMPLICADO">MUY_COMPLICADO (máxima exigencia)</option>
