@@ -32,6 +32,7 @@ import {
   getCellStr,
   parseExcelDate,
   parseExcelTime,
+  parseTimeFromExcelSerial,
   teamKey,
   teamKeyTokens,
   teamKeyBaseTokens,
@@ -438,14 +439,21 @@ export async function importFmfExcelAction(formData: FormData): Promise<FmfImpor
     }
 
     // 3. Fecha + Hora
-    const dateStr = parseExcelDate(fechaRaw as string | number);
-    const timeStr = parseExcelTime(horaRaw as string | number);
+    const dateStr = parseExcelDate(fechaRaw as string | number | Date);
+    // Derive time: explicit Hora column → embedded in Fecha string → Excel serial fraction → default 00:00
+    let timeStr = parseExcelTime(horaRaw as string | number);
+    if (!timeStr && typeof fechaRaw === "number") {
+      timeStr = parseTimeFromExcelSerial(fechaRaw);
+    }
+    if (!timeStr && typeof fechaRaw === "string") {
+      timeStr = parseExcelTime(fechaRaw);
+    }
+    timeStr ??= "00:00";
     let kickoff: Date | null = null;
 
     if (!dateStr) {
+      console.debug("DATE_PARSE_FAIL", { fechaRaw, typeof: typeof fechaRaw, fechaStr: String(fechaRaw) });
       errors.push("Fecha inválida o vacía.");
-    } else if (!timeStr) {
-      errors.push("Hora inválida o vacía.");
     } else {
       const dt = DateTime.fromFormat(`${dateStr} ${timeStr}`, "yyyy-MM-dd HH:mm", {
         zone: "America/Mexico_City",
@@ -1009,6 +1017,323 @@ export async function importFmfExcelAction(formData: FormData): Promise<FmfImpor
     createdMatches,
     invalidRemaining: mode === "commit_valid" ? summary.invalid : undefined,
   };
+}
+
+// ─── Scoped import types ─────────────────────────────────────────────
+export type RunFmfImportInput = {
+  mode: "validate" | "commit";
+  scope: { leagueId: string; groupId: string; matchdayId: string; matchdayNumber: number };
+  rows: Record<string, unknown>[];
+  sourcePrefix?: string;
+  importBatchId?: string;
+};
+
+export type ScopedRowResult = {
+  rowNumber: number;
+  raw: { Local: string; Visitante: string; Fecha: string; Hora: string };
+  errors: string[];
+  normalized?: {
+    homeTeamId: string;
+    homeTeamName: string;
+    awayTeamId: string;
+    awayTeamName: string;
+    venueId: string;
+    venueName: string;
+    kickoff: Date;
+    municipality?: string;
+  };
+  resolvedVenueId?: string;
+  resolvedVenueName?: string;
+};
+
+export type RunFmfImportResult = {
+  ok: boolean;
+  rows: ScopedRowResult[];
+  created?: number;
+  message?: string;
+};
+
+// ─── Scoped import (fixed league/group/matchday) ─────────────────────
+export async function runFmfImport(input: RunFmfImportInput): Promise<RunFmfImportResult> {
+  const { mode, scope, rows, sourcePrefix = "fmf_excel_v2" } = input;
+  const importBatchId =
+    input.importBatchId ?? `${sourcePrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  // Auth
+  const ctx = await getDelegateContext();
+  assertCanEdit(ctx);
+  const delegateId = assertEffectiveDelegateId(ctx);
+
+  const db = getFirestore();
+
+  // ── Build team cache for the group ──
+  const teamSnap = await db
+    .collection("teams")
+    .where("groupId", "==", scope.groupId)
+    .where("delegateId", "==", delegateId)
+    .get();
+
+  const byNorm = new Map<string, TeamInfo>();
+  const byKey = new Map<string, TeamInfo[]>();
+  const all: TeamCacheEntry["all"] = [];
+  const tokenFreq = new Map<string, number>();
+
+  for (const doc of teamSnap.docs) {
+    const d = doc.data();
+    const name = String(d.name ?? "").trim();
+    if (!name) continue;
+    const info: TeamInfo = {
+      id: doc.id,
+      name,
+      stadium: String(d.stadium ?? d.venue ?? "").trim(),
+      municipality: String(d.municipality ?? "").trim(),
+    };
+
+    byNorm.set(norm(name), info);
+
+    const key = teamKey(name);
+    if (key) {
+      const arr = byKey.get(key) ?? [];
+      arr.push(info);
+      byKey.set(key, arr);
+    }
+
+    all.push({ team: info, keyTokens: teamKeyTokens(name) });
+
+    const baseTokens = teamKeyBaseTokens(name);
+    const seen = new Set<string>();
+    for (const t of baseTokens) {
+      if (!seen.has(t)) {
+        seen.add(t);
+        tokenFreq.set(t, (tokenFreq.get(t) ?? 0) + 1);
+      }
+    }
+  }
+
+  const teamCache: TeamCacheEntry = { byNorm, byKey, all, tokenFreq };
+
+  // ── Build venue cache for the group ──
+  const venueSnap = await db.collection("venues").where("groupId", "==", scope.groupId).get();
+  const venuesMap = new Map<string, VenueInfo>();
+  for (const doc of venueSnap.docs) {
+    const d = doc.data();
+    const name = String(d.name ?? "").trim();
+    if (!name) continue;
+    venuesMap.set(norm(name), { id: doc.id, name });
+  }
+
+  // ── Build shared column index from first row's keys ──
+  const sharedIndex = new Map<string, string>();
+  if (rows.length > 0) {
+    for (const h of Object.keys(rows[0])) {
+      sharedIndex.set(normKey(h), h);
+    }
+  }
+
+  // ── Process rows ──
+  const results: ScopedRowResult[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const rowNumber = i + 1;
+    const src = rows[i];
+    const errors: string[] = [];
+
+    const localRaw = getCellStr(src, sharedIndex, "local");
+    const visitanteRaw = getCellStr(src, sharedIndex, "visitante");
+    const fechaRaw = getCell(src, sharedIndex, "fecha");
+    const horaRaw = getCell(src, sharedIndex, "hora");
+
+    const raw = {
+      Local: localRaw,
+      Visitante: visitanteRaw,
+      Fecha: String(fechaRaw ?? "").trim(),
+      Hora: String(horaRaw ?? "").trim(),
+    };
+
+    // Required columns (Hora is now optional — may be embedded in Fecha)
+    if (!localRaw || !visitanteRaw || !raw.Fecha) {
+      errors.push("Formato inválido en columnas requeridas.");
+      results.push({ rowNumber, raw, errors });
+      continue;
+    }
+
+    // Same team check
+    if (norm(localRaw) === norm(visitanteRaw)) {
+      errors.push("Local y Visitante no pueden ser iguales.");
+    }
+
+    // Date/time parsing
+    const dateStr = parseExcelDate(fechaRaw as string | number | Date);
+    // Derive time: explicit Hora column → embedded in Fecha string → Excel serial fraction → default 00:00
+    let timeStr = parseExcelTime(horaRaw as string | number);
+    if (!timeStr && typeof fechaRaw === "number") {
+      timeStr = parseTimeFromExcelSerial(fechaRaw);
+    }
+    if (!timeStr && typeof fechaRaw === "string") {
+      timeStr = parseExcelTime(fechaRaw);
+    }
+    timeStr ??= "00:00";
+    let kickoff: Date | null = null;
+
+    if (!dateStr) {
+      console.debug("DATE_PARSE_FAIL", { fechaRaw, typeof: typeof fechaRaw, fechaStr: String(fechaRaw) });
+      errors.push("Fecha inválida o vacía.");
+    } else {
+      const dt = DateTime.fromFormat(`${dateStr} ${timeStr}`, "yyyy-MM-dd HH:mm", {
+        zone: "America/Mexico_City",
+      });
+      if (!dt.isValid) {
+        errors.push(`Fecha/hora inválida: ${dateStr} ${timeStr}`);
+      } else {
+        kickoff = dt.toJSDate();
+      }
+    }
+
+    // Team resolution (fuzzy)
+    let homeTeam: TeamInfo | undefined;
+    let awayTeam: TeamInfo | undefined;
+
+    const homeRes = resolveTeamByName(teamCache, localRaw);
+    if (homeRes.ok) {
+      homeTeam = homeRes.team;
+    } else {
+      errors.push(homeRes.reason);
+    }
+
+    const awayRes = resolveTeamByName(teamCache, visitanteRaw);
+    if (awayRes.ok) {
+      awayTeam = awayRes.team;
+    } else {
+      errors.push(awayRes.reason);
+    }
+
+    if (homeTeam && awayTeam && homeTeam.id === awayTeam.id) {
+      errors.push("Local y Visitante no pueden ser el mismo equipo.");
+    }
+
+    // Venue from home team's stadium
+    let venueId = "";
+    let venueName = "";
+
+    if (homeTeam) {
+      const stadiumName = homeTeam.stadium;
+      if (stadiumName) {
+        const venueMatch = venuesMap.get(norm(stadiumName));
+        if (venueMatch) {
+          venueId = venueMatch.id;
+          venueName = venueMatch.name;
+        } else {
+          venueId = "excel:" + norm(stadiumName);
+          venueName = stadiumName;
+        }
+      } else {
+        errors.push(`El equipo ${localRaw} no tiene sede/estadio configurado.`);
+      }
+    }
+
+    // Dedupe check
+    if (errors.length === 0 && kickoff && homeTeam && awayTeam) {
+      const dupSnap = await db
+        .collection("leagues")
+        .doc(scope.leagueId)
+        .collection("groups")
+        .doc(scope.groupId)
+        .collection("matchdays")
+        .doc(scope.matchdayId)
+        .collection("matches")
+        .where("homeTeamId", "==", homeTeam.id)
+        .where("awayTeamId", "==", awayTeam.id)
+        .where("kickoff", "==", kickoff)
+        .limit(1)
+        .get();
+
+      if (!dupSnap.empty) {
+        errors.push("Duplicado: ya existe un partido con mismos equipos y horario.");
+      }
+    }
+
+    results.push({
+      rowNumber,
+      raw,
+      errors,
+      normalized:
+        errors.length === 0 && kickoff && homeTeam && awayTeam && venueId
+          ? {
+              homeTeamId: homeTeam.id,
+              homeTeamName: homeTeam.name,
+              awayTeamId: awayTeam.id,
+              awayTeamName: awayTeam.name,
+              venueId,
+              venueName,
+              kickoff,
+              municipality: homeTeam.municipality || undefined,
+            }
+          : undefined,
+      resolvedVenueId: venueId || undefined,
+      resolvedVenueName: venueName || undefined,
+    });
+  }
+
+  const hasAnyError = results.some((r) => r.errors.length > 0);
+
+  // Validate mode
+  if (mode === "validate") {
+    return { ok: !hasAnyError, rows: results };
+  }
+
+  // Commit mode
+  if (hasAnyError) {
+    return { ok: false, rows: results, message: "Existen errores. Corrige antes de confirmar." };
+  }
+
+  const now = new Date();
+  const BATCH_SIZE = 499;
+  let createdMatches = 0;
+  const validRows = results.filter((r) => r.normalized);
+
+  for (let i = 0; i < validRows.length; i += BATCH_SIZE) {
+    const chunk = validRows.slice(i, i + BATCH_SIZE);
+    const batch = db.batch();
+
+    for (const row of chunk) {
+      const n = row.normalized!;
+      const coll = db
+        .collection("leagues")
+        .doc(scope.leagueId)
+        .collection("groups")
+        .doc(scope.groupId)
+        .collection("matchdays")
+        .doc(scope.matchdayId)
+        .collection("matches");
+
+      batch.set(coll.doc(), {
+        leagueId: scope.leagueId,
+        groupId: scope.groupId,
+        matchdayId: scope.matchdayId,
+        matchdayNumber: scope.matchdayNumber,
+        homeTeamId: n.homeTeamId,
+        homeTeamName: n.homeTeamName,
+        awayTeamId: n.awayTeamId,
+        awayTeamName: n.awayTeamName,
+        venueId: n.venueId,
+        venueName: n.venueName,
+        municipality: n.municipality ?? "",
+        kickoff: n.kickoff,
+        status: "scheduled",
+        source: sourcePrefix,
+        importBatchId,
+        delegateId,
+        createdBy: ctx.uid,
+        createdAt: now,
+        updatedAt: now,
+      });
+      createdMatches++;
+    }
+
+    await batch.commit();
+  }
+
+  return { ok: true, rows: results, created: createdMatches };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────

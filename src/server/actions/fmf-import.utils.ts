@@ -1,3 +1,4 @@
+/* eslint-disable complexity, max-lines */
 import * as XLSX from "xlsx";
 
 import { norm } from "@/lib/normalize";
@@ -63,9 +64,74 @@ export function getCellStr(
 }
 
 // ─── Excel date/time helpers ─────────────────────────────────────────
-export function parseExcelDate(val: string | number | null | undefined): string | null {
+/**
+ * Extracts the date-only portion from a string that may contain time info.
+ * "2/24/2026 16:00" → "2/24/2026", "2/24/2026 4:00 PM" → "2/24/2026"
+ */
+function extractDatePart(s: string): string {
+  s = s.replace(/(?:\u00A0|\u200B|\u200C|\u200D|\uFEFF)/g, " ").trim();
+  return s.split(/\s+/)[0];
+}
+
+/**
+ * Resolves a 2-digit or 4-digit year string to a 4-digit year.
+ * "26" → "2026", "2026" → "2026"
+ */
+function resolveYear(raw: string): string {
+  if (raw.length <= 2) {
+    const n = parseInt(raw, 10);
+    return String(2000 + n);
+  }
+  return raw;
+}
+
+/**
+ * Disambiguates A/B/YYYY (or A-B-YYYY) into { day, month } using Mexican-first rules:
+ *  - a > 12 → dd/MM  (a can't be month)
+ *  - b > 12 → MM/dd  (b can't be month, American)
+ *  - both <= 12 → dd/MM (Mexican default)
+ */
+function disambiguateDayMonth(a: number, b: number): { day: number; month: number } | null {
+  let day: number;
+  let month: number;
+
+  if (a > 12) {
+    day = a;
+    month = b;
+  } else if (b > 12) {
+    month = a;
+    day = b;
+  } else {
+    day = a;
+    month = b;
+  }
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return { day, month };
+}
+
+export function parseExcelDate(val: string | number | Date | null | undefined): string | null {
   if (val == null || val === "") return null;
 
+  if (typeof val === "string") {
+    val = val.replace(/(?:\u00A0|\u200B|\u200C|\u200D|\uFEFF)/g, " ").trim();
+    if (/^-?\d+(\.\d+)?$/.test(val)) {
+      const num = Number(val);
+      if (Number.isFinite(num)) {
+        val = num;
+      }
+    }
+  }
+
+  // Date object (from some XLSX parsers)
+  if (val instanceof Date) {
+    const y = String(val.getFullYear()).padStart(4, "0");
+    const m = String(val.getMonth() + 1).padStart(2, "0");
+    const d = String(val.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  // Excel serial number (integer or with fractional time part)
   if (typeof val === "number") {
     const parsed = XLSX.SSF.parse_date_code(val);
     if (!parsed) return null;
@@ -75,18 +141,47 @@ export function parseExcelDate(val: string | number | null | undefined): string 
     return `${y}-${m}-${d}`;
   }
 
-  const s = String(val).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m2 = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
-  if (m2) {
-    return `${m2[3]}-${m2[2].padStart(2, "0")}-${m2[1].padStart(2, "0")}`;
+  // Strip time portion if present: "2/24/2026 16:00" → "2/24/2026"
+  const datePart = extractDatePart(String(val).trim());
+
+  // yyyy-MM-dd (ISO, with optional single-digit month/day)
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(datePart)) {
+    const [yy, mm, dd] = datePart.split("-");
+    return `${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
   }
+
+  // A/B/YYYY, A-B-YYYY, A/B/YY, A-B-YY
+  const m2 = datePart.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (m2) {
+    const a = parseInt(m2[1], 10);
+    const b = parseInt(m2[2], 10);
+    const year = resolveYear(m2[3]);
+    const dm = disambiguateDayMonth(a, b);
+    if (!dm) return null;
+    return `${year}-${String(dm.month).padStart(2, "0")}-${String(dm.day).padStart(2, "0")}`;
+  }
+
   return null;
 }
 
+/**
+ * Extracts a time string from an Excel serial, a plain time string,
+ * an AM/PM time, or a datetime string that embeds the time.
+ * Always returns "HH:mm" (24h) or null.
+ */
 export function parseExcelTime(val: string | number | null | undefined): string | null {
   if (val == null || val === "") return null;
+  if (typeof val === "string") {
+    val = val.replace(/(?:\u00A0|\u200B|\u200C|\u200D|\uFEFF)/g, " ").trim();
+    if (/^-?\d+(\.\d+)?$/.test(val)) {
+      const num = Number(val);
+      if (Number.isFinite(num)) {
+        val = num;
+      }
+    }
+  }
 
+  // Excel serial fractional time (0.6667 ≈ 16:00)
   if (typeof val === "number") {
     const totalMinutes = Math.round(val * 24 * 60);
     const h = Math.floor(totalMinutes / 60) % 24;
@@ -95,8 +190,43 @@ export function parseExcelTime(val: string | number | null | undefined): string 
   }
 
   const s = String(val).trim();
-  if (/^\d{1,2}:\d{2}$/.test(s)) return s.padStart(5, "0");
+
+  // Try to find a time pattern anywhere in the string (handles "2/24/2026 4:00 PM", "16:00", etc.)
+  // AM/PM pattern: "4:00 PM", "4:00PM", "11:30 am"
+  const ampmMatch = s.match(/(\d{1,2}):(\d{2})\s*(am|pm|AM|PM|a\.m\.|p\.m\.)/);
+  if (ampmMatch) {
+    let h = parseInt(ampmMatch[1], 10);
+    const m = parseInt(ampmMatch[2], 10);
+    const meridiem = ampmMatch[3].toLowerCase().replace(/\./g, "");
+    if (meridiem === "pm" && h < 12) h += 12;
+    if (meridiem === "am" && h === 12) h = 0;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
+
+  // 24h pattern anywhere in the string: "16:00", or embedded like "2/24/2026 16:00"
+  const h24Match = s.match(/(\d{1,2}):(\d{2})/);
+  if (h24Match) {
+    const h = parseInt(h24Match[1], 10);
+    const m = parseInt(h24Match[2], 10);
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    }
+  }
+
   return null;
+}
+
+/**
+ * Extracts a time string from an Excel serial number that has a fractional part.
+ * Returns "HH:mm" or null if the serial has no fractional component.
+ */
+export function parseTimeFromExcelSerial(val: number): string | null {
+  const parsed = XLSX.SSF.parse_date_code(val);
+  if (!parsed) return null;
+  const h = parsed.H ?? 0;
+  const m = parsed.M ?? 0;
+  if (h === 0 && m === 0 && val === Math.floor(val)) return null;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 // ─── Fuzzy team matching ─────────────────────────────────────────────
