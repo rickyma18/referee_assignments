@@ -1,12 +1,9 @@
 // src/app/(main)/dashboard/teams/tiers/page.tsx
 
-import { Suspense } from "react";
-
 import { getFirestore } from "firebase-admin/firestore";
 
 import "@/server/admin/firebase-admin";
 import { EntityHeader } from "@/components/entity-header";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { TeamTier } from "@/domain/teams/team-tier";
 import { getDelegateContext } from "@/server/auth/get-delegate-context";
 import { getByGroup } from "@/server/repositories/teams.repo";
@@ -18,10 +15,7 @@ export const revalidate = 0;
 export const runtime = "nodejs";
 
 type PageProps = {
-  searchParams?: {
-    leagueId?: string;
-    groupId?: string;
-  };
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 type LeagueDoc = {
@@ -114,8 +108,9 @@ async function getTeamsForBoard(groupId: string | undefined): Promise<TeamForBoa
 }
 
 export default async function Page({ searchParams }: PageProps) {
-  const spLeagueId = searchParams?.leagueId;
-  const spGroupId = searchParams?.groupId;
+  const sp = searchParams ? await searchParams : undefined;
+  const spLeagueId = typeof sp?.leagueId === "string" ? sp.leagueId : undefined;
+  const spGroupId = typeof sp?.groupId === "string" ? sp.groupId : undefined;
 
   const { leagues, groups } = await getLeaguesAndGroups();
 
@@ -145,7 +140,7 @@ export default async function Page({ searchParams }: PageProps) {
 
   const headerTitle = "Tier List de equipos";
   const subtitle =
-    "Organiza los equipos por nivel de complejidad (Tranquilos, Regulares, Complicados…) para la sugerencia automática de ternas.";
+    "Organiza los equipos por nivel de complejidad (Estandar, Regulares, Complicados…) para la sugerencia automática de ternas.";
 
   return (
     <div className="max-w-full space-y-6 overflow-x-hidden">
@@ -156,22 +151,13 @@ export default async function Page({ searchParams }: PageProps) {
         canDelete={false}
       />
 
-      <Suspense
-        fallback={
-          <div className="space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-[400px] w-full" />
-          </div>
-        }
-      >
-        <TeamTiersBoard
-          leagues={leagues}
-          groups={groups}
-          initialLeagueId={initialLeagueId}
-          initialGroupId={initialGroupId}
-          initialTeams={teams}
-        />
-      </Suspense>
+      <TeamTiersBoard
+        leagues={leagues}
+        groups={groups}
+        initialLeagueId={initialLeagueId}
+        initialGroupId={initialGroupId}
+        initialTeams={teams}
+      />
     </div>
   );
 }

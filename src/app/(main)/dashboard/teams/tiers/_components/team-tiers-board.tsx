@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable max-lines, complexity */
 
 // src/app/(main)/dashboard/teams/tiers/_components/team-tiers-board.tsx
 
@@ -47,8 +48,8 @@ type ColumnConfig = {
 
 const COLUMNS: ColumnConfig[] = [
   {
-    id: "TRANQUILO",
-    label: "Tranquilos",
+    id: "ESTANDAR",
+    label: "Estandar",
     description: "Partidos normalmente sin problema.",
     badgeClassName: "bg-emerald-100 text-emerald-800 border-emerald-200",
   },
@@ -248,7 +249,7 @@ export function TeamTiersBoard({ leagues, groups, initialLeagueId, initialGroupI
 
   const itemsByColumn = useMemo(() => {
     const map: Record<TeamTier, TeamForBoard[]> = {
-      TRANQUILO: [],
+      ESTANDAR: [],
       REGULARES: [],
       COMPLICADO: [],
       MUY_COMPLICADO: [],
@@ -429,8 +430,8 @@ export function TeamTiersBoard({ leagues, groups, initialLeagueId, initialGroupI
 
 function formatTierLabel(tier: TeamTier): string {
   switch (tier) {
-    case "TRANQUILO":
-      return "Tranquilo";
+    case "ESTANDAR":
+      return "Estandar";
     case "REGULARES":
       return "Regulares";
     case "COMPLICADO":

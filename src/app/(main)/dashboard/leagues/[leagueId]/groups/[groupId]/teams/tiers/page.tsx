@@ -1,14 +1,11 @@
 // src/app/(main)/dashboard/leagues/[leagueId]/groups/[groupId]/teams/tiers/page.tsx
 
-import { Suspense } from "react";
-
 import { notFound } from "next/navigation";
 
 import { getFirestore } from "firebase-admin/firestore";
 
 import "@/server/admin/firebase-admin";
 import { EntityHeader } from "@/components/entity-header";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { TeamTier } from "@/domain/teams/team-tier";
 import { getDelegateContext } from "@/server/auth/get-delegate-context";
 import { getByGroup } from "@/server/repositories/teams.repo";
@@ -20,10 +17,10 @@ export const revalidate = 0;
 export const runtime = "nodejs";
 
 type PageProps = {
-  params: {
+  params: Promise<{
     leagueId: string;
     groupId: string;
-  };
+  }>;
 };
 
 type LeagueDoc = {
@@ -109,7 +106,7 @@ async function getTeamsForBoard(groupId: string): Promise<TeamForBoard[]> {
 }
 
 export default async function Page({ params }: PageProps) {
-  const { leagueId, groupId } = params;
+  const { leagueId, groupId } = await params;
 
   const [{ league, group }, teams] = await Promise.all([
     getLeagueAndGroupScoped(leagueId, groupId),
@@ -122,7 +119,7 @@ export default async function Page({ params }: PageProps) {
   }
 
   const headerTitle = group ? `${league.name} · ${group.name}` : league.name;
-  const subtitle = "Organiza los equipos por nivel de complejidad (Tranquilos, Regulares, Complicados…).";
+  const subtitle = "Organiza los equipos por nivel de complejidad (ESTANDARs, Regulares, Complicados…).";
 
   return (
     <div className="max-w-full space-y-6 overflow-x-hidden">
@@ -135,16 +132,7 @@ export default async function Page({ params }: PageProps) {
         canDelete={false}
       />
 
-      <Suspense
-        fallback={
-          <div className="space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-[400px] w-full" />
-          </div>
-        }
-      >
-        <TeamTiersBoard leagueId={leagueId} groupId={groupId} teams={teams} />
-      </Suspense>
+      <TeamTiersBoard leagueId={leagueId} groupId={groupId} teams={teams} />
     </div>
   );
 }

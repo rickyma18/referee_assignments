@@ -4,7 +4,6 @@ import * as React from "react";
 
 import { useParams, useRouter } from "next/navigation";
 
-import { DateTime } from "luxon";
 import { toast } from "sonner";
 
 import { EntityHeader } from "@/components/entity-header";
@@ -16,7 +15,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { getGroupAction } from "@/server/actions/groups.actions";
 import { getLeagueAction } from "@/server/actions/leagues.actions";
-import { getMatchdayAction, updateMatchdayAction, deleteMatchdayAction } from "@/server/actions/matchdays.actions";
+import {
+  getMatchdayAction,
+  updateMatchdayAction,
+  deleteMatchdayAction,
+  updateMatchdayNumberAction,
+} from "@/server/actions/matchdays.actions";
 
 type MatchdayDTO = {
   id: string;
@@ -35,12 +39,6 @@ type LeagueUI = {
   color?: string | null;
   logoUrl?: string | null;
 };
-
-function isoToDDMMYYYY(iso: string) {
-  if (!iso) return "";
-  const dt = DateTime.fromISO(iso, { zone: "America/Mexico_City" });
-  return dt.isValid ? dt.toFormat("dd-MM-yyyy") : "";
-}
 
 export default function MatchdayDetailPage() {
   const { leagueId, groupId, matchdayId } = useParams<{
@@ -69,6 +67,11 @@ export default function MatchdayDetailPage() {
   const [saving, setSaving] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
 
+  // Número editable
+  const [numberStr, setNumberStr] = React.useState<string>("");
+  const [savingNumber, setSavingNumber] = React.useState(false);
+  const [numberError, setNumberError] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     (async () => {
       try {
@@ -80,10 +83,11 @@ export default function MatchdayDetailPage() {
           return;
         }
         setItem(data as MatchdayDTO);
+        setNumberStr(String((data as MatchdayDTO).number));
 
-        // Parsear Timestamps a YYYY-MM-DD
-        const s = isoToDDMMYYYY((data as any).startDate);
-        const e = isoToDDMMYYYY((data as any).endDate);
+        // Parsear Timestamps a YYYY-MM-DD para <input type="date" />
+        const s = tsToInputDate((data as any).startDate);
+        const e = tsToInputDate((data as any).endDate);
         setStart(s);
         setEnd(e);
         setStatus((data as any).status ?? "ACTIVE");
@@ -143,6 +147,37 @@ export default function MatchdayDetailPage() {
       return;
     }
 
+    // --- Guardar número si cambió ---
+    const chosenNumber = parseInt(numberStr, 10);
+    if (!Number.isInteger(chosenNumber) || chosenNumber < 1) {
+      const errMsg = "El número debe ser un entero mayor o igual a 1.";
+      toast.error(errMsg);
+      setNumberError(errMsg);
+      return;
+    }
+
+    if (chosenNumber !== item.number) {
+      setSavingNumber(true);
+      try {
+        const numRes = await updateMatchdayNumberAction(String(leagueId), String(groupId), item.id, chosenNumber);
+        if (!numRes.ok) {
+          const errMsg = numRes.message ?? "No se pudo actualizar el número";
+          toast.error(errMsg);
+          setNumberError(errMsg);
+          return;
+        }
+        // Actualizar estado local para que el header refleje el nuevo número
+        setItem((prev) => (prev ? { ...prev, number: chosenNumber } : prev));
+        setNumberError(null);
+      } catch {
+        toast.error("Error inesperado al actualizar el número");
+        return;
+      } finally {
+        setSavingNumber(false);
+      }
+    }
+
+    // --- Guardar fechas y status ---
     setSaving(true);
     try {
       const res = await updateMatchdayAction({
@@ -230,7 +265,23 @@ export default function MatchdayDetailPage() {
       <div className="grid gap-4">
         <div className="grid gap-2">
           <Label>Número</Label>
-          <Input value={item.number} readOnly />
+          {canEdit ? (
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              value={numberStr}
+              onChange={(e) => {
+                setNumberStr(e.target.value.replace(/[^\d]/g, ""));
+                setNumberError(null);
+              }}
+              disabled={saving || savingNumber}
+            />
+          ) : (
+            <Input value={item.number} readOnly />
+          )}
+          {numberError && <p className="text-destructive text-sm">{numberError}</p>}
         </div>
 
         <div className="grid gap-2">
@@ -275,8 +326,8 @@ export default function MatchdayDetailPage() {
 
       {canEdit && (
         <div className="flex gap-2">
-          <Button type="submit" disabled={saving}>
-            {saving ? "Guardando..." : "Guardar"}
+          <Button type="submit" disabled={saving || savingNumber}>
+            {saving || savingNumber ? "Guardando..." : "Guardar"}
           </Button>
         </div>
       )}

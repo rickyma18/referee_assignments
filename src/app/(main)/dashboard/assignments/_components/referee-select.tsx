@@ -1,3 +1,4 @@
+/* eslint-disable max-lines, complexity */
 "use client";
 
 // src/app/(main)/dashboard/assignments/_components/referee-select.tsx
@@ -25,6 +26,11 @@ type Props = {
 
 export function RefereeSelect({ value, onChange, referees, placeholder, mode = "ALL" }: Props) {
   const [open, setOpen] = React.useState(false);
+  const [searchValue, setSearchValue] = React.useState("");
+
+  // Helper para detectar si es externo
+  const isExternal = value.startsWith("ext:");
+  const externalLabel = isExternal ? value.replace("ext:", "") : null;
 
   // Filtrado por rol (árbitro vs asesor) + orden alfabético
   const options = React.useMemo(() => {
@@ -38,11 +44,31 @@ export function RefereeSelect({ value, onChange, referees, placeholder, mode = "
       list = list.filter((r) => r.canAssess);
     }
 
-    return [...list].sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
+    const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
+
+    // ✅ Opción extra para FORANEO
+    // La agregamos al principio o final.
+    // Usamos un ID especial para "FORANEO" predefinido -> "ext:FORANEO"
+    const foraneoOption: RefereeOption = {
+      id: "ext:FORANEO",
+      name: "FORANEO",
+      status: "DISPONIBLE",
+      canAssess: mode === "ASESOR", // Dependiendo del modo
+    };
+
+    return [foraneoOption, ...sorted];
   }, [mode, referees]);
 
-  const selected = options.find((r) => r.id === value) ?? referees.find((r) => r.id === value);
-  const label = selected?.name ?? "";
+  const selected = options.find((r) => r.id === value);
+  // Si es externo y no está en la lista (custom), usamos el label parseado
+  let label = selected?.name;
+  if (!label && isExternal && externalLabel) {
+    label = externalLabel; // Mostrar tal cual viene (o con (Ext))
+  }
+  if (!label && value) {
+    // Fallback por si acaso
+    label = value;
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -53,15 +79,40 @@ export function RefereeSelect({ value, onChange, referees, placeholder, mode = "
           aria-expanded={open}
           className="h-8 w-full justify-between px-2 text-xs"
         >
-          {label || <span className="text-muted-foreground">{placeholder}</span>}
+          {label ?? <span className="text-muted-foreground">{placeholder}</span>}{" "}
           <ChevronsUpDown className="ml-2 h-3 w-3 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0" align="start">
-        <Command>
-          <CommandInput placeholder={`Buscar ${placeholder.toLowerCase()}...`} className="h-8 text-xs" />
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder={`Buscar ${placeholder.toLowerCase()}...`}
+            className="h-8 text-xs"
+            value={searchValue}
+            onValueChange={setSearchValue}
+          />
           <CommandList>
+            {/* Si no hay coincidencias exactas, permitimos crear EXTERNO */}
+            {searchValue.length > 0 && !options.some((r) => r.name.toLowerCase() === searchValue.toLowerCase()) && (
+              <CommandGroup heading="Quedará como externo">
+                <CommandItem
+                  value={"ext:" + searchValue}
+                  onSelect={() => {
+                    // Normalización básica: mayúsculas
+                    onChange(`ext:${searchValue.toUpperCase()}`);
+                    setOpen(false);
+                    setSearchValue("");
+                  }}
+                  className="text-xs"
+                >
+                  <Check className={cn("mr-2 h-3 w-3 opacity-0")} />
+                  Usar &quot;{searchValue.toUpperCase()}&quot;
+                </CommandItem>
+              </CommandGroup>
+            )}
+
             <CommandEmpty className="text-muted-foreground py-2 text-xs">No se encontraron coincidencias.</CommandEmpty>
+
             <CommandGroup>
               {/* Opción "Sin asignar" */}
               <CommandItem
@@ -76,20 +127,25 @@ export function RefereeSelect({ value, onChange, referees, placeholder, mode = "
                 Sin asignar
               </CommandItem>
 
-              {options.map((r) => (
-                <CommandItem
-                  key={r.id}
-                  value={r.name}
-                  onSelect={() => {
-                    onChange(r.id);
-                    setOpen(false);
-                  }}
-                  className="text-xs"
-                >
-                  <Check className={cn("mr-2 h-3 w-3", value === r.id ? "opacity-100" : "opacity-0")} />
-                  {r.name}
-                </CommandItem>
-              ))}
+              {options
+                .filter((r) => {
+                  if (!searchValue) return true;
+                  return r.name.toLowerCase().includes(searchValue.toLowerCase());
+                })
+                .map((r) => (
+                  <CommandItem
+                    key={r.id}
+                    value={r.name}
+                    onSelect={() => {
+                      onChange(r.id);
+                      setOpen(false);
+                    }}
+                    className="text-xs"
+                  >
+                    <Check className={cn("mr-2 h-3 w-3", value === r.id ? "opacity-100" : "opacity-0")} />
+                    {r.name}
+                  </CommandItem>
+                ))}
             </CommandGroup>
           </CommandList>
         </Command>

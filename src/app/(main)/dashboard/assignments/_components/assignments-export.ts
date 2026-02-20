@@ -7,7 +7,13 @@ export function buildExportRows(
   referees: RefereeOption[],
   leagueById: Map<string, LeagueDoc>,
 ) {
-  const getRefName = (id?: string | null) => (id ? (referees.find((r) => r.id === id)?.name ?? "") : "");
+  const getRefName = (id?: string | null) => {
+    if (!id) return "";
+    if (id.startsWith("ext:")) {
+      return id.replace("ext:", "");
+    }
+    return referees.find((r) => r.id === id)?.name ?? "";
+  };
 
   return rows.map((m) => {
     const league = leagueById.get(m.leagueId);

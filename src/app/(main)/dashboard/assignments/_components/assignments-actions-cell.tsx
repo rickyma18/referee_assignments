@@ -20,12 +20,28 @@ type Props = {
 
 export function ActionsCell({ row: m, meta }: Props) {
   const [saving, setSaving] = React.useState(false);
+  const [justSaved, setJustSaved] = React.useState(false);
+  const savedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Limpia el timer si el componente se desmonta
+  React.useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
+
+  function markSaved() {
+    meta.onSaved();
+    setJustSaved(true);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setJustSaved(false), 2500);
+  }
 
   // La terna "completa" sigue siendo central + AA1 + AA2; 4º y asesor son opcionales
   const hasTerna = Boolean(m.central && m.aa1 && m.aa2);
 
   // eslint-disable-next-line complexity
-  async function doAssign(options?: { ignoreRecentTeamConflicts?: boolean }) {
+  async function doAssign(options?: { ignoreRecentTeamConflicts?: boolean; ignoreSameDayConflicts?: boolean }) {
     if (!m.central || !m.aa1 || !m.aa2) {
       toast.error("Debes seleccionar al menos Central y los dos Asistentes.");
       return;
@@ -43,11 +59,24 @@ export function ActionsCell({ row: m, meta }: Props) {
     try {
       setSaving(true);
 
-      const centralName = meta.referees.find((r) => r.id === m.central)?.name ?? "";
-      const aa1Name = meta.referees.find((r) => r.id === m.aa1)?.name ?? "";
-      const aa2Name = meta.referees.find((r) => r.id === m.aa2)?.name ?? "";
-      const fourthName = m.fourth ? (meta.referees.find((r) => r.id === m.fourth)?.name ?? "") : "";
-      const assessorName = m.assessor ? (meta.referees.find((r) => r.id === m.assessor)?.name ?? "") : "";
+      // Helper: split "ext:LABEL" → { id: "", label: "LABEL" }, real id → { id, label: "" }
+      const parseSlot = (val: string) => {
+        if (!val) return { id: "", label: "" };
+        if (val.startsWith("ext:")) return { id: "", label: val.slice(4) };
+        return { id: val, label: "" };
+      };
+
+      const centralSlot = parseSlot(m.central);
+      const aa1Slot = parseSlot(m.aa1);
+      const aa2Slot = parseSlot(m.aa2);
+      const fourthSlot = parseSlot(m.fourth);
+      const assessorSlot = parseSlot(m.assessor);
+
+      const centralName = centralSlot.id ? (meta.referees.find((r) => r.id === centralSlot.id)?.name ?? "") : "";
+      const aa1Name = aa1Slot.id ? (meta.referees.find((r) => r.id === aa1Slot.id)?.name ?? "") : "";
+      const aa2Name = aa2Slot.id ? (meta.referees.find((r) => r.id === aa2Slot.id)?.name ?? "") : "";
+      const fourthName = fourthSlot.id ? (meta.referees.find((r) => r.id === fourthSlot.id)?.name ?? "") : "";
+      const assessorName = assessorSlot.id ? (meta.referees.find((r) => r.id === assessorSlot.id)?.name ?? "") : "";
 
       const fd = new FormData();
       fd.append("leagueId", m.leagueId);
@@ -55,27 +84,32 @@ export function ActionsCell({ row: m, meta }: Props) {
       fd.append("matchdayId", m.matchdayId);
       fd.append("matchId", m.id);
 
-      fd.append("centralRefereeId", m.central);
-      fd.append("aa1RefereeId", m.aa1);
-      fd.append("aa2RefereeId", m.aa2);
+      fd.append("centralRefereeId", centralSlot.id);
+      fd.append("centralExternalLabel", centralSlot.label);
+      fd.append("aa1RefereeId", aa1Slot.id);
+      fd.append("aa1ExternalLabel", aa1Slot.label);
+      fd.append("aa2RefereeId", aa2Slot.id);
+      fd.append("aa2ExternalLabel", aa2Slot.label);
 
       if (centralName) fd.append("centralRefereeName", centralName);
       if (aa1Name) fd.append("aa1RefereeName", aa1Name);
       if (aa2Name) fd.append("aa2RefereeName", aa2Name);
 
-      // Nuevos campos opcionales (4º árbitro y asesor)
-      if (m.fourth) {
-        fd.append("fourthRefereeId", m.fourth);
-        if (fourthName) fd.append("fourthRefereeName", fourthName);
-      }
+      // 4º árbitro y asesor: siempre se envían (vacío = el usuario los borró)
+      // El server usa: clave ausente→conservar, vacío→null, valor→guardar
+      fd.append("fourthRefereeId", fourthSlot.id);
+      fd.append("fourthExternalLabel", fourthSlot.label);
+      if (fourthName) fd.append("fourthRefereeName", fourthName);
 
-      if (m.assessor) {
-        fd.append("assessorRefereeId", m.assessor);
-        if (assessorName) fd.append("assessorRefereeName", assessorName);
-      }
+      fd.append("assessorRefereeId", assessorSlot.id);
+      fd.append("assessorExternalLabel", assessorSlot.label);
+      if (assessorName) fd.append("assessorRefereeName", assessorName);
 
       if (options?.ignoreRecentTeamConflicts) {
         fd.append("ignoreRecentTeamConflicts", "true");
+      }
+      if (options?.ignoreSameDayConflicts) {
+        fd.append("ignoreSameDayConflicts", "true");
       }
 
       const res = await assignManualTernaAction(fd);
@@ -144,6 +178,38 @@ export function ActionsCell({ row: m, meta }: Props) {
         return;
       }
 
+      if (data.code === "SAME_DAY_CONFLICT") {
+        const conflicts = data.sameDayConflicts ?? [];
+
+        const details =
+          conflicts.length === 0
+            ? null
+            : conflicts
+                .map((c) => {
+                  const refName = meta.referees.find((r) => r.id === c.refereeId)?.name ?? c.refereeId;
+                  const vs = [c.otherHomeTeamName, c.otherAwayTeamName].filter(Boolean).join(" vs ");
+                  return `${refName} (${c.refereeRole}) ya tiene partido ese día${vs ? `: ${vs}` : ""}`;
+                })
+                .join("\n");
+
+        toast.error(
+          <div className="text-left whitespace-pre-line">
+            <strong>Conflicto: mismo día calendario</strong>
+            <br />
+            {details ?? "Algún árbitro ya tiene otro partido asignado el mismo día."}
+          </div>,
+          {
+            action: {
+              label: "Continuar de todas formas",
+              onClick: () => {
+                void doAssign({ ignoreSameDayConflicts: true });
+              },
+            },
+          },
+        );
+        return;
+      }
+
       if (data.code === "RCS_BELOW_THRESHOLD_BLOCK") {
         // Bloqueo por configuración de temporada
         toast.error(
@@ -159,18 +225,14 @@ export function ActionsCell({ row: m, meta }: Props) {
           data.error ?? "Advertencia: el RCS del central está por debajo del MDS recomendado para este partido.",
         );
 
-        meta.onSaved();
+        markSaved();
         return;
       }
 
       // 🔹 Éxito normal
       if (data.code === "OK") {
         toast.success("Terna asignada correctamente.");
-
-        if (data.rcsEvaluation) {
-          meta.onSaved();
-        }
-
+        markSaved();
         return;
       }
 
@@ -200,10 +262,15 @@ export function ActionsCell({ row: m, meta }: Props) {
           {saving ? "Guardando…" : hasTerna ? "Actualizar" : "Asignar"}
         </Button>
         <Badge
-          variant={hasTerna ? "default" : "outline"}
-          className={cn("mt-0.5 text-[10px]", hasTerna && "border-emerald-200 bg-emerald-100 text-emerald-700")}
+          variant={justSaved ? "default" : hasTerna ? "default" : "outline"}
+          className={cn(
+            "mt-0.5 text-[10px]",
+            justSaved
+              ? "border-blue-200 bg-blue-100 text-blue-700"
+              : hasTerna && "border-emerald-200 bg-emerald-100 text-emerald-700",
+          )}
         >
-          {hasTerna ? "Terna completa" : "Sin terna"}
+          {justSaved ? "Guardado" : hasTerna ? "Terna completa" : "Sin terna"}
         </Badge>
       </div>
     </div>

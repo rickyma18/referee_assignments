@@ -5,14 +5,7 @@
 import "server-only";
 import { getFirestore } from "firebase-admin/firestore";
 
-// 🔹 Normalizador (quita acentos, mayúsculas y espacios)
-function norm(s: string) {
-  return s
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .trim();
-}
+import { norm } from "@/lib/normalize";
 
 function fixMojibake(s: string) {
   try {

@@ -51,7 +51,7 @@ export const TeamBaseSchema = z.object({
   /**
    * Tier de comportamiento / complejidad del equipo.
    *
-   * - TRANQUILO
+   * - ESTANDAR
    * - REGULARES
    * - COMPLICADO
    * - MUY_COMPLICADO

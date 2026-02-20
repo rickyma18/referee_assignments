@@ -27,10 +27,15 @@ export type AssignmentMatchRow = {
   awayTeamName: string;
   venueName?: string | null;
   centralRefereeId?: string | null;
+  centralExternalLabel?: string | null;
   aa1RefereeId?: string | null;
+  aa1ExternalLabel?: string | null;
   aa2RefereeId?: string | null;
+  aa2ExternalLabel?: string | null;
   fourthRefereeId?: string | null;
+  fourthExternalLabel?: string | null;
   assessorRefereeId?: string | null;
+  assessorExternalLabel?: string | null;
   leagueColorHex?: string | null;
 };
 
