@@ -1,3 +1,4 @@
+/* eslint-disable max-lines, complexity, func-call-spacing */
 "use client";
 
 import * as React from "react";
@@ -40,6 +41,17 @@ import {
   type AssignmentTableMeta,
   type AssignmentsTableProps,
 } from "./assignments-types";
+
+/** Normaliza texto para búsqueda: minúsculas, sin acentos, sin puntuación */
+function normText(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export function AssignmentsTable({ leagues, groups, matches, referees }: AssignmentsTableProps) {
   const router = useRouter();
@@ -144,6 +156,35 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     }
   }, []);
 
+  // Precomputed search index per row (accent-insensitive, all relevant fields)
+  const searchIndex = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of rowData) {
+      const parts: string[] = [
+        leagueById.get(m.leagueId)?.name ?? "",
+        m.groupName ?? "",
+        m.matchdayNumber != null ? String(m.matchdayNumber) : "",
+        m.jornadaLabel ?? "",
+        m.category ?? "",
+        m.homeTeamName ?? "",
+        m.awayTeamName ?? "",
+        m.venueName ?? "",
+        getRefDisplay(m.central),
+        getRefDisplay(m.aa1),
+        getRefDisplay(m.aa2),
+        getRefDisplay(m.fourth),
+        getRefDisplay(m.assessor),
+        m.centralExternalLabel ?? "",
+        m.aa1ExternalLabel ?? "",
+        m.aa2ExternalLabel ?? "",
+        m.fourthExternalLabel ?? "",
+        m.assessorExternalLabel ?? "",
+      ];
+      map.set(m.id, normText(parts.join(" ")));
+    }
+    return map;
+  }, [rowData, leagueById, getRefDisplay]);
+
   const isRangeActive = filterFrom !== "" || filterTo !== "";
 
   // Si cambian los matches desde el servidor (router.refresh), sincronizamos
@@ -233,25 +274,14 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       });
     }
 
-    // 🔍 búsqueda global
-    if (globalSearch.trim().length > 0) {
-      const q = globalSearch.trim().toLowerCase();
+    // 🔍 búsqueda global (multi-token AND, accent-insensitive)
+    const tokens = normText(globalSearch)
+      .split(" ")
+      .filter((t) => t.length >= 2);
+    if (tokens.length > 0) {
       rows = rows.filter((m) => {
-        const leagueName = leagueById.get(m.leagueId)?.name ?? "";
-
-        const texts: string[] = [
-          m.homeTeamName ?? "",
-          m.awayTeamName ?? "",
-          leagueName,
-          String((m as any).matchdayNumber ?? ""),
-        ];
-
-        const refIds = [m.central, m.aa1, m.aa2, m.fourth, m.assessor].filter(Boolean);
-        for (const rid of refIds) {
-          texts.push(getRefDisplay(rid));
-        }
-
-        return texts.some((t) => t.toLowerCase().includes(q));
+        const idx = searchIndex.get(m.id) ?? "";
+        return tokens.every((t) => idx.includes(t));
       });
     }
 
@@ -282,9 +312,8 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     filterFrom,
     filterTo,
     globalSearch,
-    leagueById,
+    searchIndex,
     getMatchDate,
-    getRefDisplay,
     isRangeActive,
     isRefereeView,
   ]);

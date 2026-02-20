@@ -1,4 +1,5 @@
 // src/server/actions/assignments.actions.ts
+/* eslint-disable max-lines, complexity */
 "use server";
 import "server-only";
 
@@ -46,6 +47,19 @@ export type AssignManualTernaData =
     };
 
 /**
+ * Helper: regresa string (trim) o null.
+ * - FormData.get() puede ser null (key ausente)
+ * - Puede venir "" si el input se envió vacío
+ * En ambos casos lo tratamos como null.
+ */
+function fdStringOrNull(fd: FormData, key: string): string | null {
+  const v = fd.get(key);
+  if (v === null) return null;
+  const s = String(v).trim();
+  return s.length > 0 ? s : null;
+}
+
+/**
  * Acción para asignar terna MANUALMENTE a un partido.
  *
  * Seguridad multi-tenant:
@@ -74,9 +88,14 @@ export async function assignManualTernaAction(formData: FormData) {
     const matchdayId = String(formData.get("matchdayId") ?? "");
     const matchId = String(formData.get("matchId") ?? "");
 
-    const centralRefereeId = String(formData.get("centralRefereeId") ?? "");
-    const aa1RefereeId = String(formData.get("aa1RefereeId") ?? "");
-    const aa2RefereeId = String(formData.get("aa2RefereeId") ?? "");
+    // ✅ FIX ESLint: evitar `|| null` (prefer-nullish-coalescing)
+    const centralRefereeId = fdStringOrNull(formData, "centralRefereeId");
+    const aa1RefereeId = fdStringOrNull(formData, "aa1RefereeId");
+    const aa2RefereeId = fdStringOrNull(formData, "aa2RefereeId");
+
+    const centralExternalLabel = fdStringOrNull(formData, "centralExternalLabel");
+    const aa1ExternalLabel = fdStringOrNull(formData, "aa1ExternalLabel");
+    const aa2ExternalLabel = fdStringOrNull(formData, "aa2ExternalLabel");
 
     const centralRefereeName = formData.get("centralRefereeName");
     const aa1RefereeName = formData.get("aa1RefereeName");
@@ -88,20 +107,35 @@ export async function assignManualTernaAction(formData: FormData) {
     // devuelve "id" si fue enviada con valor (→ guardar)
     const fourthRawId = formData.get("fourthRefereeId");
     const fourthRawName = formData.get("fourthRefereeName");
+
+    // ✅ FIX ESLint: evitar `String(..) || null`
+    const fourthExternalLabel = fdStringOrNull(formData, "fourthExternalLabel");
+
     const assessorRawId = formData.get("assessorRefereeId");
     const assessorRawName = formData.get("assessorRefereeName");
+
+    // ✅ FIX ESLint: evitar `String(..) || null`
+    const assessorExternalLabel = fdStringOrNull(formData, "assessorExternalLabel");
 
     // Si quieres guardar quién asignó, puedes mandar userId en el formData
     const updatedBy = formData.get("userId") ? String(formData.get("userId")) : null;
 
-    if (!leagueId || !groupId || !matchdayId || !matchId || !centralRefereeId || !aa1RefereeId || !aa2RefereeId) {
+    // Cada rol necesita ID real o ExternalLabel
+    const hasCentral = centralRefereeId ?? centralExternalLabel;
+    const hasAa1 = aa1RefereeId ?? aa1ExternalLabel;
+    const hasAa2 = aa2RefereeId ?? aa2ExternalLabel;
+
+    if (!leagueId || !groupId || !matchdayId || !matchId || !hasCentral || !hasAa1 || !hasAa2) {
       return {
         code: "MISSING_PARAMS",
         error: "Faltan parámetros obligatorios para asignar la terna.",
       };
     }
 
-    if (centralRefereeId === aa1RefereeId || centralRefereeId === aa2RefereeId || aa1RefereeId === aa2RefereeId) {
+    // Duplicados: solo entre IDs reales (labels externos como "FORANEO" pueden repetirse)
+    const coreRealIds = [centralRefereeId, aa1RefereeId, aa2RefereeId].filter(Boolean) as string[];
+    const uniqueCoreIds = new Set(coreRealIds);
+    if (uniqueCoreIds.size !== coreRealIds.length) {
       return {
         code: "DUPLICATE_REFEREES",
         error: "Un árbitro no puede repetirse como central y asistente en la misma terna.",
@@ -158,7 +192,8 @@ export async function assignManualTernaAction(formData: FormData) {
       }
     }
 
-    // 2) Validar que los árbitros existan y estén DISPONIBLES
+    // 2) Validar que los árbitros con ID real existan y estén DISPONIBLES
+    //    (los ext:* NO se validan — no son docs de Firestore)
     const unavailableRefs: string[] = [];
     const refsCol = db.collection("referees");
 
@@ -170,9 +205,9 @@ export async function assignManualTernaAction(formData: FormData) {
       return status === "DISPONIBLE";
     }
 
-    if (!(await isAvailable(centralRefereeId))) unavailableRefs.push(centralRefereeId);
-    if (!(await isAvailable(aa1RefereeId))) unavailableRefs.push(aa1RefereeId);
-    if (!(await isAvailable(aa2RefereeId))) unavailableRefs.push(aa2RefereeId);
+    if (centralRefereeId && !(await isAvailable(centralRefereeId))) unavailableRefs.push(centralRefereeId);
+    if (aa1RefereeId && !(await isAvailable(aa1RefereeId))) unavailableRefs.push(aa1RefereeId);
+    if (aa2RefereeId && !(await isAvailable(aa2RefereeId))) unavailableRefs.push(aa2RefereeId);
 
     if (unavailableRefs.length > 0) {
       return {
@@ -184,16 +219,23 @@ export async function assignManualTernaAction(formData: FormData) {
 
     const ignoreRecentTeamConflicts = String(formData.get("ignoreRecentTeamConflicts") ?? "").toLowerCase() === "true";
 
-    // 3) Regla de las últimas 4 jornadas (NO RA-XX)
+    // IDs reales para validaciones (ext:* se excluyen)
+    const realCentralId = centralRefereeId ?? "";
+    const realAa1Id = aa1RefereeId ?? "";
+    const realAa2Id = aa2RefereeId ?? "";
+    const realFourthId = fourthRawId !== null ? (String(fourthRawId) ? String(fourthRawId) : null) : null;
+    const realAssessorId = assessorRawId !== null ? (String(assessorRawId) ? String(assessorRawId) : null) : null;
+
+    // 3) Regla de las últimas 4 jornadas (NO RA-XX) – solo IDs reales
     const conflicts = await findRecentTeamConflicts({
       leagueId,
       groupId,
       currentMatchdayNumber: matchdayNumber,
       homeTeamId,
       awayTeamId,
-      centralRefereeId,
-      aa1RefereeId,
-      aa2RefereeId,
+      centralRefereeId: realCentralId,
+      aa1RefereeId: realAa1Id,
+      aa2RefereeId: realAa2Id,
       currentMatchId: matchId,
     });
 
@@ -205,15 +247,15 @@ export async function assignManualTernaAction(formData: FormData) {
       };
     }
 
-    // 4) Regla de choque de horario (Choque) – esta sigue siendo bloqueo duro
+    // 4) Regla de choque de horario (Choque) – solo IDs reales
     if (kickoff) {
       const scheduleConflicts = await findScheduleConflicts({
         leagueId,
         matchId,
         kickoff,
-        centralRefereeId,
-        aa1RefereeId,
-        aa2RefereeId,
+        centralRefereeId: realCentralId,
+        aa1RefereeId: realAa1Id,
+        aa2RefereeId: realAa2Id,
       });
 
       if (scheduleConflicts.length > 0) {
@@ -225,18 +267,18 @@ export async function assignManualTernaAction(formData: FormData) {
       }
     }
 
-    // 4.5) Regla de "mismo día" (soft-block) – misma liga, mismo día calendario
+    // 4.5) Regla de "mismo día" (soft-block) – solo IDs reales
     if (kickoff) {
       const ignoreSameDayConflicts = String(formData.get("ignoreSameDayConflicts") ?? "").toLowerCase() === "true";
       const sameDayConflicts = await findSameDayConflicts({
         leagueId,
         matchId,
         kickoff,
-        centralRefereeId,
-        aa1RefereeId,
-        aa2RefereeId,
-        fourthRefereeId: fourthRawId !== null ? String(fourthRawId) || null : null,
-        assessorRefereeId: assessorRawId !== null ? String(assessorRawId) || null : null,
+        centralRefereeId: realCentralId,
+        aa1RefereeId: realAa1Id,
+        aa2RefereeId: realAa2Id,
+        fourthRefereeId: realFourthId,
+        assessorRefereeId: realAssessorId,
       });
 
       if (sameDayConflicts.length > 0 && !ignoreSameDayConflicts) {
@@ -249,13 +291,16 @@ export async function assignManualTernaAction(formData: FormData) {
     }
 
     // 5) Evaluar MDS vs RCS_central (bloqueo/advertencia según temporada)
-    const rcsEvaluation = await evaluateCentralRcs({
-      leagueId,
-      groupId,
-      matchdayId,
-      matchId,
-      centralRefereeId,
-    });
+    //    Solo si el central es un ID real (ext no tiene RCS)
+    const rcsEvaluation = centralRefereeId
+      ? await evaluateCentralRcs({
+          leagueId,
+          groupId,
+          matchdayId,
+          matchId,
+          centralRefereeId,
+        })
+      : { mds: null, rcsCentral: null, tolerance: 0, policy: "NONE" as const, belowThreshold: false };
 
     if (rcsEvaluation.belowThreshold && rcsEvaluation.policy === "BLOCK") {
       // Bloqueo duro por parámetro de temporada
@@ -271,41 +316,57 @@ export async function assignManualTernaAction(formData: FormData) {
     const now = new Date();
 
     // Construimos el payload base (central/aa1/aa2 siempre se actualizan)
+    // Lógica: si hay ID real → guardar ID, limpiar label. Si hay label → guardar label, limpiar ID.
     const updateData: Record<string, unknown> = {
-      centralRefereeId,
-      aa1RefereeId,
-      aa2RefereeId,
-      centralRefereeName: centralRefereeName ? String(centralRefereeName) : (match.centralRefereeName ?? null),
-      aa1RefereeName: aa1RefereeName ? String(aa1RefereeName) : (match.aa1RefereeName ?? null),
-      aa2RefereeName: aa2RefereeName ? String(aa2RefereeName) : (match.aa2RefereeName ?? null),
+      centralRefereeId: centralRefereeId ?? null,
+      centralExternalLabel: centralRefereeId ? null : (centralExternalLabel ?? null),
+      aa1RefereeId: aa1RefereeId ?? null,
+      aa1ExternalLabel: aa1RefereeId ? null : (aa1ExternalLabel ?? null),
+      aa2RefereeId: aa2RefereeId ?? null,
+      aa2ExternalLabel: aa2RefereeId ? null : (aa2ExternalLabel ?? null),
+      centralRefereeName: centralRefereeName
+        ? String(centralRefereeName)
+        : (centralExternalLabel ?? match.centralRefereeName ?? null),
+      aa1RefereeName: aa1RefereeName ? String(aa1RefereeName) : (aa1ExternalLabel ?? match.aa1RefereeName ?? null),
+      aa2RefereeName: aa2RefereeName ? String(aa2RefereeName) : (aa2ExternalLabel ?? match.aa2RefereeName ?? null),
       updatedAt: now,
       updatedBy,
     };
 
     // Fourth: solo tocar si el key fue enviado en el FormData
     // - fourthRawId === null  → clave ausente → no incluimos el campo (Firestore lo conserva)
-    // - fourthRawId === ""    → usuario borró → guardar null + limpiar label y nombre
+    // - fourthRawId === ""    → usuario borró (o ext label) → revisar label
     // - fourthRawId === "id"  → usuario seleccionó → guardar id + limpiar label
     if (fourthRawId !== null) {
-      const fourthRefereeId = String(fourthRawId) || null;
-      updateData.fourthRefereeId = fourthRefereeId;
-      updateData.fourthExternalLabel = null; // este flujo solo usa IDs
-      updateData.fourthRefereeName = fourthRefereeId
-        ? fourthRawName !== null
-          ? String(fourthRawName) || null
-          : (match.fourthRefereeName ?? null)
-        : null; // si se borró el árbitro, también se limpia el nombre
+      const fourthId = fourthRawId ? String(fourthRawId) : null;
+      updateData.fourthRefereeId = fourthId ?? null;
+      updateData.fourthExternalLabel = fourthId ? null : (fourthExternalLabel ?? null);
+      const hasAny = fourthId ?? fourthExternalLabel;
+      updateData.fourthRefereeName = hasAny
+        ? fourthId
+          ? fourthRawName !== null
+            ? String(fourthRawName)
+              ? String(fourthRawName)
+              : null
+            : (match.fourthRefereeName ?? null)
+          : (fourthExternalLabel ?? null)
+        : null;
     }
 
     // Assessor: mismo patrón
     if (assessorRawId !== null) {
-      const assessorRefereeId = String(assessorRawId) || null;
-      updateData.assessorRefereeId = assessorRefereeId;
-      updateData.assessorExternalLabel = null;
-      updateData.assessorRefereeName = assessorRefereeId
-        ? assessorRawName !== null
-          ? String(assessorRawName) || null
-          : (match.assessorRefereeName ?? null)
+      const assessorId = assessorRawId ? String(assessorRawId) : null;
+      updateData.assessorRefereeId = assessorId ?? null;
+      updateData.assessorExternalLabel = assessorId ? null : (assessorExternalLabel ?? null);
+      const hasAny = assessorId ?? assessorExternalLabel;
+      updateData.assessorRefereeName = hasAny
+        ? assessorId
+          ? assessorRawName !== null
+            ? String(assessorRawName)
+              ? String(assessorRawName)
+              : null
+            : (match.assessorRefereeName ?? null)
+          : (assessorExternalLabel ?? null)
         : null;
     }
 
@@ -419,10 +480,6 @@ export async function confirmSuggestedAssignmentsAction(payload: {
         .doc(m.matchdayId)
         .collection("matches")
         .doc(m.matchId);
-
-      // Lógica de limpieza: Si hay ID, label=undefined (se borra). Si hay Label, ID=null (se borra).
-      // PERO al actualizar en Firestore, undefined se ignora, null borra.
-      // Así que explícitamente mandamos null si no aplica.
 
       batch.update(matchRef, {
         centralRefereeId: m.centralRefereeId ?? null,

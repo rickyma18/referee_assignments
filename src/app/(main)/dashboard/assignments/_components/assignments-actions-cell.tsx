@@ -59,11 +59,24 @@ export function ActionsCell({ row: m, meta }: Props) {
     try {
       setSaving(true);
 
-      const centralName = meta.referees.find((r) => r.id === m.central)?.name ?? "";
-      const aa1Name = meta.referees.find((r) => r.id === m.aa1)?.name ?? "";
-      const aa2Name = meta.referees.find((r) => r.id === m.aa2)?.name ?? "";
-      const fourthName = m.fourth ? (meta.referees.find((r) => r.id === m.fourth)?.name ?? "") : "";
-      const assessorName = m.assessor ? (meta.referees.find((r) => r.id === m.assessor)?.name ?? "") : "";
+      // Helper: split "ext:LABEL" → { id: "", label: "LABEL" }, real id → { id, label: "" }
+      const parseSlot = (val: string) => {
+        if (!val) return { id: "", label: "" };
+        if (val.startsWith("ext:")) return { id: "", label: val.slice(4) };
+        return { id: val, label: "" };
+      };
+
+      const centralSlot = parseSlot(m.central);
+      const aa1Slot = parseSlot(m.aa1);
+      const aa2Slot = parseSlot(m.aa2);
+      const fourthSlot = parseSlot(m.fourth);
+      const assessorSlot = parseSlot(m.assessor);
+
+      const centralName = centralSlot.id ? (meta.referees.find((r) => r.id === centralSlot.id)?.name ?? "") : "";
+      const aa1Name = aa1Slot.id ? (meta.referees.find((r) => r.id === aa1Slot.id)?.name ?? "") : "";
+      const aa2Name = aa2Slot.id ? (meta.referees.find((r) => r.id === aa2Slot.id)?.name ?? "") : "";
+      const fourthName = fourthSlot.id ? (meta.referees.find((r) => r.id === fourthSlot.id)?.name ?? "") : "";
+      const assessorName = assessorSlot.id ? (meta.referees.find((r) => r.id === assessorSlot.id)?.name ?? "") : "";
 
       const fd = new FormData();
       fd.append("leagueId", m.leagueId);
@@ -71,9 +84,12 @@ export function ActionsCell({ row: m, meta }: Props) {
       fd.append("matchdayId", m.matchdayId);
       fd.append("matchId", m.id);
 
-      fd.append("centralRefereeId", m.central);
-      fd.append("aa1RefereeId", m.aa1);
-      fd.append("aa2RefereeId", m.aa2);
+      fd.append("centralRefereeId", centralSlot.id);
+      fd.append("centralExternalLabel", centralSlot.label);
+      fd.append("aa1RefereeId", aa1Slot.id);
+      fd.append("aa1ExternalLabel", aa1Slot.label);
+      fd.append("aa2RefereeId", aa2Slot.id);
+      fd.append("aa2ExternalLabel", aa2Slot.label);
 
       if (centralName) fd.append("centralRefereeName", centralName);
       if (aa1Name) fd.append("aa1RefereeName", aa1Name);
@@ -81,11 +97,13 @@ export function ActionsCell({ row: m, meta }: Props) {
 
       // 4º árbitro y asesor: siempre se envían (vacío = el usuario los borró)
       // El server usa: clave ausente→conservar, vacío→null, valor→guardar
-      fd.append("fourthRefereeId", m.fourth || "");
-      if (m.fourth && fourthName) fd.append("fourthRefereeName", fourthName);
+      fd.append("fourthRefereeId", fourthSlot.id);
+      fd.append("fourthExternalLabel", fourthSlot.label);
+      if (fourthName) fd.append("fourthRefereeName", fourthName);
 
-      fd.append("assessorRefereeId", m.assessor || "");
-      if (m.assessor && assessorName) fd.append("assessorRefereeName", assessorName);
+      fd.append("assessorRefereeId", assessorSlot.id);
+      fd.append("assessorExternalLabel", assessorSlot.label);
+      if (assessorName) fd.append("assessorRefereeName", assessorName);
 
       if (options?.ignoreRecentTeamConflicts) {
         fd.append("ignoreRecentTeamConflicts", "true");

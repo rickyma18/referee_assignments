@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable max-lines, complexity */
 
 // src/app/(main)/dashboard/teams/tiers/_components/team-tiers-board.tsx
 
