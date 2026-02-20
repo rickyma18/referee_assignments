@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { getCoreRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
-import { FileSpreadsheet, Sparkles, CheckCircle2, Users } from "lucide-react";
+import { FileSpreadsheet, RefreshCw, Sparkles, CheckCircle2, Users } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -44,6 +44,7 @@ import {
 export function AssignmentsTable({ leagues, groups, matches, referees }: AssignmentsTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isRefreshing, startRefreshTransition] = useTransition();
 
   // Info del usuario
   const { userDoc } = useCurrentUser();
@@ -75,14 +76,22 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
   const [isConfirmingAll, setIsConfirmingAll] = useState(false);
 
+  /* ---------- Inicialización de filas ---------- */
+  // Helper para inicializar el valor del select (ID o ext:LABEL)
+  const getInitialValue = (id?: string | null, label?: string | null) => {
+    if (id) return id;
+    if (label) return `ext:${label}`;
+    return "";
+  };
+
   const [rowData, setRowData] = useState<AssignmentRowState[]>(() =>
     matches.map((m) => ({
       ...m,
-      central: m.centralRefereeId ?? "",
-      aa1: m.aa1RefereeId ?? "",
-      aa2: m.aa2RefereeId ?? "",
-      fourth: m.fourthRefereeId ?? "",
-      assessor: m.assessorRefereeId ?? "",
+      central: getInitialValue(m.centralRefereeId, m.centralExternalLabel),
+      aa1: getInitialValue(m.aa1RefereeId, m.aa1ExternalLabel),
+      aa2: getInitialValue(m.aa2RefereeId, m.aa2ExternalLabel),
+      fourth: getInitialValue(m.fourthRefereeId, m.fourthExternalLabel),
+      assessor: getInitialValue(m.assessorRefereeId, m.assessorExternalLabel),
     })),
   );
 
@@ -101,6 +110,10 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
   const getRefDisplay = useCallback(
     (id: string) => {
+      if (!id) return "";
+      if (id.startsWith("ext:")) {
+        return id.replace("ext:", "");
+      }
       const r = refereesById.get(id);
       if (!r) return id;
       const anyRef = r as any;
@@ -144,11 +157,11 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
       return matches.map((m) => ({
         ...m,
-        central: m.centralRefereeId ?? "",
-        aa1: m.aa1RefereeId ?? "",
-        aa2: m.aa2RefereeId ?? "",
-        fourth: m.fourthRefereeId ?? "",
-        assessor: m.assessorRefereeId ?? "",
+        central: getInitialValue(m.centralRefereeId, m.centralExternalLabel),
+        aa1: getInitialValue(m.aa1RefereeId, m.aa1ExternalLabel),
+        aa2: getInitialValue(m.aa2RefereeId, m.aa2ExternalLabel),
+        fourth: getInitialValue(m.fourthRefereeId, m.fourthExternalLabel),
+        assessor: getInitialValue(m.assessorRefereeId, m.assessorExternalLabel),
       }));
     });
   }, [matches]);
@@ -251,7 +264,13 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
 
     // Vista ARBITRO: solo partidos con terna CONFIRMADA en Firestore
     const finalRows = isRefereeView
-      ? sorted.filter((m) => Boolean(m.centralRefereeId && m.aa1RefereeId && m.aa2RefereeId))
+      ? sorted.filter((m) => {
+          // En vista árbitro, consideramos "confirmado" si hay ID o Label
+          const c = m.centralRefereeId ?? m.centralExternalLabel;
+          const a1 = m.aa1RefereeId ?? m.aa1ExternalLabel;
+          const a2 = m.aa2RefereeId ?? m.aa2ExternalLabel;
+          return Boolean(c && a1 && a2);
+        })
       : sorted;
 
     return finalRows;
@@ -292,6 +311,7 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       pagination: {
         pageSize: 50,
       },
+      sorting: [],
     },
     meta: {
       referees,
@@ -304,11 +324,11 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
             return updater(row);
           }),
         ),
-      onSaved: () => {
-        startTransition(() => {
-          router.refresh();
-        });
-      },
+      // Fase 2: no hacemos router.refresh() en saves individuales.
+      // El server action ya invalida caches con revalidateTag;
+      // el estado local (rowData) ya refleja la selección del usuario.
+      // router.refresh() solo se usa en handleConfirmAll (acciones globales).
+      onSaved: () => {},
     } satisfies AssignmentTableMeta,
   });
 
@@ -454,17 +474,33 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       const coreRows = table.getPrePaginationRowModel().rows;
       const rows = coreRows.map((r) => r.original);
 
+      // Helper para extraer ID vs Label
+      const parseVal = (val: string) => {
+        if (!val) return { id: null, label: null };
+        if (val.startsWith("ext:")) {
+          return { id: null, label: val.replace("ext:", "") };
+        }
+        return { id: val, label: null };
+      };
+
       // Tomamos solo las que:
-      // 1) Tienen terna completa en el UI (central / aa1 / aa2)
-      // 2) Cambiaron respecto a lo que venía desde el servidor (centralRefereeId/aa1RefereeId/aa2RefereeId)
+      // 1) Tienen terna completa en el UI (central / aa1 / aa2) - Requisito base
+      // 2) Cambiaron respecto a lo que venía desde el servidor (incluyendo 4to y asesor)
       const toConfirm = rows.filter((row) => {
         if (!row.central || !row.aa1 || !row.aa2) return false;
 
-        const origCentral = row.centralRefereeId ?? "";
-        const origAa1 = row.aa1RefereeId ?? "";
-        const origAa2 = row.aa2RefereeId ?? "";
+        const origCentral = getInitialValue(row.centralRefereeId, row.centralExternalLabel);
+        const origAa1 = getInitialValue(row.aa1RefereeId, row.aa1ExternalLabel);
+        const origAa2 = getInitialValue(row.aa2RefereeId, row.aa2ExternalLabel);
+        const origFourth = getInitialValue(row.fourthRefereeId, row.fourthExternalLabel);
+        const origAssessor = getInitialValue(row.assessorRefereeId, row.assessorExternalLabel);
 
-        const changed = row.central !== origCentral || row.aa1 !== origAa1 || row.aa2 !== origAa2;
+        const changed =
+          row.central !== origCentral ||
+          row.aa1 !== origAa1 ||
+          row.aa2 !== origAa2 ||
+          row.fourth !== origFourth ||
+          row.assessor !== origAssessor;
 
         return changed;
       });
@@ -474,18 +510,38 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
         return;
       }
 
-      const payloadMatches = toConfirm.map((row) => ({
-        leagueId: row.leagueId,
-        groupId: row.groupId,
-        matchdayId: row.matchdayId,
-        matchId: row.id,
-        centralRefereeId: row.central,
-        aa1RefereeId: row.aa1,
-        aa2RefereeId: row.aa2,
-        centralRefereeName: row.central ? getRefDisplay(row.central) : null,
-        aa1RefereeName: row.aa1 ? getRefDisplay(row.aa1) : null,
-        aa2RefereeName: row.aa2 ? getRefDisplay(row.aa2) : null,
-      }));
+      const payloadMatches = toConfirm.map((row) => {
+        const c = parseVal(row.central);
+        const a1 = parseVal(row.aa1);
+        const a2 = parseVal(row.aa2);
+        const f = parseVal(row.fourth);
+        const as = parseVal(row.assessor);
+
+        return {
+          leagueId: row.leagueId,
+          groupId: row.groupId,
+          matchdayId: row.matchdayId,
+          matchId: row.id,
+
+          centralRefereeId: c.id,
+          centralExternalLabel: c.label,
+          aa1RefereeId: a1.id,
+          aa1ExternalLabel: a1.label,
+          aa2RefereeId: a2.id,
+          aa2ExternalLabel: a2.label,
+          fourthRefereeId: f.id,
+          fourthExternalLabel: f.label,
+          assessorRefereeId: as.id,
+          assessorExternalLabel: as.label,
+
+          // Nombres calculados para display histórico
+          centralRefereeName: c.id ? getRefDisplay(c.id) : c.label,
+          aa1RefereeName: a1.id ? getRefDisplay(a1.id) : a1.label,
+          aa2RefereeName: a2.id ? getRefDisplay(a2.id) : a2.label,
+          fourthRefereeName: f.id ? getRefDisplay(f.id) : f.label,
+          assessorRefereeName: as.id ? getRefDisplay(as.id) : as.label,
+        };
+      });
 
       const res = await confirmSuggestedAssignmentsAction({
         matches: payloadMatches,
@@ -558,6 +614,24 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
     setFilterTo("");
     setGlobalSearch("");
   }, []);
+
+  // 🔄 Refresh manual (Fase 2: el usuario decide cuándo recargar)
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
+  const [, forceTickUpdate] = useState(0);
+
+  const handleManualRefresh = useCallback(() => {
+    startRefreshTransition(() => {
+      router.refresh();
+    });
+    setLastRefreshedAt(Date.now());
+  }, [router]);
+
+  // Tick cada 10s para actualizar el label relativo
+  useEffect(() => {
+    if (lastRefreshedAt === null) return;
+    const id = setInterval(() => forceTickUpdate((n) => n + 1), 10_000);
+    return () => clearInterval(id);
+  }, [lastRefreshedAt]);
 
   /* ---------- LOADING DE ROL: evitamos el parpadeo ---------- */
 
@@ -710,6 +784,24 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Exportar Excel
           </Button>
+
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="ghost" onClick={handleManualRefresh} disabled={isRefreshing || isPending}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              {isRefreshing ? "Actualizando…" : "Actualizar"}
+            </Button>
+            {lastRefreshedAt !== null && !isRefreshing && (
+              <span className="text-muted-foreground text-[11px] leading-none">
+                {(() => {
+                  const secs = Math.floor((Date.now() - lastRefreshedAt) / 1000);
+                  if (secs < 10) return "Actualizado justo ahora";
+                  if (secs < 60) return `Actualizado hace ${secs}s`;
+                  const mins = Math.floor(secs / 60);
+                  return `Actualizado hace ${mins}m`;
+                })()}
+              </span>
+            )}
+          </div>
 
           <DataTableViewOptions table={table} />
         </div>

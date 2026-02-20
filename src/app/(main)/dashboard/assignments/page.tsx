@@ -1,6 +1,8 @@
 // src/app/(main)/dashboard/assignments/page.tsx
 import { Suspense } from "react";
 
+import { unstable_cache } from "next/cache";
+
 import { getFirestore } from "firebase-admin/firestore";
 
 import "@/server/admin/firebase-admin";
@@ -9,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getDelegateContext } from "@/server/auth/get-delegate-context";
 
 import { AssignmentsTable } from "./_components/assignments-table";
+import type { AssignmentMatchRow } from "./_components/assignments-types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -26,31 +29,21 @@ type GroupDoc = {
   leagueId: string;
 };
 
-type AssignmentMatchRow = {
-  id: string;
-  leagueId: string;
-  leagueName: string;
-  groupId: string;
-  groupName: string;
-  matchdayId: string;
-  matchdayNumber: number | null;
-  kickoff: string | null; // ISO string para mandarlo al cliente
-  category?: string | null;
-  jornadaLabel?: string | null;
-  homeTeamName: string;
-  awayTeamName: string;
-  venueName?: string | null;
-  centralRefereeId?: string | null;
-  aa1RefereeId?: string | null;
-  aa2RefereeId?: string | null;
-  leagueColorHex?: string | null;
-};
-
 type RefereeOption = {
   id: string;
   name: string;
   status: string;
   canAssess: boolean;
+};
+
+type MatchesDataResult = {
+  leagues: LeagueDoc[];
+  groups: GroupDoc[];
+  matches: AssignmentMatchRow[];
+};
+
+type AssignmentsDataResult = MatchesDataResult & {
+  referees: RefereeOption[];
 };
 
 function toDateSafe(input: any): Date | null {
@@ -70,27 +63,37 @@ function toDateSafe(input: any): Date | null {
   return null;
 }
 
-async function getAssignmentsData(): Promise<{
-  leagues: LeagueDoc[];
-  groups: GroupDoc[];
-  matches: AssignmentMatchRow[];
-  referees: RefereeOption[];
-}> {
+// ─── Queries puras (sin cache) ───────────────────────────────────────────────
+
+async function fetchRefereesFromFirestore(
+  shouldScope: boolean,
+  effectiveDelegateId: string | null,
+): Promise<RefereeOption[]> {
+  const db = getFirestore();
+  const base = db.collection("referees").where("status", "==", "DISPONIBLE");
+  const query = shouldScope ? base.where("delegateId", "==", effectiveDelegateId) : base;
+  const snap = await query.get();
+
+  return snap.docs.map((d) => {
+    const data = d.data() as any;
+    const status = (data?.status ?? "").toString().toUpperCase();
+    const rawName = (data?.name as string | undefined) ?? `${data?.firstName ?? ""} ${data?.lastName ?? ""}`.trim();
+    const name = rawName && rawName.trim().length > 0 ? rawName : "Sin nombre";
+    return { id: d.id, name, status, canAssess: Boolean(data?.canAssess) };
+  });
+}
+
+/**
+ * Queries paralelas de leagues → groups → matchdays → matches.
+ * 4 rondas secuenciales de awaits paralelos (vs ~92 secuenciales antes).
+ */
+async function fetchMatchesDataFromFirestore(
+  shouldScope: boolean,
+  effectiveDelegateId: string | null,
+): Promise<MatchesDataResult> {
   const db = getFirestore();
 
-  // ✅ Multi-tenant context (SUPER global vs impersonation vs DELEGADO)
-  const ctx = await getDelegateContext();
-
-  // Si NO es super global, debemos tener delegateId efectivo para scoping
-  const shouldScope = !(ctx.isSuper && !ctx.effectiveDelegateId);
-  const effectiveDelegateId = ctx.effectiveDelegateId;
-
-  // Si se requiere scope y no hay delegateId (ej: árbitro/asistente), devolvemos vacío
-  if (shouldScope && !effectiveDelegateId) {
-    return { leagues: [], groups: [], matches: [], referees: [] };
-  }
-
-  // 1) Ligas (filtradas por delegateId si aplica)
+  // ── Ronda 1: leagues ───────────────────────────────────────────────────
   const leaguesQuery = shouldScope
     ? db.collection("leagues").where("delegateId", "==", effectiveDelegateId)
     : db.collection("leagues");
@@ -107,100 +110,157 @@ async function getAssignmentsData(): Promise<{
     };
   });
 
-  // 2) Grupos (por liga) — UNA sola lectura por liga (subcolección)
+  // ── Ronda 2: groups (todas las ligas en paralelo) ──────────────────────
+  const groupResults = await Promise.all(
+    leaguesSnap.docs.map(async (lg) => {
+      const grpSnap = await lg.ref.collection("groups").get();
+      return { leagueId: lg.id, docs: grpSnap.docs };
+    }),
+  );
+
   const groups: GroupDoc[] = [];
-  const groupsByLeague = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
 
-  for (const lg of leaguesSnap.docs) {
-    const grpSnap = await lg.ref.collection("groups").get();
-    groupsByLeague.set(lg.id, grpSnap.docs);
+  type GroupMeta = {
+    leagueId: string;
+    leagueName: string;
+    leagueColor: string | null;
+    groupDoc: FirebaseFirestore.QueryDocumentSnapshot;
+  };
+  const allGroupMetas: GroupMeta[] = [];
 
-    grpSnap.forEach((g) => {
+  for (const { leagueId, docs } of groupResults) {
+    const lgData = leaguesSnap.docs.find((d) => d.id === leagueId)?.data() as any;
+    const leagueName = lgData?.name ?? "Liga";
+    const leagueColor = lgData?.color ?? null;
+
+    for (const g of docs) {
       const data = g.data() as any;
       groups.push({
         id: g.id,
         name: data?.name ?? data?.code ?? "Grupo",
-        leagueId: lg.id,
+        leagueId,
       });
-    });
-  }
-
-  // 3) Partidos (solo de las leagues ya filtradas)
-  const matches: AssignmentMatchRow[] = [];
-
-  for (const lg of leaguesSnap.docs) {
-    const leagueId = lg.id;
-    const leagueData = lg.data() as any;
-    const leagueName = leagueData?.name ?? "Liga";
-
-    const groupDocs = groupsByLeague.get(leagueId) ?? [];
-
-    for (const g of groupDocs) {
-      const groupId = g.id;
-      const groupData = g.data() as any;
-      const groupName = groupData?.name ?? groupData?.code ?? "Grupo";
-
-      const matchdaysSnap = await g.ref.collection("matchdays").get();
-      for (const md of matchdaysSnap.docs) {
-        const mdData = md.data() as any;
-        const matchdayId = md.id;
-        const matchdayNumber: number | null = typeof mdData?.number === "number" ? mdData.number : null;
-
-        const matchesSnap = await md.ref.collection("matches").orderBy("kickoff", "asc").get();
-
-        matchesSnap.forEach((m) => {
-          const data = m.data() as any;
-
-          const kickoffDate = toDateSafe(data.kickoff ?? data.date);
-          const kickoffIso = kickoffDate ? kickoffDate.toISOString() : null;
-
-          matches.push({
-            id: m.id,
-            leagueId,
-            leagueName,
-            groupId,
-            groupName,
-            matchdayId,
-            matchdayNumber,
-            kickoff: kickoffIso,
-            category: data?.category ?? null,
-            jornadaLabel: mdData?.label ?? null,
-            homeTeamName: data?.homeTeamName ?? "Local",
-            awayTeamName: data?.awayTeamName ?? "Visitante",
-            venueName: data?.venueName ?? data?.stadium ?? null,
-            centralRefereeId: data?.centralRefereeId ?? null,
-            aa1RefereeId: data?.aa1RefereeId ?? null,
-            aa2RefereeId: data?.aa2RefereeId ?? null,
-            leagueColorHex: leagueData?.color ?? null,
-          });
-        });
-      }
+      allGroupMetas.push({ leagueId, leagueName, leagueColor, groupDoc: g });
     }
   }
 
-  // 4) Árbitros disponibles (filtrados por delegateId si aplica)
-  const refereesBase = db.collection("referees").where("status", "==", "DISPONIBLE");
+  // ── Ronda 3: matchdays (todos los grupos en paralelo) ──────────────────
+  const matchdayResults = await Promise.all(
+    allGroupMetas.map(async (gm) => {
+      const mdSnap = await gm.groupDoc.ref.collection("matchdays").get();
+      return { gm, docs: mdSnap.docs };
+    }),
+  );
 
-  const refereesSnap = shouldScope
-    ? await refereesBase.where("delegateId", "==", effectiveDelegateId).get()
-    : await refereesBase.get();
+  type MatchdayMeta = {
+    leagueId: string;
+    leagueName: string;
+    leagueColor: string | null;
+    groupId: string;
+    groupName: string;
+    matchdayDoc: FirebaseFirestore.QueryDocumentSnapshot;
+  };
+  const allMatchdayMetas: MatchdayMeta[] = [];
 
-  const referees: RefereeOption[] = refereesSnap.docs.map((d) => {
-    const data = d.data() as any;
-    const status = (data?.status ?? "").toString().toUpperCase();
+  for (const { gm, docs } of matchdayResults) {
+    const groupData = gm.groupDoc.data() as any;
+    const groupName = groupData?.name ?? groupData?.code ?? "Grupo";
 
-    const rawName = (data?.name as string | undefined) ?? `${data?.firstName ?? ""} ${data?.lastName ?? ""}`.trim();
-    const name = rawName && rawName.trim().length > 0 ? rawName : "Sin nombre";
+    for (const md of docs) {
+      allMatchdayMetas.push({
+        leagueId: gm.leagueId,
+        leagueName: gm.leagueName,
+        leagueColor: gm.leagueColor,
+        groupId: gm.groupDoc.id,
+        groupName,
+        matchdayDoc: md,
+      });
+    }
+  }
 
-    return {
-      id: d.id,
-      name,
-      status,
-      canAssess: Boolean(data?.canAssess),
-    };
-  });
+  // ── Ronda 4: matches (todos los matchdays en paralelo) ─────────────────
+  const matchResults = await Promise.all(
+    allMatchdayMetas.map(async (mm) => {
+      const matchesSnap = await mm.matchdayDoc.ref.collection("matches").orderBy("kickoff", "asc").get();
+      return { mm, docs: matchesSnap.docs };
+    }),
+  );
 
-  return { leagues, groups, matches, referees };
+  const matches: AssignmentMatchRow[] = [];
+
+  for (const { mm, docs } of matchResults) {
+    const mdData = mm.matchdayDoc.data() as any;
+    const matchdayNumber: number | null = typeof mdData?.number === "number" ? mdData.number : null;
+
+    for (const m of docs) {
+      const data = m.data() as any;
+      const kickoffDate = toDateSafe(data.kickoff ?? data.date);
+      const kickoffIso = kickoffDate ? kickoffDate.toISOString() : null;
+
+      matches.push({
+        id: m.id,
+        leagueId: mm.leagueId,
+        leagueName: mm.leagueName,
+        groupId: mm.groupId,
+        groupName: mm.groupName,
+        matchdayId: mm.matchdayDoc.id,
+        matchdayNumber,
+        kickoff: kickoffIso,
+        category: data?.category ?? null,
+        jornadaLabel: mdData?.label ?? null,
+        homeTeamName: data?.homeTeamName ?? "Local",
+        awayTeamName: data?.awayTeamName ?? "Visitante",
+        venueName: data?.venueName ?? data?.stadium ?? null,
+        centralRefereeId: data?.centralRefereeId ?? null,
+        centralExternalLabel: data?.centralExternalLabel ?? null,
+        aa1RefereeId: data?.aa1RefereeId ?? null,
+        aa1ExternalLabel: data?.aa1ExternalLabel ?? null,
+        aa2RefereeId: data?.aa2RefereeId ?? null,
+        aa2ExternalLabel: data?.aa2ExternalLabel ?? null,
+        fourthRefereeId: data?.fourthRefereeId ?? null,
+        fourthExternalLabel: data?.fourthExternalLabel ?? null,
+        assessorRefereeId: data?.assessorRefereeId ?? null,
+        assessorExternalLabel: data?.assessorExternalLabel ?? null,
+        leagueColorHex: mm.leagueColor,
+      });
+    }
+  }
+
+  return { leagues, groups, matches };
+}
+
+// ─── Loader principal con cache ──────────────────────────────────────────────
+
+async function getAssignmentsData(): Promise<AssignmentsDataResult> {
+  // Auth siempre fresco (lee cookies/session)
+  const ctx = await getDelegateContext();
+
+  const shouldScope = !(ctx.isSuper && !ctx.effectiveDelegateId);
+  const effectiveDelegateId = ctx.effectiveDelegateId;
+
+  if (shouldScope && !effectiveDelegateId) {
+    return { leagues: [], groups: [], matches: [], referees: [] };
+  }
+
+  const delegateKey = shouldScope ? (effectiveDelegateId ?? "global") : "global";
+
+  // Referees: TTL largo (10 min) — cambian con poca frecuencia
+  const getCachedReferees = unstable_cache(
+    () => fetchRefereesFromFirestore(shouldScope, effectiveDelegateId),
+    ["referees", delegateKey],
+    { revalidate: 600, tags: [`referees:${delegateKey}`] },
+  );
+
+  // Assignments (leagues + groups + matchdays + matches): TTL corto (2 min)
+  const getCachedMatchesData = unstable_cache(
+    () => fetchMatchesDataFromFirestore(shouldScope, effectiveDelegateId),
+    ["assignments", delegateKey],
+    { revalidate: 120, tags: [`assignments:${delegateKey}`] },
+  );
+
+  const [referees, matchesData] = await Promise.all([getCachedReferees(), getCachedMatchesData()]);
+
+  return { ...matchesData, referees };
 }
 
 export default async function Page() {

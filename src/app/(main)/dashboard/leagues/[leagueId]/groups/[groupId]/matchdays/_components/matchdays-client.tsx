@@ -16,6 +16,8 @@ import { getGroupAction } from "@/server/actions/groups.actions";
 import { getLeagueAction } from "@/server/actions/leagues.actions";
 import { deleteMatchdayAction } from "@/server/actions/matchdays.actions";
 
+import { FmfImportDialog } from "./fmf-import-dialog";
+
 // --- Helper seguro ---
 function toDateClientSafe(input: unknown): Date | null {
   if (!input) return null;
@@ -218,6 +220,7 @@ export function MatchdaysClient({ initialData, leagueId, groupId }: Props) {
                 Generar calendario
               </Link>
             </Button>
+            <FmfImportDialog leagueId={leagueId} groupId={groupId} />
           </div>
         )}
       </div>

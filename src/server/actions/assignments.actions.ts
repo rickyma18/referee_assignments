@@ -2,6 +2,8 @@
 "use server";
 import "server-only";
 
+import { updateTag } from "next/cache";
+
 import { getFirestore } from "firebase-admin/firestore";
 
 import { getDelegateContext } from "@/server/auth/get-delegate-context";
@@ -75,6 +77,15 @@ export async function assignManualTernaAction(formData: FormData) {
     const centralRefereeName = formData.get("centralRefereeName");
     const aa1RefereeName = formData.get("aa1RefereeName");
     const aa2RefereeName = formData.get("aa2RefereeName");
+
+    // Fourth y Assessor son opcionales.
+    // formData.get() devuelve null si la clave NO fue enviada (→ conservar en DB)
+    // devuelve "" si fue enviada vacía (→ el usuario borró el campo)
+    // devuelve "id" si fue enviada con valor (→ guardar)
+    const fourthRawId = formData.get("fourthRefereeId");
+    const fourthRawName = formData.get("fourthRefereeName");
+    const assessorRawId = formData.get("assessorRefereeId");
+    const assessorRawName = formData.get("assessorRefereeName");
 
     // Si quieres guardar quién asignó, puedes mandar userId en el formData
     const updatedBy = formData.get("userId") ? String(formData.get("userId")) : null;
@@ -232,7 +243,8 @@ export async function assignManualTernaAction(formData: FormData) {
     // 6) Si todo bien (o solo advertencia), actualizamos el partido con la terna
     const now = new Date();
 
-    await matchRef.update({
+    // Construimos el payload base (central/aa1/aa2 siempre se actualizan)
+    const updateData: Record<string, unknown> = {
       centralRefereeId,
       aa1RefereeId,
       aa2RefereeId,
@@ -241,7 +253,40 @@ export async function assignManualTernaAction(formData: FormData) {
       aa2RefereeName: aa2RefereeName ? String(aa2RefereeName) : (match.aa2RefereeName ?? null),
       updatedAt: now,
       updatedBy,
-    });
+    };
+
+    // Fourth: solo tocar si el key fue enviado en el FormData
+    // - fourthRawId === null  → clave ausente → no incluimos el campo (Firestore lo conserva)
+    // - fourthRawId === ""    → usuario borró → guardar null + limpiar label y nombre
+    // - fourthRawId === "id"  → usuario seleccionó → guardar id + limpiar label
+    if (fourthRawId !== null) {
+      const fourthRefereeId = String(fourthRawId) || null;
+      updateData.fourthRefereeId = fourthRefereeId;
+      updateData.fourthExternalLabel = null; // este flujo solo usa IDs
+      updateData.fourthRefereeName = fourthRefereeId
+        ? fourthRawName !== null
+          ? String(fourthRawName) || null
+          : (match.fourthRefereeName ?? null)
+        : null; // si se borró el árbitro, también se limpia el nombre
+    }
+
+    // Assessor: mismo patrón
+    if (assessorRawId !== null) {
+      const assessorRefereeId = String(assessorRawId) || null;
+      updateData.assessorRefereeId = assessorRefereeId;
+      updateData.assessorExternalLabel = null;
+      updateData.assessorRefereeName = assessorRefereeId
+        ? assessorRawName !== null
+          ? String(assessorRawName) || null
+          : (match.assessorRefereeName ?? null)
+        : null;
+    }
+
+    await matchRef.update(updateData);
+
+    // ✅ Invalidar cache de assignments para que router.refresh reciba datos frescos
+    const delegateKey = ctx.effectiveDelegateId ?? "global";
+    updateTag(`assignments:${delegateKey}`);
 
     // 7) Respuesta lógica de la asignación
     if (rcsEvaluation.belowThreshold && rcsEvaluation.policy === "WARN") {
@@ -277,12 +322,22 @@ export async function confirmSuggestedAssignmentsAction(payload: {
     groupId: string;
     matchdayId: string;
     matchId: string;
-    centralRefereeId: string;
-    aa1RefereeId: string;
-    aa2RefereeId: string;
+    centralRefereeId?: string | null;
+    centralExternalLabel?: string | null;
+    aa1RefereeId?: string | null;
+    aa1ExternalLabel?: string | null;
+    aa2RefereeId?: string | null;
+    aa2ExternalLabel?: string | null;
     centralRefereeName?: string | null;
     aa1RefereeName?: string | null;
     aa2RefereeName?: string | null;
+    // Nombres y IDs opcionales para 4to y Asesor
+    fourthRefereeId?: string | null;
+    fourthExternalLabel?: string | null;
+    assessorRefereeId?: string | null;
+    assessorExternalLabel?: string | null;
+    fourthRefereeName?: string | null;
+    assessorRefereeName?: string | null;
   }[];
   userId?: string | null;
 }) {
@@ -312,14 +367,19 @@ export async function confirmSuggestedAssignmentsAction(payload: {
     for (const m of matches) {
       // Validaciones mínimas
       if (!m.leagueId || !m.groupId || !m.matchdayId || !m.matchId) continue;
-      if (!m.centralRefereeId || !m.aa1RefereeId || !m.aa2RefereeId) continue;
 
-      // Evitar ternas con árbitros duplicados
-      if (
-        m.centralRefereeId === m.aa1RefereeId ||
-        m.centralRefereeId === m.aa2RefereeId ||
-        m.aa1RefereeId === m.aa2RefereeId
-      ) {
+      // Central/AA1/AA2 requeridos (ID o ExternalLabel)
+      const hasCentral = m.centralRefereeId ?? m.centralExternalLabel;
+      const hasAa1 = m.aa1RefereeId ?? m.aa1ExternalLabel;
+      const hasAa2 = m.aa2RefereeId ?? m.aa2ExternalLabel;
+
+      if (!hasCentral || !hasAa1 || !hasAa2) continue;
+
+      // Evitar ternas con árbitros duplicados (solo entre IDs reales)
+      // Si son etiquetas externas, no validamos duplicidad (pueden ser "FORANEO" repetido)
+      const ids = [m.centralRefereeId, m.aa1RefereeId, m.aa2RefereeId].filter(Boolean) as string[];
+      const uniqueIds = new Set(ids);
+      if (uniqueIds.size !== ids.length) {
         continue;
       }
 
@@ -333,13 +393,34 @@ export async function confirmSuggestedAssignmentsAction(payload: {
         .collection("matches")
         .doc(m.matchId);
 
+      // Lógica de limpieza: Si hay ID, label=undefined (se borra). Si hay Label, ID=null (se borra).
+      // PERO al actualizar en Firestore, undefined se ignora, null borra.
+      // Así que explícitamente mandamos null si no aplica.
+
       batch.update(matchRef, {
-        centralRefereeId: m.centralRefereeId,
-        aa1RefereeId: m.aa1RefereeId,
-        aa2RefereeId: m.aa2RefereeId,
+        centralRefereeId: m.centralRefereeId ?? null,
+        centralExternalLabel: m.centralRefereeId ? null : (m.centralExternalLabel ?? null),
+
+        aa1RefereeId: m.aa1RefereeId ?? null,
+        aa1ExternalLabel: m.aa1RefereeId ? null : (m.aa1ExternalLabel ?? null),
+
+        aa2RefereeId: m.aa2RefereeId ?? null,
+        aa2ExternalLabel: m.aa2RefereeId ? null : (m.aa2ExternalLabel ?? null),
+
         centralRefereeName: m.centralRefereeName ?? null,
         aa1RefereeName: m.aa1RefereeName ?? null,
         aa2RefereeName: m.aa2RefereeName ?? null,
+
+        // 4to y Asesor (opcionales)
+        fourthRefereeId: m.fourthRefereeId ?? null,
+        fourthExternalLabel: m.fourthRefereeId ? null : (m.fourthExternalLabel ?? null),
+
+        assessorRefereeId: m.assessorRefereeId ?? null,
+        assessorExternalLabel: m.assessorRefereeId ? null : (m.assessorExternalLabel ?? null),
+
+        fourthRefereeName: m.fourthRefereeName ?? null,
+        assessorRefereeName: m.assessorRefereeName ?? null,
+
         updatedAt: now,
         updatedBy: userId ?? null,
       });
@@ -352,6 +433,10 @@ export async function confirmSuggestedAssignmentsAction(payload: {
     }
 
     await batch.commit();
+
+    // ✅ Invalidar cache de assignments para que router.refresh reciba datos frescos
+    const delegateKey = ctx.effectiveDelegateId ?? "global";
+    updateTag(`assignments:${delegateKey}`);
 
     return { updatedCount };
   });

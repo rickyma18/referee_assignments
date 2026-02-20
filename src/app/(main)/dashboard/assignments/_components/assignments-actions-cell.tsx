@@ -20,6 +20,22 @@ type Props = {
 
 export function ActionsCell({ row: m, meta }: Props) {
   const [saving, setSaving] = React.useState(false);
+  const [justSaved, setJustSaved] = React.useState(false);
+  const savedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Limpia el timer si el componente se desmonta
+  React.useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
+
+  function markSaved() {
+    meta.onSaved();
+    setJustSaved(true);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setJustSaved(false), 2500);
+  }
 
   // La terna "completa" sigue siendo central + AA1 + AA2; 4º y asesor son opcionales
   const hasTerna = Boolean(m.central && m.aa1 && m.aa2);
@@ -63,16 +79,13 @@ export function ActionsCell({ row: m, meta }: Props) {
       if (aa1Name) fd.append("aa1RefereeName", aa1Name);
       if (aa2Name) fd.append("aa2RefereeName", aa2Name);
 
-      // Nuevos campos opcionales (4º árbitro y asesor)
-      if (m.fourth) {
-        fd.append("fourthRefereeId", m.fourth);
-        if (fourthName) fd.append("fourthRefereeName", fourthName);
-      }
+      // 4º árbitro y asesor: siempre se envían (vacío = el usuario los borró)
+      // El server usa: clave ausente→conservar, vacío→null, valor→guardar
+      fd.append("fourthRefereeId", m.fourth || "");
+      if (m.fourth && fourthName) fd.append("fourthRefereeName", fourthName);
 
-      if (m.assessor) {
-        fd.append("assessorRefereeId", m.assessor);
-        if (assessorName) fd.append("assessorRefereeName", assessorName);
-      }
+      fd.append("assessorRefereeId", m.assessor || "");
+      if (m.assessor && assessorName) fd.append("assessorRefereeName", assessorName);
 
       if (options?.ignoreRecentTeamConflicts) {
         fd.append("ignoreRecentTeamConflicts", "true");
@@ -159,18 +172,14 @@ export function ActionsCell({ row: m, meta }: Props) {
           data.error ?? "Advertencia: el RCS del central está por debajo del MDS recomendado para este partido.",
         );
 
-        meta.onSaved();
+        markSaved();
         return;
       }
 
       // 🔹 Éxito normal
       if (data.code === "OK") {
         toast.success("Terna asignada correctamente.");
-
-        if (data.rcsEvaluation) {
-          meta.onSaved();
-        }
-
+        markSaved();
         return;
       }
 
@@ -200,10 +209,15 @@ export function ActionsCell({ row: m, meta }: Props) {
           {saving ? "Guardando…" : hasTerna ? "Actualizar" : "Asignar"}
         </Button>
         <Badge
-          variant={hasTerna ? "default" : "outline"}
-          className={cn("mt-0.5 text-[10px]", hasTerna && "border-emerald-200 bg-emerald-100 text-emerald-700")}
+          variant={justSaved ? "default" : hasTerna ? "default" : "outline"}
+          className={cn(
+            "mt-0.5 text-[10px]",
+            justSaved
+              ? "border-blue-200 bg-blue-100 text-blue-700"
+              : hasTerna && "border-emerald-200 bg-emerald-100 text-emerald-700",
+          )}
         >
-          {hasTerna ? "Terna completa" : "Sin terna"}
+          {justSaved ? "Guardado" : hasTerna ? "Terna completa" : "Sin terna"}
         </Badge>
       </div>
     </div>
