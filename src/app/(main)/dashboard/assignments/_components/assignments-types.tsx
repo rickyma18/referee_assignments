@@ -61,6 +61,17 @@ export type AssignmentTableMeta = {
   canEdit: boolean; // 👈 clave para bloquear edición a ARBITRO
   updateRow: (id: string, updater: (prev: AssignmentRowState) => AssignmentRowState) => void;
   onSaved: () => void;
+  isRowDirty: (id: string) => boolean;
+  markRowSaved: (id: string, snapshot: RowSnapshot) => void;
+};
+
+/** Snapshot de los 5 campos editables para comparación dirty */
+export type RowSnapshot = {
+  central: string;
+  aa1: string;
+  aa2: string;
+  fourth: string;
+  assessor: string;
 };
 
 export type AssignmentsTableProps = {

@@ -125,21 +125,33 @@ export async function assignManualTernaAction(formData: FormData) {
     const hasAa1 = aa1RefereeId ?? aa1ExternalLabel;
     const hasAa2 = aa2RefereeId ?? aa2ExternalLabel;
 
-    if (!leagueId || !groupId || !matchdayId || !matchId || !hasCentral || !hasAa1 || !hasAa2) {
+    // "Limpiar terna": los tres roles principales vacíos → operación de borrado
+    const isAllClear = !hasCentral && !hasAa1 && !hasAa2;
+
+    if (!leagueId || !groupId || !matchdayId || !matchId) {
       return {
         code: "MISSING_PARAMS",
         error: "Faltan parámetros obligatorios para asignar la terna.",
       };
     }
 
-    // Duplicados: solo entre IDs reales (labels externos como "FORANEO" pueden repetirse)
-    const coreRealIds = [centralRefereeId, aa1RefereeId, aa2RefereeId].filter(Boolean) as string[];
-    const uniqueCoreIds = new Set(coreRealIds);
-    if (uniqueCoreIds.size !== coreRealIds.length) {
+    if (!isAllClear && (!hasCentral || !hasAa1 || !hasAa2)) {
       return {
-        code: "DUPLICATE_REFEREES",
-        error: "Un árbitro no puede repetirse como central y asistente en la misma terna.",
+        code: "MISSING_PARAMS",
+        error: "Faltan parámetros obligatorios para asignar la terna.",
       };
+    }
+
+    // Duplicados: solo aplica cuando hay terna (roles no vacíos)
+    if (!isAllClear) {
+      const coreRealIds = [centralRefereeId, aa1RefereeId, aa2RefereeId].filter(Boolean) as string[];
+      const uniqueCoreIds = new Set(coreRealIds);
+      if (uniqueCoreIds.size !== coreRealIds.length) {
+        return {
+          code: "DUPLICATE_REFEREES",
+          error: "Un árbitro no puede repetirse como central y asistente en la misma terna.",
+        };
+      }
     }
 
     const db = getFirestore();
@@ -174,6 +186,33 @@ export async function assignManualTernaAction(formData: FormData) {
       };
     }
     await assertLeagueBelongsToDelegate(realLeagueId, ctx);
+
+    // Limpiar terna: borrar todas las designaciones del partido y salir
+    if (isAllClear) {
+      const now = new Date();
+      await matchRef.update({
+        centralRefereeId: null,
+        centralExternalLabel: null,
+        centralRefereeName: null,
+        aa1RefereeId: null,
+        aa1ExternalLabel: null,
+        aa1RefereeName: null,
+        aa2RefereeId: null,
+        aa2ExternalLabel: null,
+        aa2RefereeName: null,
+        fourthRefereeId: null,
+        fourthExternalLabel: null,
+        fourthRefereeName: null,
+        assessorRefereeId: null,
+        assessorExternalLabel: null,
+        assessorRefereeName: null,
+        updatedAt: now,
+        ...(updatedBy ? { updatedBy } : {}),
+      });
+      const delegateKey = ctx.effectiveDelegateId ?? "global";
+      updateTag(`assignments:${delegateKey}`);
+      return { code: "OK" };
+    }
 
     const matchdayNumber: number = match.matchdayNumber ?? 0;
     const homeTeamId: string = match.homeTeamId;
