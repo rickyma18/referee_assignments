@@ -1,4 +1,4 @@
-/* eslint-disable max-lines, complexity */
+/* eslint-disable complexity */
 "use client";
 
 // src/app/(main)/dashboard/assignments/_components/referee-select.tsx

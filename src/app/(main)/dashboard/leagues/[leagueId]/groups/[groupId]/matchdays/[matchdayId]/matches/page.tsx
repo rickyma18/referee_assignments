@@ -1,6 +1,7 @@
 // src/app/(main)/dashboard/leagues/[leagueId]/groups/[groupId]/matchdays/[matchdayId]/matches/page.tsx
 import { Suspense } from "react";
 
+import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -9,8 +10,9 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import "@/server/admin/firebase-admin";
 import { EntityHeader } from "@/components/entity-header";
 import { Button } from "@/components/ui/button";
+import { getDelegateContext } from "@/server/auth/get-delegate-context";
 
-import { MatchCard } from "./_components/match-card";
+import { MatchCardClient } from "./_components/match-card-client";
 import { MatchdayToolbar, MatchCardSkeleton } from "./_components/matchday-toolbar";
 
 export const dynamicParams = true;
@@ -42,6 +44,23 @@ type MatchDoc = {
   awayGoals?: number | null;
   notes?: string | null;
 
+  // designaciones
+  centralRefereeId?: string | null;
+  centralExternalLabel?: string | null;
+  centralRefereeName?: string | null;
+  aa1RefereeId?: string | null;
+  aa1ExternalLabel?: string | null;
+  aa1RefereeName?: string | null;
+  aa2RefereeId?: string | null;
+  aa2ExternalLabel?: string | null;
+  aa2RefereeName?: string | null;
+  fourthRefereeId?: string | null;
+  fourthExternalLabel?: string | null;
+  fourthRefereeName?: string | null;
+  assessorRefereeId?: string | null;
+  assessorExternalLabel?: string | null;
+  assessorRefereeName?: string | null;
+
   // añadidos
   docPath?: string;
   leagueId?: string;
@@ -66,12 +85,54 @@ type MatchVM = {
   homeGoals?: number | null;
   awayGoals?: number | null;
 
+  // designaciones
+  centralRefereeId?: string | null;
+  centralExternalLabel?: string | null;
+  centralRefereeName?: string | null;
+  aa1RefereeId?: string | null;
+  aa1ExternalLabel?: string | null;
+  aa1RefereeName?: string | null;
+  aa2RefereeId?: string | null;
+  aa2ExternalLabel?: string | null;
+  aa2RefereeName?: string | null;
+  fourthRefereeId?: string | null;
+  fourthExternalLabel?: string | null;
+  fourthRefereeName?: string | null;
+  assessorRefereeId?: string | null;
+  assessorExternalLabel?: string | null;
+  assessorRefereeName?: string | null;
+
   // añadidos
   docPath?: string;
   leagueId?: string;
   groupId?: string;
   matchdayId?: string;
 };
+
+type RefereeOption = {
+  id: string;
+  name: string;
+  status: string;
+  canAssess: boolean;
+};
+
+async function fetchReferees(shouldScope: boolean, effectiveDelegateId: string | null): Promise<RefereeOption[]> {
+  if (shouldScope && !effectiveDelegateId) return [];
+  const db = getFirestore();
+  const base = db.collection("referees").where("status", "==", "DISPONIBLE");
+  const query = shouldScope ? base.where("delegateId", "==", effectiveDelegateId) : base;
+  const snap = await query.get();
+  return snap.docs.map((d) => {
+    const data = d.data() as any;
+    const rawName = (data?.name as string | undefined) ?? `${data?.firstName ?? ""} ${data?.lastName ?? ""}`.trim();
+    return {
+      id: d.id,
+      name: rawName.trim() || "Sin nombre",
+      status: String(data?.status ?? ""),
+      canAssess: Boolean(data?.canAssess),
+    };
+  });
+}
 
 function toDateSafe(input: any): Date | null {
   if (!input) return null;
@@ -247,6 +308,23 @@ async function getMatchesWithTeams(rawParams: Params): Promise<MatchVM[]> {
       homeGoals: m.homeGoals ?? null,
       awayGoals: m.awayGoals ?? null,
 
+      // designaciones — read directly from the match doc (no extra queries)
+      centralRefereeId: m.centralRefereeId ?? null,
+      centralExternalLabel: m.centralExternalLabel ?? null,
+      centralRefereeName: m.centralRefereeName ?? null,
+      aa1RefereeId: m.aa1RefereeId ?? null,
+      aa1ExternalLabel: m.aa1ExternalLabel ?? null,
+      aa1RefereeName: m.aa1RefereeName ?? null,
+      aa2RefereeId: m.aa2RefereeId ?? null,
+      aa2ExternalLabel: m.aa2ExternalLabel ?? null,
+      aa2RefereeName: m.aa2RefereeName ?? null,
+      fourthRefereeId: m.fourthRefereeId ?? null,
+      fourthExternalLabel: m.fourthExternalLabel ?? null,
+      fourthRefereeName: m.fourthRefereeName ?? null,
+      assessorRefereeId: m.assessorRefereeId ?? null,
+      assessorExternalLabel: m.assessorExternalLabel ?? null,
+      assessorRefereeName: m.assessorRefereeName ?? null,
+
       docPath: m.docPath,
       leagueId: m.leagueId,
       groupId: m.groupId,
@@ -273,11 +351,31 @@ export default async function Page({
   const estadoFilter = sp?.estado ?? "todos";
 
   const db = getFirestore();
-  const header = await getMatchdayHeader(db, p);
-  if (!header) notFound();
 
-  const { league, group } = await getLeagueAndGroupHeader(db, p);
-  const matches = await getMatchesWithTeams(p);
+  // ── Auth: role + referees (only needed for canEdit roles) ──────────────
+  const ctx = await getDelegateContext();
+  const role = ctx.role ?? "DESCONOCIDO";
+  const canEdit = role === "SUPERUSUARIO" || role === "DELEGADO" || role === "ASISTENTE";
+
+  const shouldScope = !(ctx.isSuper && !ctx.effectiveDelegateId);
+  const effectiveDelegateId = ctx.effectiveDelegateId ?? null;
+  const delegateKey = shouldScope ? (effectiveDelegateId ?? "global") : "global";
+
+  // Cache referees for 10 min — they change rarely
+  const getCachedReferees = unstable_cache(
+    () => fetchReferees(shouldScope, effectiveDelegateId),
+    ["referees", delegateKey],
+    { revalidate: 600, tags: [`referees:${delegateKey}`] },
+  );
+
+  const [header, { league, group }, matches, referees] = await Promise.all([
+    getMatchdayHeader(db, p),
+    getLeagueAndGroupHeader(db, p),
+    getMatchesWithTeams(p),
+    canEdit ? getCachedReferees() : Promise.resolve<RefereeOption[]>([]),
+  ]);
+
+  if (!header) notFound();
 
   const filteredMatches = filterMatchesByEstado(matches, estadoFilter);
 
@@ -332,18 +430,26 @@ export default async function Page({
             </Button>
           </div>
         ) : (
-          <MatchesGrid matches={filteredMatches} />
+          <MatchesGrid matches={filteredMatches} referees={referees} canEdit={canEdit} />
         )}
       </Suspense>
     </div>
   );
 }
 
-function MatchesGrid({ matches }: { matches: MatchVM[] }) {
+function MatchesGrid({
+  matches,
+  referees,
+  canEdit,
+}: {
+  matches: MatchVM[];
+  referees: RefereeOption[];
+  canEdit: boolean;
+}) {
   return (
     <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
       {matches.map((m) => (
-        <MatchCard
+        <MatchCardClient
           key={m.id}
           id={m.id}
           date={m.dateObj ?? null}
@@ -370,6 +476,31 @@ function MatchesGrid({ matches }: { matches: MatchVM[] }) {
             groupId: m.groupId,
             matchdayId: m.matchdayId,
           }}
+          assignments={{
+            centralRefereeId: m.centralRefereeId,
+            centralExternalLabel: m.centralExternalLabel,
+            centralRefereeName: m.centralRefereeName,
+            aa1RefereeId: m.aa1RefereeId,
+            aa1ExternalLabel: m.aa1ExternalLabel,
+            aa1RefereeName: m.aa1RefereeName,
+            aa2RefereeId: m.aa2RefereeId,
+            aa2ExternalLabel: m.aa2ExternalLabel,
+            aa2RefereeName: m.aa2RefereeName,
+            fourthRefereeId: m.fourthRefereeId,
+            fourthExternalLabel: m.fourthExternalLabel,
+            fourthRefereeName: m.fourthRefereeName,
+            assessorRefereeId: m.assessorRefereeId,
+            assessorExternalLabel: m.assessorExternalLabel,
+            assessorRefereeName: m.assessorRefereeName,
+          }}
+          matchIds={{
+            leagueId: m.leagueId ?? "",
+            groupId: m.groupId ?? "",
+            matchdayId: m.matchdayId ?? "",
+            matchId: m.id,
+          }}
+          referees={referees}
+          canEdit={canEdit}
         />
       ))}
     </div>

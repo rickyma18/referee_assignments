@@ -1,6 +1,6 @@
-// config/firebaseConfig.ts
-import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { getAnalytics, isSupported, Analytics } from "firebase/analytics";
+// config/firebase-config.ts
+import { getAnalytics, isSupported } from "firebase/analytics";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -16,25 +16,21 @@ const firebaseConfig = {
 };
 
 // ✅ Inicializa Firebase solo una vez
-let app: FirebaseApp;
-if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApp();
-}
+export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // ⚙️ Inicializa Analytics solo en el navegador y si está soportado
-let analytics: Analytics | undefined;
-
 if (typeof window !== "undefined") {
-  isSupported().then((supported) => {
-    if (supported) {
-      analytics = getAnalytics(app);
-    }
-  });
+  isSupported()
+    .then((supported) => {
+      if (supported) {
+        getAnalytics(app);
+      }
+    })
+    .catch(() => {
+      /* ignore */
+    });
 }
 
 // 🔥 Inicializa Auth y Firestore
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export { app, analytics };

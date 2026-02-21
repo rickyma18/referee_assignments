@@ -1,7 +1,9 @@
 "use client";
-import { db } from "@/config/firebaseConfig";
-import { collection, addDoc, getDocs } from "firebase/firestore";
 import { useState } from "react";
+
+import { collection, addDoc, getDocs } from "firebase/firestore";
+
+import { db } from "@/config/firebase-config";
 
 export default function TestPage() {
   const [data, setData] = useState<any[]>([]);
@@ -24,10 +26,10 @@ export default function TestPage() {
     <div className="p-6">
       <h1 className="text-2xl font-bold">Prueba Firestore</h1>
       <div className="mt-4 flex gap-4">
-        <button onClick={addTest} className="bg-blue-500 text-white px-4 py-2 rounded">
+        <button onClick={addTest} className="rounded bg-blue-500 px-4 py-2 text-white">
           Agregar documento
         </button>
-        <button onClick={loadTests} className="bg-green-500 text-white px-4 py-2 rounded">
+        <button onClick={loadTests} className="rounded bg-green-500 px-4 py-2 text-white">
           Cargar documentos
         </button>
       </div>

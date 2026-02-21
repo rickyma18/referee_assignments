@@ -15,7 +15,7 @@ import { validateMatchesDryRun, confirmMatchesImport } from "@/server/actions/ma
  *   Formato A (directo): { ok, created, message?, errors? }
  *   Formato B (secureWrite): { ok, data: { ok, created, errors? }, message? }
  */
-// eslint-disable-next-line complexity
+
 type AnyRes = any;
 
 // eslint-disable-next-line complexity

@@ -107,7 +107,6 @@ export default function TeamsExplorerPage() {
         setLoadingLeagues(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Abrir lo que venga en la URL (solo agregar, NO reabrir cerradas)

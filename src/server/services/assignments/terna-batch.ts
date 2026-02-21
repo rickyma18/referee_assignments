@@ -313,8 +313,6 @@ export async function suggestTernasForMatchesBalanced(
 
       matchData = matchSnap.data() as any;
     }
-
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const alreadyHasAssignment = !!matchData.centralRefereeId || !!matchData.aa1RefereeId || !!matchData.aa2RefereeId;
 
     if (!ignoreExistingAssignment && alreadyHasAssignment) {

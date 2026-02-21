@@ -332,7 +332,7 @@ export async function generateMatchdaysBulkAction(payload: GenerateMatchdaysPayl
       if (existingNumbers.has(number)) {
         skippedNumbers.push(number);
         // no creamos nada para este número, pero seguimos con el siguiente
-        // eslint-disable-next-line no-continue
+
         continue;
       }
 
