@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getFirestore, Timestamp, FieldPath } from "firebase-admin/firestore";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 
 import "@/server/admin/firebase-admin";
 import { EntityHeader } from "@/components/entity-header";
@@ -27,6 +27,10 @@ type MatchDoc = {
   id: string;
   homeTeamId: string;
   awayTeamId: string;
+  homeTeamName?: string | null;
+  awayTeamName?: string | null;
+  homeTeamLogoUrl?: string | null;
+  awayTeamLogoUrl?: string | null;
   kickoff?: Timestamp | Date | string | null;
   date?: Timestamp | Date | string | null;
   stadium?: string | null;
@@ -45,14 +49,6 @@ type MatchDoc = {
   matchdayId?: string;
 };
 
-type TeamDoc = {
-  id: string;
-  name: string;
-  logoUrl?: string | null;
-  municipality?: string | null;
-  stadium?: string | null;
-};
-
 type MatchVM = {
   id: string;
   dateObj: Date | null;
@@ -65,10 +61,10 @@ type MatchVM = {
   awayTeamId: string;
   homeTeamName?: string | null;
   awayTeamName?: string | null;
+  homeTeamLogoUrl?: string | null;
+  awayTeamLogoUrl?: string | null;
   homeGoals?: number | null;
   awayGoals?: number | null;
-  homeTeam: TeamDoc | null;
-  awayTeam: TeamDoc | null;
 
   // añadidos
   docPath?: string;
@@ -218,44 +214,17 @@ async function getMatchesWithTeams(rawParams: Params): Promise<MatchVM[]> {
     matchdayId: (d.data() as any)?.matchdayId ?? matchdayId,
   }));
 
-  const teamIds = Array.from(new Set(matches.flatMap((m) => [m.homeTeamId, m.awayTeamId]).filter(Boolean)));
-
-  const teamsMap = new Map<string, TeamDoc>();
-  if (teamIds.length) {
-    const chunk = (arr: string[], size: number) =>
-      Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
-
-    const leagueTeamsCol = db.collection("leagues").doc(leagueId).collection("teams");
-    for (const ids of chunk(teamIds, 10)) {
-      const snap = await leagueTeamsCol.where(FieldPath.documentId(), "in", ids).get();
-      snap.forEach((doc) => {
-        const t = doc.data() as any;
-        teamsMap.set(doc.id, {
-          id: doc.id,
-          name: t?.name ?? "—",
-          logoUrl: t?.logoUrl ?? null,
-          municipality: t?.municipality ?? null,
-          stadium: t?.stadium ?? null,
-        });
-      });
-    }
-
-    const missing = teamIds.filter((id) => !teamsMap.has(id));
-    if (missing.length) {
-      const rootTeamsCol = db.collection("teams");
-      for (const ids of chunk(missing, 10)) {
-        const snap = await rootTeamsCol.where(FieldPath.documentId(), "in", ids).get();
-        snap.forEach((doc) => {
-          const t = doc.data() as any;
-          teamsMap.set(doc.id, {
-            id: doc.id,
-            name: t?.name ?? "—",
-            logoUrl: t?.logoUrl ?? null,
-            municipality: t?.municipality ?? null,
-            stadium: t?.stadium ?? null,
-          });
-        });
-      }
+  // Debug: log first 2 matches to verify Firestore data (server-side only)
+  if (process.env.NEXT_PUBLIC_DEBUG_LOGOS === "1" && matches.length > 0) {
+    for (const sample of matches.slice(0, 2)) {
+      console.debug(
+        "[MatchesPage] matchId=%s home=%s homeLogoUrl=%s away=%s awayLogoUrl=%s",
+        sample.id,
+        (sample as any).homeTeamName ?? "?",
+        (sample as any).homeTeamLogoUrl ?? "MISSING",
+        (sample as any).awayTeamName ?? "?",
+        (sample as any).awayTeamLogoUrl ?? "MISSING",
+      );
     }
   }
 
@@ -267,16 +236,16 @@ async function getMatchesWithTeams(rawParams: Params): Promise<MatchVM[]> {
       status: m.status,
       stadium: m.stadium ?? null,
       venue: m.venue ?? null,
-      venueName: (m as any).venueName ?? null,
+      venueName: m.venueName ?? null,
       matchNumber: m.matchNumber,
       homeTeamId: m.homeTeamId,
       awayTeamId: m.awayTeamId,
-      homeTeamName: (m as any).homeTeamName ?? null,
-      awayTeamName: (m as any).awayTeamName ?? null,
+      homeTeamName: m.homeTeamName ?? null,
+      awayTeamName: m.awayTeamName ?? null,
+      homeTeamLogoUrl: m.homeTeamLogoUrl ?? null,
+      awayTeamLogoUrl: m.awayTeamLogoUrl ?? null,
       homeGoals: m.homeGoals ?? null,
       awayGoals: m.awayGoals ?? null,
-      homeTeam: teamsMap.get(m.homeTeamId) ?? null,
-      awayTeam: teamsMap.get(m.awayTeamId) ?? null,
 
       docPath: m.docPath,
       leagueId: m.leagueId,
@@ -380,18 +349,18 @@ function MatchesGrid({ matches }: { matches: MatchVM[] }) {
           date={m.dateObj ?? null}
           // 👇 ahora el estado se muestra en español
           status={mapStatusToDisplay(m.status)}
-          stadium={m.stadium ?? m.venueName ?? m.venue ?? m.homeTeam?.stadium ?? null}
+          stadium={m.stadium ?? m.venueName ?? m.venue ?? null}
           matchNumber={m.matchNumber ?? undefined}
           home={{
             id: m.homeTeamId,
-            name: m.homeTeam?.name ?? m.homeTeamName ?? "Por definir",
-            logoUrl: m.homeTeam?.logoUrl ?? undefined,
+            name: m.homeTeamName ?? "Por definir",
+            logoUrl: m.homeTeamLogoUrl ?? undefined,
             goals: m.homeGoals ?? undefined,
           }}
           away={{
             id: m.awayTeamId,
-            name: m.awayTeam?.name ?? m.awayTeamName ?? "Por definir",
-            logoUrl: m.awayTeam?.logoUrl ?? undefined,
+            name: m.awayTeamName ?? "Por definir",
+            logoUrl: m.awayTeamLogoUrl ?? undefined,
             goals: m.awayGoals ?? undefined,
           }}
           // añadidos

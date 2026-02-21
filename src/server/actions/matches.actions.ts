@@ -64,18 +64,75 @@ export async function createMatchAction(p: CreateMatchParams) {
     .doc(p.matchdayId)
     .collection("matches");
 
-  // 🔹 Leer municipio desde /teams/{homeTeamId}
+  // 🔹 Leer municipio y logoUrl de los equipos
+  // Prioridad: leagues/{leagueId}/teams/{teamId}, fallback a teams/{teamId}
   let municipality: string | null = null;
-  try {
-    const teamSnap = await db.collection("teams").doc(p.homeTeamId).get();
-    if (teamSnap.exists) {
-      const t = teamSnap.data() as any;
-      if (typeof t?.municipality === "string" && t.municipality.trim()) {
-        municipality = t.municipality.trim();
+  let homeTeamLogoUrl: string | null = null;
+  let awayTeamLogoUrl: string | null = null;
+
+  const logoCache = new Map<string, string | null>();
+
+  async function resolveTeamLogo(teamId: string): Promise<string | null> {
+    if (logoCache.has(teamId)) return logoCache.get(teamId)!;
+    let logoUrl: string | null = null;
+    try {
+      const leagueTeamSnap = await db.collection("leagues").doc(p.leagueId).collection("teams").doc(teamId).get();
+      if (leagueTeamSnap.exists) {
+        const t = leagueTeamSnap.data() as any;
+        logoUrl = typeof t?.logoUrl === "string" ? t.logoUrl : null;
+      }
+    } catch {
+      /* noop */
+    }
+    if (logoUrl == null) {
+      try {
+        const rootTeamSnap = await db.collection("teams").doc(teamId).get();
+        if (rootTeamSnap.exists) {
+          const t = rootTeamSnap.data() as any;
+          logoUrl = typeof t?.logoUrl === "string" ? t.logoUrl : null;
+        }
+      } catch {
+        /* noop */
       }
     }
+    logoCache.set(teamId, logoUrl);
+    return logoUrl;
+  }
+
+  try {
+    // Read home team for municipality + logoUrl
+    let homeTeamRead = false;
+    try {
+      const leagueTeamSnap = await db.collection("leagues").doc(p.leagueId).collection("teams").doc(p.homeTeamId).get();
+      if (leagueTeamSnap.exists) {
+        const t = leagueTeamSnap.data() as any;
+        homeTeamLogoUrl = typeof t?.logoUrl === "string" ? t.logoUrl : null;
+        if (typeof t?.municipality === "string" && t.municipality.trim()) {
+          municipality = t.municipality.trim();
+        }
+        homeTeamRead = true;
+        logoCache.set(p.homeTeamId, homeTeamLogoUrl);
+      }
+    } catch {
+      /* noop */
+    }
+
+    if (!homeTeamRead) {
+      const teamSnap = await db.collection("teams").doc(p.homeTeamId).get();
+      if (teamSnap.exists) {
+        const t = teamSnap.data() as any;
+        homeTeamLogoUrl = typeof t?.logoUrl === "string" ? t.logoUrl : null;
+        if (typeof t?.municipality === "string" && t.municipality.trim()) {
+          municipality = t.municipality.trim();
+        }
+        logoCache.set(p.homeTeamId, homeTeamLogoUrl);
+      }
+    }
+
+    // Away team logoUrl
+    awayTeamLogoUrl = await resolveTeamLogo(p.awayTeamId);
   } catch (err) {
-    console.error("[createMatchAction] Error leyendo municipio de /teams:", err);
+    console.error("[createMatchAction] Error leyendo datos de equipos:", err);
   }
 
   const dup = await coll
@@ -98,6 +155,8 @@ export async function createMatchAction(p: CreateMatchParams) {
     awayTeamId: p.awayTeamId,
     homeTeamName: p.homeTeamName,
     awayTeamName: p.awayTeamName,
+    homeTeamLogoUrl,
+    awayTeamLogoUrl,
     venueId: p.venueId,
     venueName: p.venueName,
     kickoff: kickoff.toJSDate(),

@@ -13,6 +13,9 @@ export interface MatchDoc {
   awayTeamId: string;
   awayTeamName: string;
 
+  homeTeamLogoUrl?: string | null;
+  awayTeamLogoUrl?: string | null;
+
   venueId: string;
   venueName: string;
 

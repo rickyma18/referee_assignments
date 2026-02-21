@@ -62,6 +62,17 @@ export function MatchCard({
       })
     : "Fecha por definir";
 
+  if (process.env.NEXT_PUBLIC_DEBUG_LOGOS === "1") {
+    console.debug(
+      "[MatchCard]",
+      id,
+      "home.logoUrl=",
+      home.logoUrl ?? "EMPTY",
+      "away.logoUrl=",
+      away.logoUrl ?? "EMPTY",
+    );
+  }
+
   const isFinished = status === "FINISHED";
   const isLive = status === "LIVE";
   const isPostponed = status === "POSTPONED";
@@ -231,14 +242,73 @@ function TeamRow({ team, side }: { team: TeamSide; side: "left" | "right" }) {
   );
 }
 
-function TeamLogo({ logoUrl }: { logoUrl?: string }) {
+/* ---------- Logo helpers ---------- */
+
+function debugLogo(...args: unknown[]) {
+  if (process.env.NEXT_PUBLIC_DEBUG_LOGOS === "1") {
+    console.debug("[TeamLogo]", ...args);
+  }
+}
+
+function normalizeLogoUrl(url?: string | null): string | null {
+  if (!url) return null;
+
+  // Trim + replace NBSP, zero-width spaces, and other exotic whitespace
+  let cleaned = url.replace(/[\s\u00A0\u200B\uFEFF]+/g, " ").trim();
+  if (!cleaned) return null;
+
+  // gs:// URIs can't be rendered directly — need a download URL
+  if (cleaned.startsWith("gs://")) {
+    debugLogo("gs:// URI not renderable:", cleaned);
+    return null;
+  }
+
+  // Upgrade http → https when we're on a secure page
+  if (cleaned.startsWith("http://")) {
+    cleaned = cleaned.replace(/^http:\/\//, "https://");
+  }
+
+  return cleaned;
+}
+
+function getLogoHost(src: string): string {
+  try {
+    return new URL(src).hostname;
+  } catch {
+    return "invalid";
+  }
+}
+
+function TeamLogo({ logoUrl }: { logoUrl?: string | null }) {
+  const src = normalizeLogoUrl(logoUrl);
+  const [errored, setErrored] = React.useState(false);
+
+  // Reset error state when URL changes
+  React.useEffect(() => {
+    setErrored(false);
+  }, [src]);
+
+  const showFallback = !src || errored;
+
   return (
     <div className="bg-background grid h-10 w-10 place-items-center overflow-hidden rounded-full border">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {logoUrl ? (
-        <img src={logoUrl} alt="" className="h-full w-full object-cover" />
-      ) : (
+      {showFallback ? (
         <div className="h-5 w-5 rounded-full border" />
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={src}
+          alt=""
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          decoding="async"
+          data-logo-host={getLogoHost(src)}
+          className="h-full w-full object-cover"
+          onError={() => {
+            debugLogo("load failed:", src, "host:", getLogoHost(src));
+            setErrored(true);
+          }}
+        />
       )}
     </div>
   );
