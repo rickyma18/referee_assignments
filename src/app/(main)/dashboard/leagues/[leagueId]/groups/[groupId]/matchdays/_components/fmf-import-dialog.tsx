@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Clipboard,
   ClipboardCheck,
+  Download,
   FileSpreadsheet,
   Loader2,
   Maximize2,
@@ -288,6 +289,66 @@ function SummaryBar({
       )}
     </div>
   );
+}
+
+// ─── Template Download ───────────────────────────────────────────────────────
+
+const TEMPLATE_HEADERS = [
+  "FECHA",
+  "CATEGORIA",
+  "JORNADA",
+  "EQUIPOLOCAL",
+  "EQUIPOVISITANTE",
+  "ARBITRO",
+  "ARBITRO ASISTENTE 1",
+  "ARBITRO ASISTENTE 2",
+  "CUARTO ARBITRO",
+  "ASESOR",
+  "HORA",
+  "ESTADIO",
+] as const;
+
+const TEMPLATE_EXAMPLE_ROW = [
+  "2025-03-15",
+  "LTDP GRUPO 13",
+  "1",
+  "EQUIPO A",
+  "EQUIPO B",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "16:00",
+  "ESTADIO MUNICIPAL",
+];
+
+async function downloadTemplate() {
+  const XLSX = await import("xlsx");
+
+  const data = [TEMPLATE_HEADERS as unknown as string[], TEMPLATE_EXAMPLE_ROW];
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+
+  // Column widths based on header lengths
+  ws["!cols"] = TEMPLATE_HEADERS.map((h) => ({ wch: Math.max(h.length + 4, 16) }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "PARTIDOS");
+
+  const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "PLANTILLA_PARTIDOS_LTDP.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -619,6 +680,19 @@ export function FmfImportDialog({ leagueId: _leagueId, groupId: _groupId }: Prop
                     onChange={handleFileChange}
                   />
                 </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-3 gap-1.5 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadTemplate();
+                  }}
+                >
+                  <Download className="size-3.5" />
+                  Descargar plantilla
+                </Button>
               </div>
             )}
 
