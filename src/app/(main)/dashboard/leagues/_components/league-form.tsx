@@ -116,10 +116,8 @@ export function LeagueForm({ initial, canEdit = true, afterSaveHref }: Props) {
   const displaySeason = (watchSeason ?? "").trim();
   const nameForSubtitle = (displayName ?? "").trim();
   const seasonForSubtitle = (displaySeason ?? "").trim();
-
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const subtitleName = nameForSubtitle ? nameForSubtitle : "Nombre de la liga";
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+
   const subtitleSeason = seasonForSubtitle ? seasonForSubtitle : "Temporada";
 
   const effectiveSlug = initial?.slug ?? (liveSlug && liveSlug.length ? liveSlug : "");

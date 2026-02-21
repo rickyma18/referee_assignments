@@ -3,11 +3,13 @@
 // =============================
 "use client";
 import * as React from "react";
-import { useGroups } from "@/hooks/use-groups";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+
 import { Check, ChevronsUpDown } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useGroups } from "@/hooks/use-groups";
 import { cn } from "@/lib/utils";
 
 export function GroupCombobox({

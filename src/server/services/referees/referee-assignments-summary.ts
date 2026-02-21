@@ -175,7 +175,7 @@ export async function getRefereeAssignmentsSummary(refereeId: string): Promise<R
 
         // Sacamos la lógica pesada a un helper para evitar max-depth
         // y mantener el código más legible.
-        // eslint-disable-next-line no-await-in-loop
+
         await collectMatchesForMatchday({
           leagueId,
           groupId,

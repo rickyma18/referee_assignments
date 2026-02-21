@@ -40,6 +40,7 @@ import {
   type RefereeOption,
   type AssignmentTableMeta,
   type AssignmentsTableProps,
+  type RowSnapshot,
 } from "./assignments-types";
 
 /** Normaliza texto para búsqueda: minúsculas, sin acentos, sin puntuación */
@@ -106,6 +107,52 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       assessor: getInitialValue(m.assessorRefereeId, m.assessorExternalLabel),
     })),
   );
+
+  /* ---------- Dirty tracking: baseline por fila ---------- */
+  const [baselineById, setBaselineById] = useState<Map<string, RowSnapshot>>(() => {
+    const map = new Map<string, RowSnapshot>();
+    for (const m of matches) {
+      map.set(m.id, {
+        central: getInitialValue(m.centralRefereeId, m.centralExternalLabel),
+        aa1: getInitialValue(m.aa1RefereeId, m.aa1ExternalLabel),
+        aa2: getInitialValue(m.aa2RefereeId, m.aa2ExternalLabel),
+        fourth: getInitialValue(m.fourthRefereeId, m.fourthExternalLabel),
+        assessor: getInitialValue(m.assessorRefereeId, m.assessorExternalLabel),
+      });
+    }
+    return map;
+  });
+
+  // Mapa indexado de rowData para búsqueda O(1) en isRowDirty
+  const rowById = useMemo(() => {
+    const map = new Map<string, AssignmentRowState>();
+    for (const r of rowData) map.set(r.id, r);
+    return map;
+  }, [rowData]);
+
+  const isRowDirty = useCallback(
+    (id: string): boolean => {
+      const row = rowById.get(id);
+      const base = baselineById.get(id);
+      if (!row || !base) return false;
+      return (
+        row.central !== base.central ||
+        row.aa1 !== base.aa1 ||
+        row.aa2 !== base.aa2 ||
+        row.fourth !== base.fourth ||
+        row.assessor !== base.assessor
+      );
+    },
+    [rowById, baselineById],
+  );
+
+  const markRowSaved = useCallback((id: string, snapshot: RowSnapshot) => {
+    setBaselineById((prev) => {
+      const next = new Map(prev);
+      next.set(id, snapshot);
+      return next;
+    });
+  }, []);
 
   const leagueById = useMemo(() => {
     const map = new Map<string, LeagueDoc>();
@@ -195,6 +242,19 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
         const sameIds = prev.every((row, idx) => row.id === matches[idx]?.id);
         if (sameIds) return prev;
       }
+
+      // También reseteamos baseline
+      const newBaseline = new Map<string, RowSnapshot>();
+      for (const m of matches) {
+        newBaseline.set(m.id, {
+          central: getInitialValue(m.centralRefereeId, m.centralExternalLabel),
+          aa1: getInitialValue(m.aa1RefereeId, m.aa1ExternalLabel),
+          aa2: getInitialValue(m.aa2RefereeId, m.aa2ExternalLabel),
+          fourth: getInitialValue(m.fourthRefereeId, m.fourthExternalLabel),
+          assessor: getInitialValue(m.assessorRefereeId, m.assessorExternalLabel),
+        });
+      }
+      setBaselineById(newBaseline);
 
       return matches.map((m) => ({
         ...m,
@@ -358,6 +418,8 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
       // el estado local (rowData) ya refleja la selección del usuario.
       // router.refresh() solo se usa en handleConfirmAll (acciones globales).
       onSaved: () => {},
+      isRowDirty,
+      markRowSaved,
     } satisfies AssignmentTableMeta,
   });
 
@@ -587,6 +649,21 @@ export function AssignmentsTable({ leagues, groups, matches, referees }: Assignm
         toast.info("No se confirmó ninguna terna. Verifica que haya cambios pendientes.");
       } else {
         toast.success(`Se confirmaron ${updatedCount} ternas.`);
+
+        // Actualizar baseline de las filas confirmadas
+        setBaselineById((prev) => {
+          const next = new Map(prev);
+          for (const row of toConfirm) {
+            next.set(row.id, {
+              central: row.central,
+              aa1: row.aa1,
+              aa2: row.aa2,
+              fourth: row.fourth,
+              assessor: row.assessor,
+            });
+          }
+          return next;
+        });
       }
 
       startTransition(() => {

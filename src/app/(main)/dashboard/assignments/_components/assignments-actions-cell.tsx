@@ -4,14 +4,26 @@
 
 import * as React from "react";
 
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { assignManualTernaAction } from "@/server/actions/assignments.actions";
 
-import type { AssignmentRowState, AssignmentTableMeta } from "./assignments-types";
+import type { AssignmentRowState, AssignmentTableMeta, RowSnapshot } from "./assignments-types";
 
 type Props = {
   row: AssignmentRowState;
@@ -30,7 +42,30 @@ export function ActionsCell({ row: m, meta }: Props) {
     };
   }, []);
 
+  const isDirty = meta.isRowDirty(m.id);
+  const isAllEmpty = !m.central && !m.aa1 && !m.aa2 && !m.fourth && !m.assessor;
+
+  function handleClear() {
+    meta.updateRow(m.id, (prev) => ({
+      ...prev,
+      central: "",
+      aa1: "",
+      aa2: "",
+      fourth: "",
+      assessor: "",
+    }));
+  }
+
   function markSaved() {
+    // Actualizar baseline con los valores actuales
+    const snapshot: RowSnapshot = {
+      central: m.central,
+      aa1: m.aa1,
+      aa2: m.aa2,
+      fourth: m.fourth,
+      assessor: m.assessor,
+    };
+    meta.markRowSaved(m.id, snapshot);
     meta.onSaved();
     setJustSaved(true);
     if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
@@ -42,18 +77,21 @@ export function ActionsCell({ row: m, meta }: Props) {
 
   // eslint-disable-next-line complexity
   async function doAssign(options?: { ignoreRecentTeamConflicts?: boolean; ignoreSameDayConflicts?: boolean }) {
-    if (!m.central || !m.aa1 || !m.aa2) {
-      toast.error("Debes seleccionar al menos Central y los dos Asistentes.");
-      return;
-    }
+    // Caso "limpiar terna": se permite enviar todo vacío → el server borrará las designaciones
+    if (!isAllEmpty) {
+      if (!m.central || !m.aa1 || !m.aa2) {
+        toast.error("Debes seleccionar al menos Central y los dos Asistentes.");
+        return;
+      }
 
-    // 🧩 Nueva validación: no permitir repetidos en la terna principal
-    const coreIds = [m.central, m.aa1, m.aa2];
-    const uniqueCoreIds = new Set(coreIds);
+      // 🧩 Nueva validación: no permitir repetidos en la terna principal
+      const coreIds = [m.central, m.aa1, m.aa2];
+      const uniqueCoreIds = new Set(coreIds);
 
-    if (uniqueCoreIds.size !== coreIds.length) {
-      toast.error("Un árbitro no puede repetirse como central y asistente en la misma terna.");
-      return;
+      if (uniqueCoreIds.size !== coreIds.length) {
+        toast.error("Un árbitro no puede repetirse como central y asistente en la misma terna.");
+        return;
+      }
     }
 
     try {
@@ -250,27 +288,71 @@ export function ActionsCell({ row: m, meta }: Props) {
     void doAssign();
   }
 
+  // Determinar si hay terna guardada en DB (baseline con valores)
+  const baseHasTerna = Boolean(
+    (m.centralRefereeId ?? m.centralExternalLabel) &&
+      (m.aa1RefereeId ?? m.aa1ExternalLabel) &&
+      (m.aa2RefereeId ?? m.aa2ExternalLabel),
+  );
+
+  const saveVariant = isAllEmpty && isDirty ? "destructive" : hasTerna ? "default" : "outline";
+  const saveLabel = saving ? "Guardando…" : hasTerna || baseHasTerna ? "Actualizar" : "Asignar";
+
   return (
     <div className="px-3 py-2.5 text-center">
       <div className="flex flex-col items-center justify-center gap-1">
-        <Button
-          size="sm"
-          variant={hasTerna ? "default" : "outline"}
-          onClick={handleSave}
-          disabled={saving || meta.isPendingGlobal}
-        >
-          {saving ? "Guardando…" : hasTerna ? "Actualizar" : "Asignar"}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant={saveVariant}
+            onClick={handleSave}
+            disabled={saving || meta.isPendingGlobal || !isDirty}
+          >
+            {saveLabel}
+          </Button>
+
+          {meta.canEdit && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label="Borrar terna"
+                  title="Borrar terna"
+                  disabled={saving || isAllEmpty}
+                  className="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Borrar designaciones</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esto limpiará la terna en esta fila. No se guardará hasta que presiones Actualizar.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClear}>Sí, borrar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
+
         <Badge
-          variant={justSaved ? "default" : hasTerna ? "default" : "outline"}
+          variant={justSaved ? "default" : isDirty ? "secondary" : hasTerna ? "default" : "outline"}
           className={cn(
             "mt-0.5 text-[10px]",
             justSaved
               ? "border-blue-200 bg-blue-100 text-blue-700"
-              : hasTerna && "border-emerald-200 bg-emerald-100 text-emerald-700",
+              : isDirty
+                ? "border-amber-200 bg-amber-100 text-amber-700"
+                : hasTerna && "border-emerald-200 bg-emerald-100 text-emerald-700",
           )}
         >
-          {justSaved ? "Guardado" : hasTerna ? "Terna completa" : "Sin terna"}
+          {justSaved ? "Guardado" : isDirty ? "Sin guardar" : hasTerna ? "Terna completa" : "Sin terna"}
         </Badge>
       </div>
     </div>

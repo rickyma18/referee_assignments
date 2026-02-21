@@ -3,6 +3,7 @@
 // =============================
 "use client";
 import useSWR from "swr";
+
 import { listGroupsAction } from "@/server/actions/groups.actions";
 
 export function useGroups(leagueId: string, season?: string) {

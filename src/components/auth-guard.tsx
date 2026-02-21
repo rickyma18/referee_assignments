@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import { useRouter, usePathname } from "next/navigation";
+
 import { onAuthStateChanged } from "firebase/auth";
 
-import { auth } from "@/lib/firebase";
-import type { UserDoc } from "@/types/user";
-import type { UserRole } from "@/types/roles";
 import { getUserDoc } from "@/data/users";
+import { auth } from "@/lib/firebase";
+import type { UserRole } from "@/types/roles";
+import type { UserDoc } from "@/types/user";
 
 export function AuthGuard({ allowedRoles, children }: { allowedRoles: UserRole[]; children: React.ReactNode }) {
   const router = useRouter();

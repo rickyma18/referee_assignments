@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+
 import { ColumnDef } from "@tanstack/react-table";
+import { MoreHorizontal } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal } from "lucide-react";
+
 import type { Designation } from "./types";
 
 function formatMx(dateISO: string, time?: string) {

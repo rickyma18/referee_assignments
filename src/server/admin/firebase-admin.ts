@@ -10,13 +10,12 @@ import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore, FieldValue } from "firebase-admin/firestore";
 
 declare global {
-  // eslint-disable-next-line no-var
   var ADMIN_APP: ReturnType<typeof initializeApp> | undefined;
-  // eslint-disable-next-line no-var
+
   var ADMIN_DB: Firestore | undefined;
-  // eslint-disable-next-line no-var
+
   var ADMIN_AUTH: Auth | undefined;
-  // eslint-disable-next-line no-var
+
   var firestoreSettingsApplied: boolean | undefined;
 }
 

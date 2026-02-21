@@ -1,6 +1,8 @@
 "use client";
 import { useEffect } from "react";
+
 import { useRouter } from "next/navigation";
+
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { Can } from "@/lib/rbac";
 

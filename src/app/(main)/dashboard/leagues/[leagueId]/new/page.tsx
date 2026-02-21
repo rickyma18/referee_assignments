@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 
 import RoleGate from "@/components/auth/role-gate";
 import { useCurrentUser } from "@/hooks/use-current-user";
+
 import { LeagueForm } from "../../_components/league-form";
 
 export default function NewLeaguePage() {

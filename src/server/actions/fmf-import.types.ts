@@ -85,7 +85,7 @@ export type FmfImportResult = {
   };
 };
 
-export type TeamInfo = { id: string; name: string; stadium: string; municipality: string };
+export type TeamInfo = { id: string; name: string; stadium: string; municipality: string; logoUrl?: string | null };
 export type RefereeInfo = { id: string; name: string; status: string; canAssess: boolean };
 export type VenueInfo = { id: string; name: string };
 

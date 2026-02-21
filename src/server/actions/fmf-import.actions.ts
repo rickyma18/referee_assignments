@@ -166,6 +166,7 @@ export async function importFmfExcelAction(formData: FormData): Promise<FmfImpor
         name,
         stadium: String(d.stadium ?? d.venue ?? "").trim(),
         municipality: String(d.municipality ?? "").trim(),
+        logoUrl: typeof d.logoUrl === "string" ? d.logoUrl : null,
       };
 
       // Exact index
@@ -289,6 +290,7 @@ export async function importFmfExcelAction(formData: FormData): Promise<FmfImpor
         name: String(data.name ?? "").trim(),
         stadium: String(data.stadium ?? data.venue ?? "").trim(),
         municipality: String(data.municipality ?? "").trim(),
+        logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : null,
       },
     };
   }
@@ -376,8 +378,10 @@ export async function importFmfExcelAction(formData: FormData): Promise<FmfImpor
     groupId: string;
     homeTeamId: string;
     homeTeamName: string;
+    homeTeamLogoUrl: string | null;
     awayTeamId: string;
     awayTeamName: string;
+    awayTeamLogoUrl: string | null;
     kickoff: Date;
     venueId: string;
     venueName: string;
@@ -779,8 +783,10 @@ export async function importFmfExcelAction(formData: FormData): Promise<FmfImpor
         groupId: effectiveGroupId!,
         homeTeamId: homeTeam!.id,
         homeTeamName: homeTeam!.name,
+        homeTeamLogoUrl: homeTeam!.logoUrl ?? null,
         awayTeamId: awayTeam!.id,
         awayTeamName: awayTeam!.name,
+        awayTeamLogoUrl: awayTeam!.logoUrl ?? null,
         kickoff: kickoff!,
         venueId,
         venueName,
@@ -965,8 +971,10 @@ export async function importFmfExcelAction(formData: FormData): Promise<FmfImpor
         matchdayNumber: row.jornada,
         homeTeamId: row.homeTeamId,
         homeTeamName: row.homeTeamName,
+        homeTeamLogoUrl: row.homeTeamLogoUrl ?? null,
         awayTeamId: row.awayTeamId,
         awayTeamName: row.awayTeamName,
+        awayTeamLogoUrl: row.awayTeamLogoUrl ?? null,
         kickoff: row.kickoff,
         venueId: row.venueId,
         venueName: row.venueName,
@@ -1035,8 +1043,10 @@ export type ScopedRowResult = {
   normalized?: {
     homeTeamId: string;
     homeTeamName: string;
+    homeTeamLogoUrl?: string | null;
     awayTeamId: string;
     awayTeamName: string;
+    awayTeamLogoUrl?: string | null;
     venueId: string;
     venueName: string;
     kickoff: Date;
@@ -1087,6 +1097,7 @@ export async function runFmfImport(input: RunFmfImportInput): Promise<RunFmfImpo
       name,
       stadium: String(d.stadium ?? d.venue ?? "").trim(),
       municipality: String(d.municipality ?? "").trim(),
+      logoUrl: typeof d.logoUrl === "string" ? d.logoUrl : null,
     };
 
     byNorm.set(norm(name), info);
@@ -1261,8 +1272,10 @@ export async function runFmfImport(input: RunFmfImportInput): Promise<RunFmfImpo
           ? {
               homeTeamId: homeTeam.id,
               homeTeamName: homeTeam.name,
+              homeTeamLogoUrl: homeTeam.logoUrl ?? null,
               awayTeamId: awayTeam.id,
               awayTeamName: awayTeam.name,
+              awayTeamLogoUrl: awayTeam.logoUrl ?? null,
               venueId,
               venueName,
               kickoff,
@@ -1313,8 +1326,10 @@ export async function runFmfImport(input: RunFmfImportInput): Promise<RunFmfImpo
         matchdayNumber: scope.matchdayNumber,
         homeTeamId: n.homeTeamId,
         homeTeamName: n.homeTeamName,
+        homeTeamLogoUrl: n.homeTeamLogoUrl ?? null,
         awayTeamId: n.awayTeamId,
         awayTeamName: n.awayTeamName,
+        awayTeamLogoUrl: n.awayTeamLogoUrl ?? null,
         venueId: n.venueId,
         venueName: n.venueName,
         municipality: n.municipality ?? "",

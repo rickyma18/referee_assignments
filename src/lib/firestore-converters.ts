@@ -1,5 +1,6 @@
 // src/lib/firestore-converters.ts
 import type { FirestoreDataConverter, QueryDocumentSnapshot } from "firebase/firestore";
+
 import type { UserDoc } from "@/types/user";
 
 export const userConverter: FirestoreDataConverter<UserDoc> = {
